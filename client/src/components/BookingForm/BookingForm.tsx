@@ -11,6 +11,10 @@ const BookingForm = () => {
 
   const [showMenu, setShowMenu] = useState(false);
   const [activeEmailField, setActiveEmailField] = useState<string | null>(null);
+  
+  // המשתנה החדש שנועל את הכפתור!
+  const [isSubmitting, setIsSubmitting] = useState(false); 
+  
   const emailSuffixes = ['@gmail.com', '@hotmail.com', '@outlook.com', '@yahoo.com', '@icloud.com', '@walla.co.il'];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -27,11 +31,13 @@ const BookingForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // מעבר ישיר לתפריט (מעקף זמני כדי שתוכלי לראות את העיצוב)
-    setShowMenu(true);
+    // מונע שליחה נוספת אם כבר התחלנו לשמור (חוסם דאבל-קליק)
+    if (isSubmitting) return; 
+    
+    setIsSubmitting(true); // נועלים את הכפתור
 
-    /* --- הקוד המקורי לשרת - שמתי אותו בהערה בינתיים ---
     try {
+      // פנייה אמיתית לשרת לשמירת הנתונים
       const response = await fetch('http://localhost:5000/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,16 +45,19 @@ const BookingForm = () => {
       });
 
       if (response.ok) {
+        // מעבר לתפריט *רק* אם השרת אישר שהנתונים נשמרו בהצלחה!
         setShowMenu(true);
       } else {
-        alert("שגיאה בשמירת הנתונים");
+        alert("שגיאה בשמירת הנתונים - השרת החזיר שגיאה");
+        setIsSubmitting(false); // משחררים את הנעילה אם הייתה שגיאה כדי שאפשר יהיה לנסות שוב
       }
     } catch (error) {
       console.error("Error:", error);
-      alert("שגיאת התחברות לשרת");
+      alert("שגיאת התחברות לשרת - ודאי שהשרת פועל ברקע");
+      setIsSubmitting(false); // משחררים את הנעילה
     }
-    */
   };
+
   const isWedding = formData.eventType === 'חתונה';
   const eventTypesList = ['חתונה', 'אירוסין', 'בר מצווה', 'בת מצווה', 'ברית', 'בריתה', 'חינה', 'הרמת כוסית', 'כנס מקצועי', 'אירוע חברה/עסקי'];
 
@@ -163,8 +172,9 @@ const BookingForm = () => {
           </div>
 
           <div className={styles.actions}>
-            <button type="submit" className={styles.submitBtn}>
-              שמירת הפרטים ומעבר לצפייה בתפריט
+            {/* הכפתור עכשיו משתנה וננעל בזמן שמירה! */}
+            <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
+              {isSubmitting ? 'שומר נתונים, אנא המתן...' : 'שמירת הפרטים ומעבר לצפייה בתפריט'}
             </button>
           </div>
         </form>
