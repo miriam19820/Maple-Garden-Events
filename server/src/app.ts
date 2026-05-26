@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors'; // 1. מוסיפים את הייבוא הזה
-import bookingRoutes from './routes/booking.routes';
+import bookingRoutes from './routes/booking';
+import menuRoutes from './routes/menu'; // ייבוא הנתיב החדש
+// ...
+
 
 const app = express();
 
@@ -10,6 +13,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use('/api/menu', menuRoutes); // חיבור הנתיב לשרת
 
 // נתיבים
 app.use('/api/bookings', bookingRoutes);
