@@ -26,6 +26,11 @@ const BookingForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // מעבר ישיר לתפריט (מעקף זמני כדי שתוכלי לראות את העיצוב)
+    setShowMenu(true);
+
+    /* --- הקוד המקורי לשרת - שמתי אותו בהערה בינתיים ---
     try {
       const response = await fetch('http://localhost:5000/api/bookings', {
         method: 'POST',
@@ -42,8 +47,8 @@ const BookingForm = () => {
       console.error("Error:", error);
       alert("שגיאת התחברות לשרת");
     }
+    */
   };
-
   const isWedding = formData.eventType === 'חתונה';
   const eventTypesList = ['חתונה', 'אירוסין', 'בר מצווה', 'בת מצווה', 'ברית', 'בריתה', 'חינה', 'הרמת כוסית', 'כנס מקצועי', 'אירוע חברה/עסקי'];
 
