@@ -1,0 +1,174 @@
+/* BookingForm.module.css */
+
+.container {
+  min-height: 100vh;
+  background-color: #f9fafb;
+  padding: 2rem;
+  direction: rtl;
+}
+
+.formCard {
+  max-width: 64rem;
+  margin: 0 auto;
+  background-color: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid #f3f4f6;
+  overflow: hidden;
+}
+
+.header {
+  background: linear-gradient(to right, #fffbeb, #ffffff);
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.title {
+  font-size: 1.875rem;
+  font-weight: 300;
+  color: #1f2937;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.titleAccent {
+  color: #f59e0b; /* Amber */
+  font-weight: 500;
+}
+
+.subtitle {
+  color: #6b7280;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.clientsSectionWedding {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+}
+
+.clientsSectionSingle {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .clientsSectionWedding {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.sectionTitleSecondary {
+  border-bottom-color: #fca5a5; /* Red-300 / Rose color for Bride side */
+}
+.clientsSection {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .clientsSection {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.clientBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.sectionTitlePrimary {
+  border-bottom-color: #fde68a; /* Amber-200 */
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.inputRow {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin-bottom: 0.25rem;
+}
+
+.input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #d1d5db;
+  padding: 0.5rem;
+  outline: none;
+  background: transparent;
+  transition: border-color 0.2s ease;
+}
+
+.input:focus {
+  border-bottom-color: #f59e0b;
+}
+
+.inputSecondary:focus {
+  border-bottom-color: #6b7280;
+}
+
+.eventDetailsSection {
+  background-color: #f9fafb;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #f3f4f6;
+}
+
+.eventDetailsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .eventDetailsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+}
+
+.submitBtn {
+  background-color: #111827;
+  color: #ffffff;
+  padding: 0.75rem 2.5rem;
+  border-radius: 9999px;
+  border: none;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+  font-size: 0.875rem;
+  letter-spacing: 0.025em;
+}
+
+.submitBtn:hover {
+  background-color: #1f2937;
+  transform: translateY(-2px);
+}
