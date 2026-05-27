@@ -6,16 +6,44 @@ export const createBooking = async (req: Request, res: Response) => {
     const data = req.body;
     const isManager = data.userRole === 'manager';
 
-    // חישוב אוטומטי של המחיר הכולל
+    // 1. טיפול חכם ב-calendarDateId: בדיקה אם התאריך קיים, ואם לא - יצירתו.
+    let eventDate = await prisma.eventDate.findUnique({
+      where: { id: data.calendarDateId }
+    });
+
+    if (!eventDate) {
+      // מנסים לפרש את הנתון כתאריך ממשי
+      const possibleDate = new Date(data.calendarDateId);
+      
+      if (!isNaN(possibleDate.getTime())) {
+        // אם זה אכן תאריך תקין, ניצור אותו/נעדכן אותו במסד הנתונים
+        eventDate = await prisma.eventDate.upsert({
+          where: { date: possibleDate },
+          update: {},
+          create: { date: possibleDate, status: 'AVAILABLE' }
+        });
+        // מעדכנים את המזהה ב-data למזהה החוקי של התאריך במסד
+        data.calendarDateId = eventDate.id; 
+      } else {
+        // אם זה לא תאריך תקין (למשל UUID ישן), נחזיר שגיאה למשתמש
+        return res.status(400).json({ 
+          success: false, 
+          message: 'התאריך אינו חוקי או שנמחק מהמערכת. אנא רענן את העמוד ונסה שוב.' 
+        });
+      }
+    }
+
+    // 2. חישוב אוטומטי של המחיר הכולל
     const calculatedTotalPrice = data.guestCount * data.finalPricePortion;
 
-    // איחוד שדות לפורמט שמסד הנתונים מכיר
+    // 3. איחוד שדות לפורמט שמסד הנתונים מכיר
     const clientAPhoneCombined = data.clientAPhone2 ? `${data.clientAPhone} | נוסף: ${data.clientAPhone2}` : data.clientAPhone;
     const clientAAddressCombined = data.clientACity ? `${data.clientACity}, ${data.clientAAddress}` : data.clientAAddress;
     
     const clientBPhoneCombined = data.clientBPhone2 ? `${data.clientBPhone} | נוסף: ${data.clientBPhone2}` : data.clientBPhone;
     const clientBAddressCombined = data.clientBCity ? `${data.clientBCity}, ${data.clientBAddress}` : data.clientBAddress;
 
+    // 4. יצירת ההזמנה החדשה
     const newBooking = await prisma.booking.create({
       data: {
         // --- צד א' ---
@@ -35,7 +63,7 @@ export const createBooking = async (req: Request, res: Response) => {
         // --- פרטי אירוע ---
         calendarDateId: data.calendarDateId,
         eventType: data.eventType,
-        timeOfDay: data.timeOfDay || null, // שדה חדש!
+        timeOfDay: data.timeOfDay || null,
         guestCount: Number(data.guestCount),
         finalPricePortion: Number(data.finalPricePortion),
         totalPrice: calculatedTotalPrice,
@@ -47,6 +75,12 @@ export const createBooking = async (req: Request, res: Response) => {
         // --- מערכת ---
         createdBy: isManager ? "מנהל מערכת" : "נציג מכירות",
       }
+    });
+
+    // 5. עדכון סטטוס התאריך ל"תפוס" ושחרור נעילות
+    await prisma.eventDate.update({
+      where: { id: data.calendarDateId },
+      data: { status: 'BOOKED', lockedBy: null }
     });
 
     res.status(201).json({
