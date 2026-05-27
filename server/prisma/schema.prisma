@@ -49,11 +49,11 @@ model Booking {
   updatedBy         String?
 }
 
-// מודל לקטגוריות (למשל: סלטים, מנות עיקריות, קינוחים)
+// מודל לקטגוריות
 model MenuCategory {
-  id    String @id @default(uuid())
-  name  String 
-  dishes Dish[]
+  id     String @id @default(uuid())
+  name   String 
+  dishes Dish[] // כאן חסרה לך ההגדרה הזו ב-Schema המקורי, זה הקשר!
 }
 
 // מודל למנה בודדת
@@ -64,4 +64,11 @@ model Dish {
   price       Float?
   categoryId  String
   category    MenuCategory @relation(fields: [categoryId], references: [id])
+}
+model EventDate {
+  id        String   @id @default(uuid())
+  date      DateTime @unique
+  status    String   // AVAILABLE, BOOKED, BLOCKED, etc.
+  lockedBy  String?
+  bookingId String?  @unique
 }

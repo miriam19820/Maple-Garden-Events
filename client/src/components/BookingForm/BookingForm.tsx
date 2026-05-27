@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styles from './BookingForm.module.css';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
+import { Calendar } from '../Calendar/Calendar'; 
 
 const BookingForm = () => {
   const [formData, setFormData] = useState({
@@ -70,10 +71,17 @@ const BookingForm = () => {
   }
 
   return (
+    
     <div className={styles.container}>
       <div className={styles.formCard}>
         <div className={styles.header}>
           <h2 className={styles.title}>יצירת אירוע חדש <span className={styles.titleAccent}>| מייפל</span></h2>
+          {/* כאן אנחנו מוסיפות את הלוח */}
+  <div style={{ padding: '20px' }}>
+     <Calendar onDateSelect={(day) => setFormData(prev => ({ ...prev, calendarDateId: day.date }))} />
+  </div>
+
+  <form className={styles.formBody} onSubmit={handleSubmit}></form>
           <p className={styles.subtitle}>הזנת נתונים למערכת - מחובר ישירות ליומן האירועים המרכזי</p>
         </div>
 

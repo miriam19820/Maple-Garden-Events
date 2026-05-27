@@ -4,7 +4,8 @@ import app from './app'; // הוספנו את הייבוא של האפליקצי
 
 // יצירת שרת HTTP שמחזיק גם את Express (עם כל הנתיבים) וגם את Socket.io
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
+// הוספנו את המילה export לפני const
+export const io = new Server(httpServer, {
   cors: { origin: "*" }
 });
 

@@ -1,0 +1,226 @@
+.calendar-container {
+  max-width: 100%;
+  background: #ffffff;
+  padding: 10px;
+  font-family: Arial, Helvetica, sans-serif;
+  user-select: none;
+}
+
+/* ניווט עליון - חצים + פס חודשים */
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.nav-btn {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #334155;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: #cbd5e1; }
+.year-btn { font-weight: bold; }
+
+/* פס החודשים */
+.months-bar {
+  display: flex;
+  flex: 1;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.month-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px 2px;
+  font-weight: bold;
+  font-size: 0.82rem;
+  color: #334155;
+  cursor: pointer;
+  border-left: 1px solid #cbd5e1;
+  background: #ffffff;
+  white-space: nowrap;
+}
+.month-tab:last-child { border-left: none; }
+.month-tab:hover { background: #e2e8f0; }
+.month-tab.active {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+/* שנה */
+.year-display {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+/* גריד LTR: שבת col1(שמאל), ראשון col7(ימין) */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background-color: #a5f3fc;
+  border: 1px solid #93c5fd;
+  width: 100%;
+  direction: ltr;
+}
+
+.week-day-label {
+  text-align: center;
+  font-weight: bold;
+  background-color: #7dd3fc;
+  color: #0369a1;
+  padding: 6px;
+  font-size: 0.9rem;
+  border: 1px solid #bae6fd;
+}
+
+/* תא - RTL פנימי */
+.calendar-cell {
+  background: #ffffff;
+  min-height: 100px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid #e2e8f0;
+  position: relative;
+  cursor: pointer;
+  transition: filter 0.1s;
+  overflow: hidden;
+  min-width: 0;
+  box-sizing: border-box;
+  direction: rtl;
+}
+.calendar-cell:hover { filter: brightness(0.96); }
+
+/* ימים מחוץ לחודש */
+.calendar-cell.out-of-month {
+  background-color: #f8fafc;
+  cursor: default;
+}
+.calendar-cell.out-of-month .gregorian-num { color: #94a3b8; }
+
+/* שורת כותרת תא */
+.cell-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.gregorian-num {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #1e293b;
+  line-height: 1;
+}
+
+.candle-time {
+  font-size: 0.72rem;
+  font-weight: bold;
+  color: #000000;
+}
+
+.hebrew-text {
+  font-size: 0.72rem;
+  color: #475569;
+  font-weight: 500;
+}
+
+.cell-status-text {
+  font-size: 0.78rem;
+  text-align: center;
+  font-weight: bold;
+  margin-top: auto;
+  padding-bottom: 2px;
+}
+
+/* ===== צבעי סטטוסים ===== */
+
+/* שבת / יום טוב - אדום מלא */
+.status-blocked {
+  background-color: #ef4444 !important;
+}
+.status-blocked .hebrew-text,
+.status-blocked .gregorian-num,
+.status-blocked .candle-time,
+.status-blocked .cell-status-text {
+  color: #ffffff !important;
+}
+
+/* שישי / ערב חג - ורוד בהיר */
+.status-forbidden {
+  background-color: #fecdd3 !important;
+}
+.status-forbidden .cell-status-text { color: #9f1239; }
+
+/* אופציה - כחול בהיר */
+.status-option {
+  background-color: #dbeafe !important;
+  border: 1px solid #2563eb !important;
+}
+.status-option .cell-status-text { color: #1d4ed8; }
+
+/* בדיקה - כתום */
+.status-checking {
+  background-color: #ffedd5 !important;
+  border: 2px dashed #f97316 !important;
+}
+.status-checking .cell-status-text { color: #c2410c; }
+
+/* סגור - אדום בינוני */
+.status-booked {
+  background-color: #fca5a5 !important;
+}
+.status-booked .cell-status-text { color: #7f1d1d; }
+
+.status-blocked {
+  cursor: not-allowed !important;
+}
+.calendar-loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 1rem;
+  color: #64748b;
+}
+
+/* פרטי ארוע בתא */
+.cell-event {
+  border-radius: 4px;
+  padding: 3px 5px;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.event-booked {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.event-option {
+  background-color: #22c55e;
+  color: #ffffff;
+}
+
+.event-name {
+  font-weight: bold;
+  font-size: 0.75rem;
+}
+
+.event-details {
+  font-size: 0.68rem;
+  opacity: 0.9;
+}
