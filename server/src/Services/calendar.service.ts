@@ -162,6 +162,37 @@ export const calendarService = {
     io.emit('date-updated', { id: dateId, status: EventStatus.OPTION });
     return updated;
   },
+  // פונקציה חדשה לשמירת אופציה ושליחת הודעות
+  async saveOptionHold(dates: string[], clientName: string, clientPhone: string, clientEmail: string) {
+    
+    // 1. מעדכנים את כל התאריכים המבוקשים לסטטוס OPTION ושומרים את פרטי הלקוח
+    const updatedDates = await prisma.eventDate.updateMany({
+      where: {
+        date: { in: dates.map(d => new Date(d)) }
+      },
+      data: {
+        status: EventStatus.OPTION,
+        clientName: clientName,
+        clientPhone: clientPhone,
+        clientEmail: clientEmail
+      }
+    });
+    
+
+    // // 2. שליחת אימייל ללקוח (בעזרת ספרייה כמו Nodemailer)
+    // // נכתוב פה פונקציית עזר שתשלח את המייל
+    // await sendOptionEmail(clientEmail, clientName, dates);
+
+    // // 3. שליחת וואטסאפ ללקוח (מצריך חיבור ל-API חיצוני כמו GreenAPI או Twilio)
+    // await sendOptionWhatsApp(clientPhone, clientName, dates);
+
+    // // 4. נשדר לכל המחשבים המחוברים (WebSockets) שהתאריכים נתפסו
+    // dates.forEach(date => {
+    //   io.emit('date-updated', { date, status: EventStatus.OPTION });
+    // });
+
+    return updatedDates;
+  },
 
   async bookEventFinal(dateId: string, bookingDetails: any) {
     const booking = await prisma.booking.create({

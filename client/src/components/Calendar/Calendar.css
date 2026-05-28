@@ -224,3 +224,26 @@
   font-size: 0.68rem;
   opacity: 0.9;
 }
+/* תאריך פנוי */
+.status-available {
+  background-color: #ffffff;
+}
+
+/* תאריך באופציה (מתלבט) */
+.status-option {
+  background-color: #ffe0b2; /* צבע כתום בהיר / אפרסק */
+  border: 2px dashed #ff9800; /* מסגרת מקווקות שמדגישה שזה זמני */
+  cursor: pointer;
+}
+
+/* תאריך סגור סופית */
+.status-booked {
+  background-color: #ef5350; /* אדום */
+  color: white;
+  cursor: not-allowed;
+}
+.hebrew-text {
+  color: #333333 !important; /* אפור כהה ובולט */
+  font-weight: 600; /* קצת מודגש */
+  font-size: 0.9em;
+}

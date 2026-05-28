@@ -1,19 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import styles from './BookingForm.module.css';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
 import { Calendar } from '../Calendar/Calendar'; 
 
 const BookingForm = () => {
+  const navigate = useNavigate();
+  const location = useLocation(); 
+
+  // זיהוי התאריכים שהגיעו מהניווט
+  let initialDates: any[] = [];
+  if (location.state?.selectedDates) {
+    initialDates = location.state.selectedDates;
+  } else if (location.state?.selectedDate) {
+    initialDates = [location.state.selectedDate];
+  } else if (location.state?.date) {
+    // אם הגיע רק תאריך כמחרוזת, נהפוך אותו לאובייקט כדי שהמערכת תדע לעבוד איתו
+    initialDates = [{ date: location.state.date, hebrewDate: '' }];
+  }
+
+  // יצרנו סטייט חדש שמחזיק את התאריכים להצגה (כדי שנוכל לעדכן אותו גם מהלוח הפנימי)
+  const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<any[]>(initialDates);
+
   const [formData, setFormData] = useState({
     clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
     calendarDateId: '', eventType: '', timeOfDay: '', guestCount: '', finalPricePortion: '', managerComments: '', clientComments: ''
   });
 
+  // עדכון התאריך בטופס הנסתר בהתאם לתאריכים שמוצגים
+  useEffect(() => {
+    if (selectedDatesDisplay.length > 0) {
+      const firstDate = typeof selectedDatesDisplay[0] === 'object' ? selectedDatesDisplay[0].date : selectedDatesDisplay[0];
+      setFormData(prev => ({ ...prev, calendarDateId: firstDate || '' }));
+    }
+  }, [selectedDatesDisplay]);
+
   const [showMenu, setShowMenu] = useState(false);
   const [activeEmailField, setActiveEmailField] = useState<string | null>(null);
-  
-  // המשתנה החדש שנועל את הכפתור!
   const [isSubmitting, setIsSubmitting] = useState(false); 
   
   const emailSuffixes = ['@gmail.com', '@hotmail.com', '@outlook.com', '@yahoo.com', '@icloud.com', '@walla.co.il'];
@@ -31,31 +55,32 @@ const BookingForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // מונע שליחה נוספת אם כבר התחלנו לשמור (חוסם דאבל-קליק)
     if (isSubmitting) return; 
-    
-    setIsSubmitting(true); // נועלים את הכפתור
+    setIsSubmitting(true);
 
     try {
-      // פנייה אמיתית לשרת לשמירת הנתונים
+      // שליחת כל התאריכים (מהלוח או מהניווט) לשרת
+      const payload = { ...formData, allSelectedDates: selectedDatesDisplay };
+      console.log("Sending data to server:", payload);
+
       const response = await fetch('http://localhost:5000/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
+      const resData = await response.json();
+
       if (response.ok) {
-        // מעבר לתפריט *רק* אם השרת אישר שהנתונים נשמרו בהצלחה!
         setShowMenu(true);
       } else {
-        alert("שגיאה בשמירת הנתונים - השרת החזיר שגיאה");
-        setIsSubmitting(false); // משחררים את הנעילה אם הייתה שגיאה כדי שאפשר יהיה לנסות שוב
+        alert(`שגיאה בשמירת הנתונים: ${resData.message || 'השרת החזיר שגיאה לא ידועה'}`);
+        setIsSubmitting(false);
       }
     } catch (error) {
       console.error("Error:", error);
       alert("שגיאת התחברות לשרת - ודאי שהשרת פועל ברקע");
-      setIsSubmitting(false); // משחררים את הנעילה
+      setIsSubmitting(false);
     }
   };
 
@@ -71,17 +96,39 @@ const BookingForm = () => {
   }
 
   return (
-    
     <div className={styles.container}>
       <div className={styles.formCard}>
         <div className={styles.header}>
           <h2 className={styles.title}>יצירת אירוע חדש <span className={styles.titleAccent}>| מייפל</span></h2>
-          {/* כאן אנחנו מוסיפות את הלוח */}
-  <div style={{ padding: '20px' }}>
-     <Calendar onDateSelect={(day) => setFormData(prev => ({ ...prev, calendarDateId: day.date }))} />
-  </div>
+          
+          {/* התיבה שונתה לעבוד מול הסטייט החדש */}
+          {selectedDatesDisplay && selectedDatesDisplay.length > 0 && (
+            <div className={styles.selectedDatesBox} style={{ margin: '15px 0', padding: '15px', backgroundColor: '#fffbeb', border: '1px solid #d97706', borderRadius: '8px', textAlign: 'right', direction: 'rtl' }}>
+              <strong style={{ display: 'block', marginBottom: '8px', color: '#92400e' }}>תאריכים נבחרים לאירוע:</strong>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {selectedDatesDisplay.map((d: any, index: number) => {
+                  const dateStr = typeof d === 'object' ? d.date : d;
+                  const hebrew = typeof d === 'object' ? d.hebrewDate : '';
+                  const formattedDate = dateStr ? dateStr.split('-').reverse().join('-') : '';
+                  
+                  return (
+                    <span key={index} style={{ padding: '4px 12px', background: '#fff', border: '1px solid #f59e0b', borderRadius: '20px', fontSize: '0.95rem', display: 'inline-block' }}>
+                      {formattedDate} {hebrew ? ` - ${hebrew}` : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-  <form className={styles.formBody} onSubmit={handleSubmit}></form>
+          <div style={{ padding: '20px' }}>
+            {/* כאן התיקון הגדול: כשתבחרי תאריך מהלוח בדף הזה, הוא יעודכן גם בתיבה למעלה עם העברי! */}
+            <Calendar onDateSelect={(day) => {
+              setFormData(prev => ({ ...prev, calendarDateId: day.date }));
+              setSelectedDatesDisplay([{ date: day.date, hebrewDate: day.hebrewDate }]);
+            }} />
+          </div>
+
           <p className={styles.subtitle}>הזנת נתונים למערכת - מחובר ישירות ליומן האירועים המרכזי</p>
         </div>
 
@@ -180,7 +227,6 @@ const BookingForm = () => {
           </div>
 
           <div className={styles.actions}>
-            {/* הכפתור עכשיו משתנה וננעל בזמן שמירה! */}
             <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
               {isSubmitting ? 'שומר נתונים, אנא המתן...' : 'שמירת הפרטים ומעבר לצפייה בתפריט'}
             </button>

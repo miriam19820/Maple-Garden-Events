@@ -68,11 +68,17 @@ model Dish {
   category    MenuCategory @relation(fields: [categoryId], references: [id])
 }
 
+// מודל לתאריכים ואופציות - מאוחד ומתוקן
 model EventDate {
-  id        String   @id @default(uuid())
-  date      DateTime @unique
-  status    String   // AVAILABLE, BOOKED, BLOCKED, etc.
-  lockedBy  String?
+  id          String   @id @default(uuid())
+  date        DateTime @unique
+  status      String   // AVAILABLE, BOOKED, BLOCKED, OPTION etc.
+  lockedBy    String?
   
-  booking   Booking? 
+  booking     Booking? 
+
+  // --- פרטי הלקוח ששומר אופציה ---
+  clientName  String?
+  clientPhone String?
+  clientEmail String?
 }

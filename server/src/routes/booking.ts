@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { createBooking, getAllBookings } from '../controllers/booking';
+import { releaseOptions } from '../controllers/booking';
+
 
 const router = Router();
 
@@ -8,5 +10,6 @@ router.post('/', createBooking);
 
 // נתיב חדש - שליפת כל ההזמנות הקיימות!
 router.get('/', getAllBookings);
+router.post('/release', releaseOptions);
 
 export default router;
