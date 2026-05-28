@@ -247,3 +247,21 @@
   font-weight: 600; /* קצת מודגש */
   font-size: 0.9em;
 }
+/* צבע לתאריך שהוא באופציה */
+.status-option {
+  background-color: #fef3c7; /* צהוב בהיר */
+  border: 1px solid #f59e0b; /* גבול צהוב כהה/כתום */
+  color: #92400e;
+}
+
+/* העיצוב של השם בתוך תאריך שהוא אופציה */
+.event-option {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #b45309;
+  border-right: 3px solid #f59e0b;
+}
+
+/* (אופציונלי) אם חסר לך עיצוב לתאריך פנוי */
+.status-available {
+  background-color: #ffffff;
+}

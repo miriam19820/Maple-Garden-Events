@@ -70,15 +70,18 @@ model Dish {
 
 // מודל לתאריכים ואופציות - מאוחד ומתוקן
 model EventDate {
-  id          String   @id @default(uuid())
-  date        DateTime @unique
-  status      String   // AVAILABLE, BOOKED, BLOCKED, OPTION etc.
-  lockedBy    String?
-  
-  booking     Booking? 
+  id              String    @id @default(uuid())
+  date            DateTime  @unique
+  status          String    // AVAILABLE, BOOKED, BLOCKED, OPTION etc.
+  lockedBy        String?
+
+  booking         Booking?
 
   // --- פרטי הלקוח ששומר אופציה ---
-  clientName  String?
-  clientPhone String?
-  clientEmail String?
+  clientName      String?
+  clientPhone     String?
+  clientEmail     String?
+
+  // --- תשתית ניהול אופציות מתקדמת (חדש) ---
+  optionExpiresAt DateTime? // שעת הפקיעה של האופציה
 }

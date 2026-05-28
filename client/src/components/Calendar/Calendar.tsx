@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
+import OptionsManager from '../OptionsManager/OptionsManager'; 
 
 interface DayData {
   id: string | null;
@@ -176,6 +177,12 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
           </div>
         </div>
       )}
+
+      {/* העברנו את מנהל האופציות לכאן! מתחת לכל שאר הרכיבים, שיהיה לו מקום מסודר ומרווח משלו */}
+      <div style={{ marginTop: '50px' }}>
+        <OptionsManager />
+      </div>
+
     </div>
   );
 };

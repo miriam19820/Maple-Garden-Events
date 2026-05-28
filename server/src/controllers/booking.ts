@@ -21,6 +21,13 @@ export const createBooking = async (req: Request, res: Response) => {
     // 2. זיהוי סטטוס חכם: תאריך אחד = סגור. יותר מאחד = שמירת אופציה.
     const newStatus = datesToProcess.length > 1 ? 'OPTION' : 'BOOKED';
 
+    // חישוב דד-ליין לאופציה: אם נשמרה אופציה, נגדיר תפוגה של 48 שעות קדימה כברירת מחדל
+    let expiryDate: Date | null = null;
+    if (newStatus === 'OPTION') {
+      expiryDate = new Date();
+      expiryDate.setHours(expiryDate.getHours() + 48);
+    }
+
     // 3. חישוב אוטומטי של המחיר הכולל ואיחוד שדות (מבוצע פעם אחת עבור כל הרשומות שייווצרו)
     const calculatedTotalPrice = data.guestCount * data.finalPricePortion;
     const clientAPhoneCombined = data.clientAPhone2 ? `${data.clientAPhone} | נוסף: ${data.clientAPhone2}` : data.clientAPhone;
@@ -41,11 +48,19 @@ export const createBooking = async (req: Request, res: Response) => {
         continue; // דילוג במידה והתאריך אינו חוקי
       }
 
-      // יצירה או עדכון של התאריך במסד הנתונים עם הסטטוס החדש
+      // יצירה או עדכון של התאריך במסד הנתונים עם הסטטוס החדש והדד-ליין
       const eventDate = await prisma.eventDate.upsert({
         where: { date: possibleDate },
-        update: { status: newStatus, lockedBy: null },
-        create: { date: possibleDate, status: newStatus }
+        update: { 
+          status: newStatus, 
+          lockedBy: null,
+          optionExpiresAt: expiryDate 
+        },
+        create: { 
+          date: possibleDate, 
+          status: newStatus,
+          optionExpiresAt: expiryDate
+        }
       });
 
       // יצירת ההזמנה לאותו תאריך ספציפי
@@ -104,14 +119,14 @@ export const createBooking = async (req: Request, res: Response) => {
 export const getAllBookings = async (req: Request, res: Response) => {
   try {
     const bookings = await prisma.booking.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      include: { eventDate: true } // השורה הקריטית שמודיעה למנהל שמדובר באופציה!
     });
     res.status(200).json({ success: true, count: bookings.length, data: bookings });
   } catch (error) {
     res.status(500).json({ success: false, message: 'שגיאה בשליפת ההזמנות.' });
   }
 };
-
 // --- פונקציה חדשה: שחרור אופציות (תאריכים שלא נסגרו) ---
 export const releaseOptions = async (req: Request, res: Response) => {
   try {
@@ -122,7 +137,7 @@ export const releaseOptions = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לשחרור.' });
     }
 
-    // מחזירים את התאריכים בלוח לסטטוס פנוי (רק אם הם היו בגדר אופציה)
+    // מחזירים את התאריכים בלוח לסטטוס פנוי (רק אם הם היו בגדר אופציה) מנקים גם את הדדליין
     await prisma.eventDate.updateMany({
       where: { 
         id: { in: dateIds },
@@ -130,7 +145,11 @@ export const releaseOptions = async (req: Request, res: Response) => {
       },
       data: { 
         status: 'AVAILABLE', 
-        lockedBy: null 
+        lockedBy: null,
+        optionExpiresAt: null,
+        clientName: null,
+        clientPhone: null,
+        clientEmail: null
       }
     });
 
@@ -152,5 +171,52 @@ export const releaseOptions = async (req: Request, res: Response) => {
       success: false, 
       message: 'שגיאה בשחרור התאריכים בשרת.' 
     });
+  }
+};
+
+// --- פונקציה חדשה: הקפצת לקוח שמתחרה על תאריך (Bump) ---
+export const bumpOption = async (req: Request, res: Response) => {
+  try {
+    const { dateId } = req.body;
+
+    if (!dateId) {
+      return res.status(400).json({ success: false, message: 'חסר מזהה תאריך.' });
+    }
+
+    const eventDate = await prisma.eventDate.findUnique({
+      where: { id: dateId },
+      include: { booking: true } 
+    });
+
+    if (!eventDate || eventDate.status !== 'OPTION') {
+      return res.status(400).json({ success: false, message: 'התאריך אינו מוגדר כאופציה כרגע.' });
+    }
+
+    // מגדירים דד-ליין חדש - 3 שעות מעכשיו
+    const newDeadline = new Date();
+    newDeadline.setHours(newDeadline.getHours() + 3);
+
+    await prisma.eventDate.update({
+      where: { id: dateId },
+      data: { optionExpiresAt: newDeadline }
+    });
+
+    // הכנה לשליחת המייל (נחליף את הלוגים האלו ב-Nodemailer בהמשך)
+    const clientEmail = eventDate.booking?.clientAEmail || eventDate.clientEmail;
+    const clientPhone = eventDate.booking?.clientAPhone || eventDate.clientPhone;
+    
+    console.log(`[מערכת התראות] נשלחת הודעת דחיפות ללקוח...`);
+    console.log(`מייל: ${clientEmail}, טלפון: ${clientPhone}`);
+    console.log(`הודעה: "לקוח אחר מעוניין בתאריך שלך. האופציה שלך תפוג בעוד 3 שעות (${newDeadline.toLocaleString()}). אנא צור קשר לסגירה."`);
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'הדד-ליין קוצר ל-3 שעות והלקוח (סימולציה) עודכן בהצלחה.',
+      newDeadline
+    });
+
+  } catch (error) {
+    console.error("Error bumping option:", error);
+    res.status(500).json({ success: false, message: 'שגיאה בהקפצת הלקוח.' });
   }
 };
