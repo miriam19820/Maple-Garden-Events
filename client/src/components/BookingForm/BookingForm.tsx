@@ -26,7 +26,12 @@ const BookingForm = () => {
     clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
     calendarDateId: '', eventType: '', timeOfDay: '', guestCount: '', finalPricePortion: '', managerComments: '', clientComments: ''
+    
   });
+  // האם להציג ללקוח שזו אופציה או סגירה (אם באנו מהלוח עם כמה תאריכים זה אוטומטית אופציה)
+  const [isOption, setIsOption] = useState(location.state?.isOption || initialDates.length > 1);
+  const [optionDurationHours, setOptionDurationHours] = useState(48); // ברירת מחדל 48 שעות
+  
 
   // עדכון התאריך בטופס הנסתר בהתאם לתאריכים שמוצגים
   useEffect(() => {
@@ -59,10 +64,12 @@ const BookingForm = () => {
     setIsSubmitting(true);
 
     try {
-      // שליחת כל התאריכים (מהלוח או מהניווט) לשרת
-      const payload = { ...formData, allSelectedDates: selectedDatesDisplay };
-      console.log("Sending data to server:", payload);
-
+   const payload = { 
+        ...formData, 
+        allSelectedDates: selectedDatesDisplay, 
+        isOption: isOption, 
+        optionDurationHours: optionDurationHours 
+      };
       const response = await fetch('http://localhost:5000/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -171,6 +178,37 @@ const BookingForm = () => {
               </div>
             </div>
           </div>
+          <div className={styles.inputGroup}>
+                <label style={{ color: '#d97706', fontWeight: 'bold' }}>סוג העסקה</label>
+                <select 
+                  value={isOption ? 'OPTION' : 'BOOKED'}
+                  onChange={(e) => setIsOption(e.target.value === 'OPTION')}
+                  className={styles.input}
+                  style={{ borderBottomColor: '#d97706', backgroundColor: '#fffbeb' }}
+                >
+                  <option value="BOOKED">סגירה סופית (BOOKED)</option>
+                  <option value="OPTION">שמירת אופציה זמנית (OPTION)</option>
+                </select>
+              </div>
+
+              {/* התפריט הזה יופיע רק אם המנהל בחר שזה "שמירת אופציה" */}
+              {isOption && (
+                <div className={styles.inputGroup}>
+                  <label style={{ color: '#dc2626', fontWeight: 'bold' }}>תוקף האופציה ⏳</label>
+                  <select 
+                    value={optionDurationHours}
+                    onChange={(e) => setOptionDurationHours(Number(e.target.value))}
+                    className={styles.input}
+                    style={{ borderBottomColor: '#dc2626' }}
+                  >
+                    <option value={12}>12 שעות</option>
+                    <option value={24}>24 שעות (יממה)</option>
+                    <option value={48}>48 שעות (יומיים)</option>
+                    <option value={72}>72 שעות (3 ימים)</option>
+                    <option value={168}>שבוע ימים</option>
+                  </select>
+                </div>
+              )}
 
           <div className={isWedding ? styles.clientsSectionWedding : styles.clientsSectionSingle}>
             <div className={styles.clientBlock}>

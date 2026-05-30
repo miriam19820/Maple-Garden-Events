@@ -1,6 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import styles from './OptionsManager.module.css';
 
+// מילון המרה ממספרים לאותיות בעברית (כדי שיוצג "ו באלול" במקום "6 באלול")
+const HEBREW_NUMERALS: Record<number, string> = {
+  1:'א',2:'ב',3:'ג',4:'ד',5:'ה',6:'ו',7:'ז',8:'ח',9:'ט',10:'י',
+  11:'יא',12:'יב',13:'יג',14:'יד',15:'טו',16:'טז',17:'יז',18:'יח',19:'יט',20:'כ',
+  21:'כא',22:'כב',23:'כג',24:'כד',25:'כה',26:'כו',27:'כז',28:'כח',29:'כט',30:'ל'
+};
+
+// פונקציית עזר להמרת התאריך המובנה לאותיות
+const getHebrewDateString = (dateObj: Date | null) => {
+  if (!dateObj) return '';
+  try {
+    const formatter = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric', month: 'long' });
+    const fullString = formatter.format(dateObj); // למשל: "6 באלול"
+    const parts = formatter.formatToParts(dateObj);
+    const dayPart = parts.find(p => p.type === 'day')?.value;
+    
+    if (dayPart) {
+      const dayNum = parseInt(dayPart, 10);
+      const hebLetter = HEBREW_NUMERALS[dayNum];
+      if (hebLetter) {
+        // מחליף את המספר (למשל 6) באות (ו)
+        return fullString.replace(dayPart, hebLetter); 
+      }
+    }
+    return fullString;
+  } catch (e) {
+    return '';
+  }
+};
+
 const OptionsManager = () => {
   const [options, setOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11,7 +41,6 @@ const OptionsManager = () => {
       const result = await response.json();
       
       if (result.success) {
-        // עכשיו השרת שולח את ה-eventDate, אז הסינון יעבוד!
         const activeOptions = result.data.filter((b: any) => b.eventDate?.status === 'OPTION');
         setOptions(activeOptions);
       }
@@ -39,7 +68,7 @@ const OptionsManager = () => {
       
       if (result.success) {
         alert("התאריך שוחרר בהצלחה!");
-        window.location.reload(); // מרענן את העמוד כדי שהלוח יתנקה ויחזור ללבן
+        window.location.reload(); 
       } else {
         alert(result.message);
       }
@@ -61,7 +90,7 @@ const OptionsManager = () => {
       
       if (result.success) {
         alert("הלקוח הוקפץ! הדד-ליין עודכן ל-3 שעות מעכשיו.");
-        window.location.reload(); // מרענן כדי שהדד-ליין החדש יוצג במנהל
+        window.location.reload(); 
       } else {
         alert(result.message);
       }
@@ -83,14 +112,21 @@ const OptionsManager = () => {
       ) : (
         <div className={styles.grid}>
           {options.map((option) => {
-            const eventDateStr = option.eventDate?.date ? new Date(option.eventDate.date).toLocaleDateString('he-IL') : '';
+            const dateObj = option.eventDate?.date ? new Date(option.eventDate.date) : null;
+            const eventDateStr = dateObj ? dateObj.toLocaleDateString('he-IL') : '';
+            
+            // קריאה לפונקציה החדשה שמתרגמת את התאריך לאותיות
+            const hebrewDateStr = getHebrewDateString(dateObj);
+
             const expiresAtStr = option.eventDate?.optionExpiresAt ? new Date(option.eventDate.optionExpiresAt).toLocaleString('he-IL') : 'לא מוגדר';
             
             return (
               <div key={option.id} className={styles.card}>
                 <div className={styles.cardContent}>
                   <div>
-                    <h3 className={styles.eventDateText}>תאריך אירוע: <strong>{eventDateStr}</strong></h3>
+                    <h3 className={styles.eventDateText}>
+                      תאריך אירוע: <strong>{eventDateStr}</strong> <span style={{ color: '#d97706', fontSize: '0.95rem' }}>({hebrewDateStr})</span>
+                    </h3>
                     <p className={styles.clientText}>
                       לקוח: {option.clientAFullName} | טלפון: {option.clientAPhone}
                     </p>

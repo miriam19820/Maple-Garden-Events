@@ -103,7 +103,8 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
           <p>מצב בחירת אופציה: נבחרו {optionDates.length} מתוך 3 תאריכים.</p>
           <div className="option-banner-actions">
             <button className="confirm-options-btn" onClick={() => {
-                navigate(`/booking`, { state: { selectedDates: optionDates } });
+                // כאן הוספנו את ה-isOption: true כדי שהטופס יבין שזו אופציה
+                navigate(`/booking`, { state: { selectedDates: optionDates, isOption: true } });
                 setIsOptionMode(false);
                 setOptionDates([]);
               }} disabled={optionDates.length === 0}>
