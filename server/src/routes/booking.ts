@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { createBooking, getAllBookings, releaseOptions, bumpOption } from '../controllers/booking';
+
+import { createBooking, getAllBookings, releaseOptions, bumpOption, finalizeBooking } from '../controllers/booking';
 
 const router = Router();
 
@@ -14,5 +15,7 @@ router.post('/release', releaseOptions);
 
 // נתיב חדש - הקפצת לקוח (קיצור דד-ליין ל-3 שעות)
 router.post('/bump', bumpOption);
+// (כמובן שצריך לייבא את finalizeBooking למעלה בקובץ)
+router.post('/finalize', finalizeBooking);
 
 export default router;

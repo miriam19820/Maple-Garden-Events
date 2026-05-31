@@ -187,3 +187,53 @@
   display: block;
   margin-bottom: 5px;
 }
+/* --- אזור אקו"ם --- */
+.akumSection {
+  grid-column: 1 / -1;
+  background-color: #f0f9ff;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #bae6fd;
+  margin-top: 1rem;
+}
+
+.akumTitle {
+  margin: 0 0 1rem 0;
+  color: #0369a1;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.akumFlex {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.akumInputGroup {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.akumInputGroupColumn {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.akumLabel {
+  margin: 0;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.akumLabelSmall {
+  color: #0369a1;
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}

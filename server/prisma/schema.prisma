@@ -1,5 +1,3 @@
-// server/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -27,7 +25,7 @@ model Booking {
   clientBAddress    String?
 
   // --- פרטי האירוע ---
-  calendarDateId    String   @unique
+  calendarDateId    String    @unique
   eventDate         EventDate @relation(fields: [calendarDateId], references: [id])
   
   eventType         String
@@ -39,10 +37,19 @@ model Booking {
   managerComments   String?
   clientComments    String?
 
-  // --- כספים ---
-  totalPrice        Float
-  paidAmount        Float    @default(0)
-  paymentStatus     String   @default("pending")
+  // --- כספים, אקו"ם וחוזים ---
+  totalPrice          Float
+  paidAmount          Float    @default(0)
+  paymentStatus       String   @default("pending")
+  
+  eventCode           String   @unique @default(cuid()) // קוד אירוע סודי לכניסת הלקוח
+  hasMusic            Boolean  @default(true)           // האם האירוע כולל מוזיקה
+  akumApprovalCode    String?                           // קוד אישור מאקו"ם
+  advancePaid         Float    @default(0)              // מקדמה ששולמה
+  totalPaid           Float    @default(0)              // סך הכל שולם
+  securityCheckStatus String   @default("PENDING")      // סטטוס צ'ק ביטחון
+  securityCheckUrl    String?                           // קישור לתמונה של צ'ק הביטחון
+  isContractSigned    Boolean  @default(false)          // האם חוזה נחתם
 
   // --- היסטוריה ולוגים ---
   createdAt         DateTime @default(now())
@@ -51,14 +58,14 @@ model Booking {
   updatedBy         String?
 }
 
-// מודל לקטגוריות
+// מודל לקטגוריות בתפריט
 model MenuCategory {
   id     String @id @default(uuid())
   name   String 
   dishes Dish[] 
 }
 
-// מודל למנה בודדת
+// מודל למנה בודדת בתפריט
 model Dish {
   id          String       @id @default(uuid())
   name        String
@@ -68,20 +75,17 @@ model Dish {
   category    MenuCategory @relation(fields: [categoryId], references: [id])
 }
 
-// מודל לתאריכים ואופציות - מאוחד ומתוקן
+// מודל לתאריכים ואופציות בלוח השנה
 model EventDate {
   id              String    @id @default(uuid())
   date            DateTime  @unique
-  status          String    // AVAILABLE, BOOKED, BLOCKED, OPTION etc.
+  status          String    // AVAILABLE, BOOKED, BLOCKED, OPTION
   lockedBy        String?
-
   booking         Booking?
 
-  // --- פרטי הלקוח ששומר אופציה ---
+  // --- פרטי הלקוח ששומר אופציה זמנית ---
   clientName      String?
   clientPhone     String?
   clientEmail     String?
-
-  // --- תשתית ניהול אופציות מתקדמת (חדש) ---
   optionExpiresAt DateTime? // שעת הפקיעה של האופציה
 }
