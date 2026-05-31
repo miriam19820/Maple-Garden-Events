@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
 import OptionsManager from '../OptionsManager/OptionsManager'; 
+import { socket } from '../../services/socketService';
 
 interface DayData {
   id: string | null;
@@ -55,12 +56,31 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const startStr = formatDateLocal(startDate);
   const endStr   = formatDateLocal(endDate);
 
+  // משיכת נתונים רגילה
   useEffect(() => {
     setLoading(true);
     axios.get('http://localhost:5000/api/calendar/dates', { params: { start: startStr, end: endStr } })
       .then(r => setDatesData(r.data))
       .catch(e => console.error('שגיאה:', e))
       .finally(() => setLoading(false));
+  }, [startStr, endStr]);
+
+  // האזנה לעדכוני זמן אמת מהשרת (Real-Time)
+  useEffect(() => {
+    const handleDateUpdate = (data: any) => {
+      console.log('עדכון זמן אמת התקבל בלוח:', data);
+      // מרעננים את הלוח בשקט (ללא מסך טעינה) כדי שהשינוי יקרה אוטומטית לעיני הלקוח
+      axios.get('http://localhost:5000/api/calendar/dates', { params: { start: startStr, end: endStr } })
+        .then(r => setDatesData(r.data))
+        .catch(e => console.error('שגיאה ברענון זמן אמת:', e));
+    };
+
+    socket.on('date-updated', handleDateUpdate);
+
+    // ניקוי ההאזנה כשהקומפוננטה נסגרת או כשמחליפים חודש
+    return () => {
+      socket.off('date-updated', handleDateUpdate);
+    };
   }, [startStr, endStr]);
 
   const buildGrid = () => {

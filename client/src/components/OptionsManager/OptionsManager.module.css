@@ -93,3 +93,12 @@
   font-size: 1.1rem;
   color: #d97706;
 }
+/* כפתור סגירה סופית - ירוק בולט */
+.finalizeBtn {
+  background-color: #10b981;
+  color: white;
+}
+
+.finalizeBtn:hover {
+  background-color: #059669;
+}
