@@ -27,7 +27,12 @@
   padding: 15px;
   background-color: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s ease-in-out;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
 }
 
 .card:hover {
@@ -101,4 +106,75 @@
 
 .finalizeBtn:hover {
   background-color: #059669;
+}
+
+/* popup */
+.popupOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  direction: rtl;
+}
+
+.popupBox {
+  background: #ffffff;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 95vw;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+
+.popupHeader {
+  background: #1e293b;
+  color: #ffffff;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.popupClose {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.popupClose:hover { color: #ef4444; }
+
+.popupBody {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(85vh - 50px);
+  overflow-y: auto;
+}
+
+.popupRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 8px;
+}
+
+.popupRow label {
+  font-weight: bold;
+  color: #475569;
+  font-size: 0.85rem;
+  min-width: 90px;
+}
+
+.popupRow span {
+  color: #1e293b;
+  font-size: 0.9rem;
 }

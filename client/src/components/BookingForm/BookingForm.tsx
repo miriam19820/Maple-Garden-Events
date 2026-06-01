@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
-
 import { useNavigate, useLocation } from 'react-router-dom';
-
 import styles from './BookingForm.module.css';
-
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
-
-import { Calendar } from '../Calendar/Calendar';
 
 
 
@@ -31,10 +26,7 @@ const BookingForm = () => {
     initialDates = [location.state.selectedDate];
 
   } else if (location.state?.date) {
-
-    // אם הגיע רק תאריך כמחרוזת, נהפוך אותו לאובייקט כדי שהמערכת תדע לעבוד איתו
-
-    initialDates = [{ date: location.state.date, hebrewDate: '' }];
+    initialDates = [{ date: location.state.date, hebrewDate: location.state.hebrewDate || '' }];
 
   }
 
@@ -220,10 +212,10 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
       <div className={styles.formCard}>
 
         <div className={styles.header}>
-
-          <h2 className={styles.title}>יצירת אירוע חדש <span className={styles.titleAccent}>| מייפל</span></h2>
-
-         
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+            <button onClick={() => navigate('/')} style={{ background: '#e2e8f0', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold' }}>← חזרה ללוח</button>
+            <h2 className={styles.title}>יצירת אירוע חדש <span className={styles.titleAccent}>| מייפל</span></h2>
+          </div>
 
           {/* התיבה שונתה לעבוד מול הסטייט החדש */}
 
@@ -265,24 +257,7 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
 
 
 
-          <div style={{ padding: '20px' }}>
-
-            {/* כאן התיקון הגדול: כשתבחרי תאריך מהלוח בדף הזה, הוא יעודכן גם בתיבה למעלה עם העברי! */}
-
-            <Calendar onDateSelect={(day) => {
-
-              setFormData(prev => ({ ...prev, calendarDateId: day.date }));
-
-              setSelectedDatesDisplay([{ date: day.date, hebrewDate: day.hebrewDate }]);
-
-            }} />
-
-          </div>
-
-
-
           <p className={styles.subtitle}>הזנת נתונים למערכת - מחובר ישירות ליומן האירועים המרכזי</p>
-
         </div>
 
 

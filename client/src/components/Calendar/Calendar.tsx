@@ -3,7 +3,6 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
-import OptionsManager from '../OptionsManager/OptionsManager'; 
 import { socket } from '../../services/socketService';
 
 interface DayData {
@@ -117,13 +116,18 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   };
 
   return (
-    <div className="calendar-container">
+    <div className="calendar-page-layout">
+      <div className="calendar-side-buttons">
+        <button className="side-mgmt-btn" onClick={() => navigate('/options-manager')}>ניהול אופציות</button>
+        <button className="side-mgmt-btn" onClick={() => navigate('/bookings-manager')}>ניהול הזמנות</button>
+      </div>
+
+      <div className="calendar-container">
       {isOptionMode && (
         <div className="option-mode-banner">
           <p>מצב בחירת אופציה: נבחרו {optionDates.length} מתוך 3 תאריכים.</p>
           <div className="option-banner-actions">
             <button className="confirm-options-btn" onClick={() => {
-                // כאן הוספנו את ה-isOption: true כדי שהטופס יבין שזו אופציה
                 navigate(`/booking`, { state: { selectedDates: optionDates, isOption: true } });
                 setIsOptionMode(false);
                 setOptionDates([]);
@@ -187,23 +191,21 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       {selectedDay && <EventPopup day={selectedDay} onClose={() => setSelectedDay(null)} />}
 
       {isActionModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content action-modal">
-            <h3>מה תרצו לעשות עם התאריך {selectedDateForAction?.split('-').reverse().join('-')}?</h3>
-            <div className="action-buttons-container">
-              <button className="book-btn" onClick={handleBookEvent}>סגירת אירוע</button>
-              <button className="option-btn" onClick={() => { setIsActionModalOpen(false); setIsOptionMode(true); setOptionDates([selectedDateForAction!]); }}>שמירת אופציה (בחירת תאריכים)</button>
+        <div className="side-panel-overlay" onClick={() => setIsActionModalOpen(false)}>
+          <div className="side-panel" onClick={e => e.stopPropagation()}>
+            <div className="side-panel-header">
+              <span>תאריך: {selectedDateForAction?.split('-').reverse().join('-')}</span>
+              <button className="side-panel-close" onClick={() => setIsActionModalOpen(false)}>✕</button>
             </div>
-            <button className="cancel-btn" onClick={() => setIsActionModalOpen(false)}>ביטול</button>
+            <div className="side-panel-body">
+              <button className="book-btn" onClick={handleBookEvent}>סגירת אירוע</button>
+              <button className="option-btn" onClick={() => { setIsActionModalOpen(false); setIsOptionMode(true); setOptionDates([selectedDateForAction!]); }}>שמירת אופציה</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* העברנו את מנהל האופציות לכאן! מתחת לכל שאר הרכיבים, שיהיה לו מקום מסודר ומרווח משלו */}
-      <div style={{ marginTop: '50px' }}>
-        <OptionsManager />
       </div>
-
     </div>
   );
 };
