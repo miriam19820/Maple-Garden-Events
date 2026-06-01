@@ -4,6 +4,7 @@ import { Calendar } from './components/Calendar/Calendar';
 import BookingForm from './components/BookingForm/BookingForm';
 import OptionsManager from './components/OptionsManager/OptionsManager';
 import BookingsManager from './components/BookingsManager/BookingsManager';
+import EventFormManager from './components/EventFormManager/EventFormManager';
 
 const CalendarWrapper = () => {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ function App() {
         <Route path="/booking" element={<BookingForm />} />
         <Route path="/options-manager" element={<OptionsManagerPage />} />
         <Route path="/bookings-manager" element={<BookingsManager />} />
+        <Route path="/event-form-manager" element={<EventFormManager />} />
       </Routes>
     </BrowserRouter>
   );

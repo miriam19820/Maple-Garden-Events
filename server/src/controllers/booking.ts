@@ -105,7 +105,7 @@ export const getAllBookings = async (req: Request, res: Response) => {
   try {
     const bookings = await prisma.booking.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { eventDate: true }
+      include: { eventDate: true, eventForm: true }
     });
     res.status(200).json({ success: true, count: bookings.length, data: bookings });
   } catch (error) {

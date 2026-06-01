@@ -56,6 +56,9 @@ model Booking {
   createdBy         String
   updatedAt         DateTime @updatedAt
   updatedBy         String?
+
+  // --- טופס הפקת אירוע ---
+  eventForm         EventForm?
 }
 
 // מודל לקטגוריות בתפריט
@@ -79,13 +82,65 @@ model Dish {
 model EventDate {
   id              String    @id @default(uuid())
   date            DateTime  @unique
-  status          String    // AVAILABLE, BOOKED, BLOCKED, OPTION
+  status          String
   lockedBy        String?
   booking         Booking?
-
-  // --- פרטי הלקוח ששומר אופציה זמנית ---
   clientName      String?
   clientPhone     String?
   clientEmail     String?
-  optionExpiresAt DateTime? // שעת הפקיעה של האופציה
+  optionExpiresAt DateTime?
+}
+
+// טופס הפקת אירוע - ממולא חודש לפני האירוע
+model EventForm {
+  id                  String   @id @default(uuid())
+  bookingId           String   @unique
+  booking             Booking  @relation(fields: [bookingId], references: [id])
+
+  // פרטי בסיס
+  eventTime           String?   // שעת קבלת פנים
+  receptionType       String?   // נפרד / מעורב
+  finalGuestCount     Int?
+  seatingType         String?   // מעורב / נפרד
+
+  // חלוקה (רק אם נפרד)
+  menPercent          Int?
+  womenPercent        Int?
+
+  // שולחן כבוד
+  honorTableCount     Int?
+
+  // עיצוב
+  tableclothId        String?   // id של מפה שנבחרה
+  napkinId            String?   // id של מפית שנבחרה
+  centerpiece         String?   // מרכזי שולחן
+  bridgeChair         String?   // כסא כלה
+
+  // ציוד
+  hasLighting         Boolean  @default(false)
+  hasSoundSystem      Boolean  @default(false)
+  hasScreens          Boolean  @default(false)
+  hasFireworks        Boolean  @default(false)
+
+  // משמחים
+  entertainersBar     Int?     // כמות בר
+  entertainersSitting Int?     // כמות ישיבה
+  entertainersMen     Int?
+  entertainersWomen   Int?
+
+  // צ'ק פיקדון
+  depositCheckUrl     String?
+  depositCheckStatus  Boolean  @default(false)
+
+  // אקו"ם
+  akumCode            String?
+
+  // כשרות
+  kashrut             String?  // בד רובין / מחפוד / אחר
+
+  // הערות (ממוספרות - JSON array)
+  notes               String?  // JSON string של מערך הערות
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
