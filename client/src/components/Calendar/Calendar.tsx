@@ -120,6 +120,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       <div className="calendar-side-buttons">
         <button className="side-mgmt-btn" onClick={() => navigate('/options-manager')}>ניהול אופציות</button>
         <button className="side-mgmt-btn" onClick={() => navigate('/bookings-manager')}>ניהול הזמנות</button>
+        <button className="side-mgmt-btn" onClick={() => navigate('/greeting')}>שליחת ברכה 💌</button>
       </div>
 
       <div className="calendar-container">
