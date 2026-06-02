@@ -128,13 +128,18 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
         <div className="option-mode-banner">
           <p>מצב בחירת אופציה: נבחרו {optionDates.length} מתוך 3 תאריכים.</p>
           <div className="option-banner-actions">
-            <button className="confirm-options-btn" onClick={() => {
-                navigate(`/booking`, { state: { selectedDates: optionDates, isOption: true } });
-                setIsOptionMode(false);
-                setOptionDates([]);
-              }} disabled={optionDates.length === 0}>
-              המשך להרשמה מלאה
-            </button>
+           <button 
+  className="confirm-options-btn" 
+  onClick={() => {
+    // אנחנו עוברים לדף האופציה החדש ומעבירים לו את התאריכים שנבחרו
+    navigate(`/option`, { state: { selectedDates: optionDates } });
+    setIsOptionMode(false);
+    setOptionDates([]);
+  }} 
+  disabled={optionDates.length === 0}
+>
+  המשך להרשמה מלאה
+</button>
             <button className="cancel-btn" onClick={() => { setIsOptionMode(false); setOptionDates([]); }}>בטל</button>
           </div>
         </div>

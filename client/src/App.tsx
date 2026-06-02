@@ -5,7 +5,9 @@ import BookingForm from './components/BookingForm/BookingForm';
 import OptionsManager from './components/OptionsManager/OptionsManager';
 import BookingsManager from './components/BookingsManager/BookingsManager';
 import EventFormManager from './components/EventFormManager/EventFormManager';
+import OptionPage from './components/optionPage/OptionPage';
 
+// בתוך ה-Routes:
 // ייבוא הקומפוננטה של התפריט שהכנו
 import MenuDisplay from './components/MenuDisplay/MenuDisplay';
 
@@ -39,7 +41,8 @@ function App() {
         <Route path="/options-manager" element={<OptionsManagerPage />} />
         <Route path="/bookings-manager" element={<BookingsManager />} />
         <Route path="/event-form-manager" element={<EventFormManager />} />
-        
+        <Route path="/option" element={<OptionPage />} />
+
         {/* הנתיב החדש של התפריט */}
         <Route path="/menu" element={<MenuDisplay />} />
       </Routes>
