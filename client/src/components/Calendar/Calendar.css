@@ -1,114 +1,49 @@
 /* =========================================
-   פריסת דף הלוח עם כפתורי ניהול בצד
+   פריסת דף הלוח
 ========================================= */
 .calendar-page-layout {
   display: flex;
   direction: rtl;
   min-height: 100vh;
-  background: #f8fafc;
+  background: #f1f5f9; /* רקע אפרפר-כחלחל מודרני */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 /* =========================================
-   תפריט צד (כפתורים)
+   תפריט צד (רספונסיבי)
 ========================================= */
 .calendar-side-buttons {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 20px 10px;
-  background: #1e293b;
-  min-width: 130px;
+  padding: 24px 16px;
+  background: #ffffff;
+  min-width: 160px;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.03);
+  z-index: 10;
 }
 
 .side-mgmt-btn {
-  background: #334155;
-  color: #f1f5f9;
-  border: 1px solid #475569;
-  border-radius: 8px;
-  padding: 12px 8px;
-  font-size: 0.85rem;
-  font-weight: bold;
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
   text-align: center;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
 
 .side-mgmt-btn:hover { 
-  background: #ef4444; 
-  border-color: #ef4444; 
+  background: #1e293b; 
+  color: #ffffff;
+  border-color: #1e293b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
-
-/* =========================================
-   פאנל צד (מודל פעולות)
-========================================= */
-.side-panel-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  z-index: 100;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.side-panel {
-  background: #fff;
-  width: 280px;
-  height: 100%;
-  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-  display: flex;
-  flex-direction: column;
-  direction: rtl;
-}
-
-.side-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background: #1e293b;
-  color: #fff;
-  font-weight: bold;
-  font-size: 1rem;
-}
-
-.side-panel-close {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.2rem;
-  cursor: pointer;
-}
-
-.side-panel-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 30px 20px;
-}
-
-.side-panel-body .book-btn {
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 14px;
-  font-size: 1rem;
-  font-weight: bold;
-  cursor: pointer;
-}
-.side-panel-body .book-btn:hover { background: #dc2626; }
-
-.side-panel-body .option-btn {
-  background: #f59e0b;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 14px;
-  font-size: 1rem;
-  font-weight: bold;
-  cursor: pointer;
-}
-.side-panel-body .option-btn:hover { background: #d97706; }
 
 /* =========================================
    מיכל הלוח הראשי
@@ -116,10 +51,10 @@
 .calendar-container {
   flex: 1;
   max-width: 100%;
-  background: #ffffff;
-  padding: 10px;
-  font-family: Arial, Helvetica, sans-serif;
-  user-select: none;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 /* =========================================
@@ -128,245 +63,239 @@
 .calendar-nav {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin-bottom: 4px;
+  gap: 8px;
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
 .nav-btn {
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 1.1rem;
   cursor: pointer;
-  color: #334155;
+  color: #475569;
   flex-shrink: 0;
+  transition: background 0.2s;
 }
-.nav-btn:hover { background: #cbd5e1; }
+.nav-btn:hover { background: #e2e8f0; color: #0f172a; }
 .year-btn { font-weight: bold; }
 
-/* פס החודשים */
 .months-bar {
   display: flex;
   flex: 1;
-  background-color: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
+  background: #f1f5f9;
 }
 
 .month-tab {
   flex: 1;
   text-align: center;
-  padding: 8px 2px;
-  font-weight: bold;
-  font-size: 0.82rem;
-  color: #334155;
+  padding: 10px 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #64748b;
   cursor: pointer;
-  border-left: 1px solid #cbd5e1;
-  background: #ffffff;
-  white-space: nowrap;
+  transition: all 0.2s ease;
 }
-.month-tab:last-child { border-left: none; }
-.month-tab:hover { background: #e2e8f0; }
+.month-tab:hover { background: #e2e8f0; color: #1e293b; }
 .month-tab.active {
-  background-color: #ef4444;
+  background-color: #3b82f6; /* כחול מודרני במקום אדום בתפריט */
   color: #ffffff;
-}
-
-/* שנה */
-.year-display {
-  text-align: center;
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: #1e293b;
-  margin-bottom: 6px;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
 }
 
 /* =========================================
-   גריד לוח השנה
+   מעטפת גריד (לרספונסיביות)
 ========================================= */
-/* גריד LTR: שבת col1(שמאל), ראשון col7(ימין) */
+.calendar-grid-wrapper {
+  overflow-x: auto; /* מאפשר גלילה בניידים */
+  padding-bottom: 10px;
+}
+
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 1px;
-  background-color: #a5f3fc;
-  border: 1px solid #93c5fd;
-  width: 100%;
-  direction: ltr;
+  grid-template-columns: repeat(7, minmax(120px, 1fr)); /* מינימום 120 פיקסל ליום כדי שלא יימעך בנייד */
+  gap: 12px; /* רווח יפה בין הימים */
+  direction: ltr; /* משאיר את הימים מימין לשמאל ע"י סידור הקולומות בקוד */
+  min-width: 900px; /* מכריח גלילה אופקית במסכים קטנים מאוד */
 }
 
 .week-day-label {
   text-align: center;
-  font-weight: bold;
-  background-color: #7dd3fc;
-  color: #0369a1;
-  padding: 6px;
-  font-size: 0.9rem;
-  border: 1px solid #bae6fd;
+  font-weight: 700;
+  color: #475569;
+  padding: 10px 0;
+  font-size: 1rem;
 }
 
 /* =========================================
-   עיצוב תא בודד
+   עיצוב קוביית יום (Floating Cell)
 ========================================= */
-/* תא - RTL פנימי */
 .calendar-cell {
   background: #ffffff;
-  min-height: 100px;
-  padding: 6px;
+  min-height: 120px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   border: 1px solid #e2e8f0;
-  position: relative;
+  border-radius: 12px; /* פינות מעוגלות מודרניות */
   cursor: pointer;
-  transition: filter 0.1s;
-  overflow: hidden;
-  min-width: 0;
-  box-sizing: border-box;
+  transition: all 0.2s ease;
   direction: rtl;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
-.calendar-cell:hover { filter: brightness(0.96); }
 
-/* ימים מחוץ לחודש */
-.calendar-cell.out-of-month {
-  background-color: #f8fafc;
-  cursor: default;
+.calendar-cell:hover:not(.out-of-month):not(.status-blocked) { 
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.05); 
+  border-color: #cbd5e1;
 }
-.calendar-cell.out-of-month .gregorian-num { color: #94a3b8; }
+
+.calendar-cell.out-of-month {
+  background-color: transparent;
+  border: 1px dashed #cbd5e1;
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
 
 /* שורת כותרת תא */
 .cell-header-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  width: 100%;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
 .gregorian-num {
-  font-size: 1.2rem;
-  font-weight: bold;
+  font-size: 1.4rem;
+  font-weight: 800;
   color: #1e293b;
   line-height: 1;
 }
 
-.candle-time {
-  font-size: 0.72rem;
-  font-weight: bold;
-  color: #000000;
+.hebrew-text {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
-.hebrew-text {
-  color: #333333 !important;
-  font-weight: 600;
-  font-size: 0.9em;
+.candle-time {
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #475569;
+  font-weight: bold;
 }
 
 .cell-status-text {
-  font-size: 0.78rem;
-  text-align: center;
-  font-weight: bold;
-  margin-top: auto;
-  padding-bottom: 2px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 4px;
+  text-align: right;
 }
 
 /* =========================================
-   צבעי סטטוסים של תאריכים
+   צבעי סטטוסים - גרסת 2026 (פסטלים אלגנטיים)
 ========================================= */
 
-/* תאריך פנוי */
-.status-available {
-  background-color: #ffffff;
-}
-
-/* שבת / חג מוגדר מהתורה - אדום מלא (חסום לחלוטין) */
+/* שבת / חג (אדום) */
 .status-blocked {
-  background-color: #ef4444 !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  border: none !important;
   cursor: not-allowed !important;
 }
-.status-blocked .hebrew-text,
-.status-blocked .gregorian-num,
-.status-blocked .candle-time,
+.status-blocked .gregorian-num, 
+.status-blocked .hebrew-text, 
 .status-blocked .cell-status-text {
   color: #ffffff !important;
 }
 
-/* שישי / צומות / ספירת העומר - ורוד בהיר (אסור לחתונה) */
+/* אסור לחתונה - שישי/צומות (ורוד עדין) */
+/* אסור לחתונה - שישי/צומות (ורוד כהה יותר וברור) */
 .status-forbidden {
-  background-color: #fecdd3 !important;
-  cursor: not-allowed !important;
+  background-color: #fce7f3 !important; /* ורוד מעט יותר רווי */
+  border: 1px solid #f472b6 !important; /* מסגרת ורודה חזקה יותר */
 }
-.status-forbidden .cell-status-text { color: #9f1239; }
-
-/* 🌟 תאריך דפוק / בעייתי - כתום בהיר (ל"ג בעומר / ערב פסח) */
+.status-forbidden .cell-status-text { color: #be185d; } /* טקסט כהה יותר לקריאות */
+/* תאריך דפוק (כתום עדין) */
 .status-problematic {
-  background-color: #ffedd5 !important;
-  border: 1px solid #fb923c !important;
+  background-color: #fff7ed !important;
+  border: 1px solid #fed7aa !important;
 }
-.status-problematic .cell-status-text { color: #c2410c; }
-
-/* תאריך באופציה (שמור זמנית ללקוח) */
-.status-option {
-  background-color: #fef3c7 !important; /* צהוב/כתום בהיר */
-  border: 2px dashed #f59e0b !important; /* מסגרת מקווקוות כתומה */
-}
-.status-option .cell-status-text { color: #b45309; }
-
-/* סגור סופית - אירוע רשום */
-.status-booked {
-  background-color: #fca5a5 !important; /* אדום בהיר */
-}
-.status-booked .cell-status-text { color: #7f1d1d; }
-
-/* תאריך שנמצא בבדיקה רגעית */
-.status-checking {
-  background-color: #ffedd5 !important;
-  border: 2px dashed #f97316 !important;
-}
-.status-checking .cell-status-text { color: #c2410c; }
-
+.status-problematic .cell-status-text { color: #ea580c; }
 
 /* =========================================
-   שונות וטעינה
+   הזמנות (גלולות קטנות)
 ========================================= */
-.calendar-loading {
-  text-align: center;
-  padding: 40px;
-  font-size: 1rem;
-  color: #64748b;
+.cell-events-container {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
 }
 
-/* =========================================
-   תצוגת אירוע רשום בתוך התא
-========================================= */
-.cell-event {
-  border-radius: 4px;
-  padding: 3px 5px;
-  margin-top: 4px;
-  font-size: 0.72rem;
-  cursor: pointer;
+.small-event-pill {
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* אירוע סגור - מודגש באדום */
 .event-booked {
-  background-color: #ef4444;
-  color: #ffffff;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-right: 3px solid #ef4444;
 }
 
-/* אירוע באופציה - מודגש בכתום/זהב */
 .event-option {
-  background-color: rgba(245, 158, 11, 0.2);
+  background-color: #fef3c7;
   color: #b45309;
   border-right: 3px solid #f59e0b;
 }
 
-.event-name {
-  font-weight: bold;
-  font-size: 0.75rem;
-}
+/* =========================================
+   רספונסיביות למסכים קטנים (סמארטפונים)
+========================================= */
+@media (max-width: 768px) {
+  .calendar-page-layout {
+    flex-direction: column;
+  }
+  
+  .calendar-side-buttons {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 12px;
+    min-width: 100%;
+    border-bottom: 1px solid #e2e8f0;
+  }
 
-.event-details {
-  font-size: 0.68rem;
-  opacity: 0.9;
+  .side-mgmt-btn {
+    white-space: nowrap;
+    padding: 10px 16px;
+  }
+
+  .calendar-container {
+    padding: 12px;
+  }
+
+  .months-bar {
+    overflow-x: auto; /* מאפשר לגלול את החודשים בנייד */
+  }
+
+  .month-tab {
+    padding: 10px 12px;
+  }
 }

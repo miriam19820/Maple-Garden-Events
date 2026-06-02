@@ -164,44 +164,46 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       <div className="year-display">{year}</div>
 
       {loading ? <div className="calendar-loading">טוען נתונים...</div> : (
-        <div className="calendar-grid">
-          {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
-          {grid.map(day => {
-            const isSelectedOption = optionDates.includes(day.date);
-            const cls = ['calendar-cell', `status-${day.status.toLowerCase()}`, !day.isCurrentMonth ? 'out-of-month' : '', isSelectedOption ? 'selected-for-option' : ''].filter(Boolean).join(' ');
-            const dayNum = new Date(day.date + 'T12:00:00').getDate();
-            const isPast = new Date(day.date + 'T12:00:00') < new Date(new Date().toDateString());
-            
-            return (
-              <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row, opacity: isPast && day.isCurrentMonth ? 0.5 : 1 }} onClick={() => {
-                if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
-                
-                if (day.bookings.length > 0) { setSelectedDay(day); return; }
-                
-                if (isOptionMode) {
-                  if (optionDates.includes(day.date)) setOptionDates(optionDates.filter(d => d !== day.date));
-                  else if (optionDates.length < 3) setOptionDates([...optionDates, day.date]);
-                  else alert("ניתן לבחור עד 3 תאריכים.");
-                } else { setSelectedDateForAction(day.date); setIsActionModalOpen(true); }
-              }}>
-                <div className="cell-header-row">
-                    <span className="gregorian-num">{dayNum}</span>
-                    {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
-                    <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
-                </div>
-                
-                <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
+        <div className="calendar-grid-wrapper">
+          <div className="calendar-grid">
+            {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
+            {grid.map(day => {
+              const isSelectedOption = optionDates.includes(day.date);
+              const cls = ['calendar-cell', `status-${day.status.toLowerCase()}`, !day.isCurrentMonth ? 'out-of-month' : '', isSelectedOption ? 'selected-for-option' : ''].filter(Boolean).join(' ');
+              const dayNum = new Date(day.date + 'T12:00:00').getDate();
+              const isPast = new Date(day.date + 'T12:00:00') < new Date(new Date().toDateString());
+              
+              return (
+                <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row, opacity: isPast && day.isCurrentMonth ? 0.5 : 1 }} onClick={() => {
+                  if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
+                  
+                  if (day.bookings.length > 0) { setSelectedDay(day); return; }
+                  
+                  if (isOptionMode) {
+                    if (optionDates.includes(day.date)) setOptionDates(optionDates.filter(d => d !== day.date));
+                    else if (optionDates.length < 3) setOptionDates([...optionDates, day.date]);
+                    else alert("ניתן לבחור עד 3 תאריכים.");
+                  } else { setSelectedDateForAction(day.date); setIsActionModalOpen(true); }
+                }}>
+                  <div className="cell-header-row">
+                      <span className="gregorian-num">{dayNum}</span>
+                      {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
+                      <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
+                  </div>
+                  
+                  <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
 
-                <div className="cell-events-container">
-                    {day.bookings.map((b, idx) => (
-                        <div key={idx} className={`small-event-pill ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}>
-                            {b.timeOfDay} - {b.clientAFullName}
-                        </div>
-                    ))}
+                  <div className="cell-events-container">
+                      {day.bookings.map((b, idx) => (
+                          <div key={idx} className={`small-event-pill ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}>
+                              {b.timeOfDay} - {b.clientAFullName}
+                          </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
