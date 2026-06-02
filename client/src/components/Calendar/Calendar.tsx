@@ -14,7 +14,7 @@ interface DayData {
   reason: string | null;
   candleTime: string | null;
   lockedBy: string | null;
-  booking: any | null;
+  bookings: any[];
   isCurrentMonth: boolean;
 }
 
@@ -44,6 +44,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const [selectedDateForAction, setSelectedDateForAction] = useState<string | null>(null);
   const [isOptionMode, setIsOptionMode] = useState(false);
   const [optionDates, setOptionDates] = useState<string[]>([]);
+  const [eventTypeFilter, setEventTypeFilter] = useState('חתונה'); 
 
   const year  = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -55,32 +56,24 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const startStr = formatDateLocal(startDate);
   const endStr   = formatDateLocal(endDate);
 
-  // משיכת נתונים רגילה
-  useEffect(() => {
+  const fetchCalendarData = () => {
     setLoading(true);
-    axios.get('http://localhost:5000/api/calendar/dates', { params: { start: startStr, end: endStr } })
+    axios.get('http://localhost:5000/api/calendar/dates', { 
+      params: { start: startStr, end: endStr, eventType: eventTypeFilter } 
+    })
       .then(r => setDatesData(r.data))
       .catch(e => console.error('שגיאה:', e))
       .finally(() => setLoading(false));
-  }, [startStr, endStr]);
+  };
 
-  // האזנה לעדכוני זמן אמת מהשרת (Real-Time)
   useEffect(() => {
-    const handleDateUpdate = (data: any) => {
-      console.log('עדכון זמן אמת התקבל בלוח:', data);
-      // מרעננים את הלוח בשקט (ללא מסך טעינה) כדי שהשינוי יקרה אוטומטית לעיני הלקוח
-      axios.get('http://localhost:5000/api/calendar/dates', { params: { start: startStr, end: endStr } })
-        .then(r => setDatesData(r.data))
-        .catch(e => console.error('שגיאה ברענון זמן אמת:', e));
-    };
+    fetchCalendarData();
+  }, [startStr, endStr, eventTypeFilter]);
 
-    socket.on('date-updated', handleDateUpdate);
-
-    // ניקוי ההאזנה כשהקומפוננטה נסגרת או כשמחליפים חודש
-    return () => {
-      socket.off('date-updated', handleDateUpdate);
-    };
-  }, [startStr, endStr]);
+  useEffect(() => {
+    socket.on('date-updated', fetchCalendarData);
+    return () => { socket.off('date-updated', fetchCalendarData); };
+  }, [startStr, endStr, eventTypeFilter]);
 
   const buildGrid = () => {
     const serverMap = new Map(datesData.map((d: any) => [d.date, d]));
@@ -92,9 +85,16 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       const srv = serverMap.get(key);
       const dow = loop.getDay();
       days.push({
-        id: srv?.id ?? null, date: key, dayOfWeek: dow, hebrewDate: srv?.hebrewDate ?? '',
-        status: srv?.status ?? 'AVAILABLE', reason: srv?.reason ?? null, candleTime: srv?.candleTime ?? null,
-        lockedBy: srv?.lockedBy ?? null, booking: srv?.booking ?? null, isCurrentMonth: loop.getMonth() === month,
+        id: srv?.id ?? null, 
+        date: key, 
+        dayOfWeek: dow, 
+        hebrewDate: srv?.hebrewDate ?? '',
+        status: srv?.status ?? 'AVAILABLE', 
+        reason: srv?.reason ?? null, 
+        candleTime: srv?.candleTime ?? null,
+        lockedBy: srv?.lockedBy ?? null, 
+        bookings: srv?.bookings ?? [],
+        isCurrentMonth: loop.getMonth() === month,
         col: DOW_TO_COL[dow], row,
       });
       if (dow === 6) row++;
@@ -124,6 +124,15 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       </div>
 
       <div className="calendar-container">
+      
+      <div style={{ padding: '10px 16px', background: '#fff', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', gap: '15px', alignItems: 'center', direction: 'rtl', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+        <strong style={{ color: '#1e293b' }}>בדוק זמינות עבור:</strong>
+        <select value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1rem', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}>
+          <option value="חתונה">חתונה</option>
+          <option value="אירוע אחר">אירוע אחר</option>
+        </select>
+      </div>
+
       {isOptionMode && (
         <div className="option-mode-banner">
           <p>מצב בחירת אופציה: נבחרו {optionDates.length} מתוך 3 תאריכים.</p>
@@ -154,7 +163,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
 
       <div className="year-display">{year}</div>
 
-      {loading ? <div className="calendar-loading">טוען...</div> : (
+      {loading ? <div className="calendar-loading">טוען נתונים...</div> : (
         <div className="calendar-grid">
           {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
           {grid.map(day => {
@@ -162,10 +171,13 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             const cls = ['calendar-cell', `status-${day.status.toLowerCase()}`, !day.isCurrentMonth ? 'out-of-month' : '', isSelectedOption ? 'selected-for-option' : ''].filter(Boolean).join(' ');
             const dayNum = new Date(day.date + 'T12:00:00').getDate();
             const isPast = new Date(day.date + 'T12:00:00') < new Date(new Date().toDateString());
+            
             return (
               <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row, opacity: isPast && day.isCurrentMonth ? 0.5 : 1 }} onClick={() => {
-                if (!day.isCurrentMonth || day.status === 'BLOCKED' || isPast) return;
-                if (day.booking) { setSelectedDay(day); return; }
+                if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
+                
+                if (day.bookings.length > 0) { setSelectedDay(day); return; }
+                
                 if (isOptionMode) {
                   if (optionDates.includes(day.date)) setOptionDates(optionDates.filter(d => d !== day.date));
                   else if (optionDates.length < 3) setOptionDates([...optionDates, day.date]);
@@ -173,16 +185,20 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
                 } else { setSelectedDateForAction(day.date); setIsActionModalOpen(true); }
               }}>
                 <div className="cell-header-row">
-                  <span className="gregorian-num">{dayNum}</span>
-                  {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
-                  <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
+                    <span className="gregorian-num">{dayNum}</span>
+                    {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
+                    <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
                 </div>
+                
                 <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
-                {day.isCurrentMonth && day.booking && (
-                  <div className={`cell-event ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}>
-                    <div className="event-name">{day.booking.clientAFullName}</div>
-                  </div>
-                )}
+
+                <div className="cell-events-container">
+                    {day.bookings.map((b, idx) => (
+                        <div key={idx} className={`small-event-pill ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}>
+                            {b.timeOfDay} - {b.clientAFullName}
+                        </div>
+                    ))}
+                </div>
               </div>
             );
           })}
@@ -205,7 +221,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
           </div>
         </div>
       )}
-
       </div>
     </div>
   );

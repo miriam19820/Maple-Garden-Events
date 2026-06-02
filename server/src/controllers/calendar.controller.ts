@@ -5,10 +5,14 @@ export const calendarController = {
 
   async getAllDates(req: Request, res: Response) {
     try {
-      const { start, end } = req.query;
+      // הוספנו כאן את ה-eventType שמגיע מה-Frontend
+      const { start, end, eventType } = req.query;
+      const parseLocalDate = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+      
       const dates = await calendarService.getAllCalendarDates(
-        new Date(start as string),
-        new Date(end as string)
+        parseLocalDate(start as string),
+        parseLocalDate(end as string),
+        eventType as string // מעבירים את סוג האירוע לשירות
       );
       res.json(dates);
     } catch (error) {
@@ -52,10 +56,13 @@ export const calendarController = {
     try {
       const dateId = req.params.dateId as string;
       const bookingDetails = req.body;
+      
+      // כאן ה-Service בודק התנגשויות לפי ה-timeOfDay שמועבר ב-bookingDetails
       const result = await calendarService.bookEventFinal(dateId, bookingDetails);
       res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: 'שגיאה בסגירת האירוע' });
+    } catch (error: any) {
+      // אם יש התנגשות, ה-Service יזרוק שגיאה והיא תחזור ללקוח כאן
+      res.status(400).json({ error: error.message });
     }
   }
 };

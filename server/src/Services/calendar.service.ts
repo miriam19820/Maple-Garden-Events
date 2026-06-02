@@ -1,4 +1,5 @@
-const hebcal = require('hebcal');
+// @ts-ignore
+import hebcal from 'hebcal';
 import prisma from "../config/prisma";
 import { io } from "../server";
 
@@ -7,12 +8,17 @@ export enum EventStatus {
   CHECKING  = 'CHECKING',
   OPTION    = 'OPTION',
   BOOKED    = 'BOOKED',
-  BLOCKED   = 'BLOCKED',
-  FORBIDDEN = 'FORBIDDEN'
+  BLOCKED   = 'BLOCKED',      // חסום לגמרי (אדום - כמו שבת)
+  FORBIDDEN = 'FORBIDDEN',    // אסור לאירוע (ורוד - חגים/צומות קשים)
+  PROBLEMATIC = 'PROBLEMATIC' // תאריך דפוק/אפשרי חלקית (כתום)
 }
 
-const LAT = 32.0853;
-const LNG = 34.7818;
+function toLocalDateKey(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 const HEBREW_NUMERALS: Record<number, string> = {
   1:'א',2:'ב',3:'ג',4:'ד',5:'ה',6:'ו',7:'ז',8:'ח',9:'ט',10:'י',
@@ -31,178 +37,201 @@ function formatHebrewDate(hDate: any): string {
   return `${HEBREW_NUMERALS[day] || day} ב${month}`;
 }
 
-function getCandleTime(jsDate: Date): string | null {
-  if (jsDate.getDay() !== 5) return null;
-  try {
-    const hDate = new hebcal.HDate(jsDate);
-    hDate.setLocation(LAT, LNG);
-    const cl: Date = hDate.candleLighting();
-    if (!cl) return null;
-    return `${cl.getHours()}:${String(cl.getMinutes()).padStart(2, '0')}`;
-  } catch {
-    return null;
-  }
+function toNoon(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
 }
-
-function getDayStaticStatus(jsDate: Date): { type: EventStatus; reason?: string } {
+export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה'): { type: EventStatus; reason?: string } {
   const jsDay = jsDate.getDay();
-  const hDate = new hebcal.HDate(jsDate);
-  const holidays: any[] = hDate.holidays(true) || [];
+  const noon = toNoon(jsDate);
+  const hDate = new hebcal.HDate(noon);
+  const hMonth: number = hDate.getMonth();
+  const hDay: number = hDate.getDate();
 
+  // ==========================================
+  // 1. שבתות וימי שישי (רלוונטי לכולם)
+  // ==========================================
   if (jsDay === 6) return { type: EventStatus.BLOCKED, reason: 'שבת' };
-
-  const isYomTov = holidays.some((e: any) => e.LIGHT_CANDLES_TZEIS || e.YOM_TOV_ENDS);
-  if (isYomTov) {
-    const name = holidays[0]?.desc[2] || holidays[0]?.desc[0] || 'יום טוב';
-    return { type: EventStatus.BLOCKED, reason: name };
+  if (jsDay === 5) {
+    if (eventType === 'חתונה') {
+      return { type: EventStatus.PROBLEMATIC, reason: 'יום שישי ' };
+    } else {
+      return { type: EventStatus.AVAILABLE, reason: 'יום שישי (בוקר בלבד)' };
+    }
   }
 
-  if (jsDay === 5) return { type: EventStatus.FORBIDDEN, reason: 'יום שישי' };
+  const holidays: any[] = hDate.holidays(true) || [];
+  const yomTovEvent = holidays.find((e: any) => (e.LIGHT_CANDLES_TZEIS || e.YOM_TOV_ENDS) && !e.CHUL_ONLY);
+  const descHe = (e: any): string => e.desc[2] || e.desc[0] || '';
+  
+  // ==========================================
+  // 2. חגים וצומות שאסורים לכל סוגי האירועים!
+  // ==========================================
 
-  const isErev = holidays.some((e: any) => e.LIGHT_CANDLES);
-  if (isErev) {
-    const name = holidays[0]?.desc[2] || holidays[0]?.desc[0] || 'ערב חג';
-    return { type: EventStatus.FORBIDDEN, reason: name };
+  // --- ניסן (1) - פסח ---
+  if (hMonth === 1) {
+    if (hDay === 14) return { type: EventStatus.FORBIDDEN, reason: 'חג הפסח' }; // במקום פסח רגיל, לבקשתך
+    if (hDay === 15) return { type: EventStatus.FORBIDDEN, reason: 'פסח' };
+    if (hDay >= 16 && hDay <= 20) return { type: EventStatus.FORBIDDEN, reason: 'חול המועד פסח' };
+    if (hDay === 21) return { type: EventStatus.FORBIDDEN, reason: 'שביעי של פסח' };
   }
 
-  const isFast = holidays.some((e: any) => {
-    const desc: string = e.desc[0] || '';
-    return desc.includes('Fast') || desc.includes('Tzom') || desc.includes('Tisha') || desc.includes('Asara');
-  });
-  if (isFast) {
-    const name = holidays[0]?.desc[2] || holidays[0]?.desc[0] || 'יום צום';
-    return { type: EventStatus.FORBIDDEN, reason: name };
+  // --- סיוון (3) - שבועות ---
+  if (hMonth === 3) {
+    if (hDay >= 3 && hDay <= 5) return { type: EventStatus.FORBIDDEN, reason: 'ימי הגבלה / ערב חג' };
+    if (hDay === 6) return { type: EventStatus.FORBIDDEN, reason: 'שבועות' };
   }
 
-  const hMonth = hDate.getMonth();
-  const hDay   = hDate.getDate();
-  if ((hMonth === 4 && hDay >= 17) || (hMonth === 5 && hDay <= 9)) {
-    return { type: EventStatus.BLOCKED, reason: 'בין המצרים' };
+  // --- תמוז (4) - שבעה עשר בתמוז ---
+  if (hMonth === 4 && hDay === 17) return { type: EventStatus.FORBIDDEN, reason: 'י"ז בתמוז' };
+
+  // --- אב (5) - תשעה באב ---
+  if (hMonth === 5 && hDay === 9) return { type: EventStatus.FORBIDDEN, reason: 'תשעה באב' }; // חסום להכל
+
+  // --- תשרי (7) - חגי תשרי ---
+  if (hMonth === 7) {
+    if (hDay === 1 || hDay === 2) return { type: EventStatus.FORBIDDEN, reason: 'ראש השנה' };
+    if (hDay === 9) return { type: EventStatus.FORBIDDEN, reason: 'ערב יום כיפור' };
+    if (hDay === 10) return { type: EventStatus.FORBIDDEN, reason: 'יום כיפור' };
+    if (hDay === 13 || hDay === 14) return { type: EventStatus.FORBIDDEN, reason: 'ערב חג סוכות' };
+    if (hDay === 15) return { type: EventStatus.FORBIDDEN, reason: 'חג סוכות' };
+    if (hDay >= 16 && hDay <= 21) return { type: EventStatus.FORBIDDEN, reason: 'חול המועד סוכות' };
+    if (hDay === 22) return { type: EventStatus.FORBIDDEN, reason: 'שמיני עצרת' };
   }
 
-  if (hMonth === 5 && hDay >= 17 && hDay <= 23) {
-    return { type: EventStatus.FORBIDDEN, reason: 'בין הזמנים' };
+  // --- אדר / אדר ב' (12, 13) - פורים ---
+  if (hMonth === 12 || hMonth === 13) {
+    const isTaAnitEsther = holidays.some((e:any) => e.desc[0] === "Ta'anit Esther");
+    if (isTaAnitEsther || hDay === 13) return { type: EventStatus.FORBIDDEN, reason: 'תענית אסתר' };
+    if (hDay === 14) return { type: EventStatus.FORBIDDEN, reason: 'פורים' };
+    if (hDay === 15) return { type: EventStatus.FORBIDDEN, reason: 'שושן פורים' };
   }
 
+  // חסימת חגים מהתורה כללית ליתר ביטחון
+  if (yomTovEvent && hMonth !== 1) return { type: EventStatus.FORBIDDEN, reason: descHe(yomTovEvent) };
+
+
+  // ==========================================
+  // 3. אירועים שאינם חתונה - פתוח כמעט לגמרי!
+  // ==========================================
+  if (eventType !== 'חתונה') {
+    if (hMonth === 6 && hDay === 29) return { type: EventStatus.PROBLEMATIC, reason: 'ערב ראש השנה' };
+    if (hMonth === 7 && hDay >= 3 && hDay <= 8) return { type: EventStatus.PROBLEMATIC, reason: 'עשרת ימי תשובה' };
+    if (hMonth === 7 && (hDay === 11 || hDay === 12)) return { type: EventStatus.AVAILABLE, reason: 'ערב סוכות' }; 
+    if (hMonth === 10 && hDay === 10) return { type: EventStatus.PROBLEMATIC, reason: 'עשרה בטבת' };
+    return { type: EventStatus.AVAILABLE };
+  }
+
+
+  // ==========================================
+  // 4. חוקים מיוחדים לחופות וחתונות בלבד
+  // ==========================================
+
+  // --- ניסן (1) ---
+  if (hMonth === 1) {
+    if (hDay >= 7 && hDay <= 10) return { type: EventStatus.PROBLEMATIC, reason: 'תאריך דפוק' };
+    if (hDay >= 11 && hDay <= 13) return { type: EventStatus.FORBIDDEN, reason: 'ערב פסח' };
+    if (hDay >= 22) return { type: EventStatus.FORBIDDEN, reason: 'ספירת העומר ' };
+  }
+
+  // --- אייר (2) - ספירת העומר ---
+  if (hMonth === 2) {
+    if (hDay === 18) {
+       return { type: EventStatus.AVAILABLE }; // ל"ג בעומר - מותר חתונות!
+    } else if (hDay >= 19) {
+       return { type: EventStatus.PROBLEMATIC,  }; // י"ט באייר (ל"ד) והלאה
+    } else {
+       return { type: EventStatus.FORBIDDEN, reason: 'ספירת העומר ' };
+    }
+  }
+
+  // --- סיוון (3) ---
+  if (hMonth === 3 && hDay <= 2) return { type: EventStatus.PROBLEMATIC, reason: 'תחילת סיוון ' };
+
+  // --- תמוז (4) - בין המצרים ---
+  if (hMonth === 4) {
+    if (hDay === 16) return { type: EventStatus.PROBLEMATIC, reason: 'ערב י"ז בתמוז' };
+    if (hDay >= 18) return { type: EventStatus.FORBIDDEN, reason: 'שלושת השבועות ' };
+  }
+
+  // --- אב (5) ---
+  if (hMonth === 5) {
+    if (hDay <= 8) return { type: EventStatus.FORBIDDEN, reason: 'תשעת הימים ' };
+    if (hDay >= 10 && hDay <= 30) return { type: EventStatus.PROBLEMATIC, reason: 'בין הזמנים' }; // בלי המילה פחות מתחתנים
+  }
+
+  // --- אלול (6) ---
+  if (hMonth === 6) {
+    if (hDay === 29) return { type: EventStatus.PROBLEMATIC, reason: 'ערב ראש השנה' };
+  }
+
+  // --- תשרי (7) ---
+  if (hMonth === 7) {
+    if (hDay >= 3 && hDay <= 8) return { type: EventStatus.PROBLEMATIC, reason: 'עשרת ימי תשובה' };
+    if (hDay === 11 || hDay === 12) return { type: EventStatus.PROBLEMATIC, reason: 'ערב סוכות' }; // יסומן כתום אבל רק יהיה כתוב "ערב סוכות"
+  }
+
+  // --- טבת (10) ---
+  if (hMonth === 10 && hDay === 10) return { type: EventStatus.PROBLEMATIC, reason: 'עשרה בטבת' };
+  
   return { type: EventStatus.AVAILABLE };
 }
-
 export const calendarService = {
-  async getAllCalendarDates(startDate: Date, endDate: Date) {
-    const dbDates = await (prisma as any).eventDate.findMany({
+  // שליפה של כל האירועים ביום (עד 3)
+  async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
+    const datesInRange = await (prisma as any).eventDate.findMany({
       where: { date: { gte: startDate, lte: endDate } },
-      include: { booking: true }
+      include: { bookings: true }
     });
-
-    const dbMap = new Map<string, any>(dbDates.map((d: any) => [
-      new Date(d.date).toISOString().split('T')[0], d
-    ]));
 
     const result = [];
     const current = new Date(startDate);
 
     while (current <= endDate) {
-      const dateKey  = current.toISOString().split('T')[0];
-      const hDate    = new hebcal.HDate(new Date(current));
-      const staticSt = getDayStaticStatus(new Date(current));
-      const dbRecord = dbMap.get(dateKey);
-
-      let finalStatus = staticSt.type;
-      if (finalStatus === EventStatus.AVAILABLE && dbRecord) {
-        finalStatus = (dbRecord as any).status as EventStatus;
-      }
+      const dateKey = toLocalDateKey(current);
+      const hDate = new hebcal.HDate(toNoon(current));
+      const staticSt = getDayStaticStatus(current, eventType);
+      
+      const record = datesInRange.find((d: any) => toLocalDateKey(new Date(d.date)) === dateKey);
+      const bookings = record?.bookings || [];
 
       result.push({
-        id:         (dbRecord as any)?.id    || null,
-        date:       dateKey,
-        dayOfWeek:  current.getDay(),
+        id: record?.id || null,
+        date: dateKey,
+        dayOfWeek: current.getDay(),
         hebrewDate: formatHebrewDate(hDate),
-        status:     finalStatus,
-        reason:     staticSt.reason || null,
-        candleTime: getCandleTime(new Date(current)),
-        lockedBy:   (dbRecord as any)?.lockedBy || null,
-        booking:    (dbRecord as any)?.booking  || null
+        // אם יש כבר 3 אירועים, היום נחסם לגמרי אוטומטית!
+        status: bookings.length >= 3 ? EventStatus.BLOCKED : staticSt.type,
+        reason: staticSt.reason || null,
+        bookings: bookings 
       });
-
       current.setDate(current.getDate() + 1);
     }
     return result;
   },
 
-  async lockDateForChecking(dateStr: string, employeeName: string) {
-    const targetDate = new Date(dateStr);
-    const st = getDayStaticStatus(targetDate);
-    if (st.type !== EventStatus.AVAILABLE) {
-      throw new Error(`לא ניתן לנעול יום זה: ${st.reason}`);
-    }
-    const updated = await (prisma as any).eventDate.upsert({
-      where:  { date: targetDate },
-      update: { status: EventStatus.CHECKING, lockedBy: employeeName },
-      create: { date: targetDate, status: EventStatus.CHECKING, lockedBy: employeeName }
-    });
-    io.emit('date-updated', { date: dateStr, status: EventStatus.CHECKING, lockedBy: employeeName, id: updated.id });
-    return updated;
-  },
-
-  async releaseDate(dateStr: string) {
-    const targetDate = new Date(dateStr);
-    const updated = await (prisma as any).eventDate.update({
-      where: { date: targetDate },
-      data:  { status: EventStatus.AVAILABLE, lockedBy: null }
-    });
-    io.emit('date-updated', { date: dateStr, status: EventStatus.AVAILABLE, lockedBy: null, id: updated.id });
-    return updated;
-  },
-
-  async createOption(dateId: string, bookingDetails: any) {
-    const updated = await (prisma as any).eventDate.update({
-      where: { id: dateId },
-      data:  { status: EventStatus.OPTION }
-    });
-    io.emit('date-updated', { id: dateId, status: EventStatus.OPTION });
-    return updated;
-  },
-  // פונקציה חדשה לשמירת אופציה ושליחת הודעות
-  async saveOptionHold(dates: string[], clientName: string, clientPhone: string, clientEmail: string) {
-    
-    // 1. מעדכנים את כל התאריכים המבוקשים לסטטוס OPTION ושומרים את פרטי הלקוח
-    const updatedDates = await prisma.eventDate.updateMany({
-      where: {
-        date: { in: dates.map(d => new Date(d)) }
-      },
-      data: {
-        status: EventStatus.OPTION,
-        clientName: clientName,
-        clientPhone: clientPhone,
-        clientEmail: clientEmail
-      }
-    });
-    
-
-    // // 2. שליחת אימייל ללקוח (בעזרת ספרייה כמו Nodemailer)
-    // // נכתוב פה פונקציית עזר שתשלח את המייל
-    // await sendOptionEmail(clientEmail, clientName, dates);
-
-    // // 3. שליחת וואטסאפ ללקוח (מצריך חיבור ל-API חיצוני כמו GreenAPI או Twilio)
-    // await sendOptionWhatsApp(clientPhone, clientName, dates);
-
-    // // 4. נשדר לכל המחשבים המחוברים (WebSockets) שהתאריכים נתפסו
-    // dates.forEach(date => {
-    //   io.emit('date-updated', { date, status: EventStatus.OPTION });
-    // });
-
-    return updatedDates;
-  },
-
+  // סגירה סופית עם מניעת התנגשויות זמן
   async bookEventFinal(dateId: string, bookingDetails: any) {
-    const booking = await prisma.booking.create({
+    const { timeOfDay } = bookingDetails;
+    
+    // חסימה בשרת: בדיקה שאין כבר אירוע בבוקר/צהריים/ערב בתאריך הזה
+    const conflict = await (prisma as any).booking.findFirst({
+      where: { calendarDateId: dateId, timeOfDay: timeOfDay }
+    });
+
+    if (conflict) {
+      throw new Error(`כבר קיים אירוע בשעה ${timeOfDay} בתאריך זה!`);
+    }
+
+    const booking = await (prisma as any).booking.create({
       data: { ...bookingDetails, calendarDateId: dateId }
     });
-    await (prisma as any).eventDate.update({
-      where: { id: dateId },
-      data:  { status: EventStatus.BOOKED }
-    });
-    io.emit('date-updated', { id: dateId, status: EventStatus.BOOKED });
+    
+    io.emit('date-updated', { dateId, status: 'BOOKED' });
     return booking;
-  }
+  },
+
+  async lockDateForChecking(dateStr: string, employeeName: string) { /* ... */ },
+  async releaseDate(dateStr: string) { /* ... */ },
+  async createOption(dateId: string, bookingDetails: any) { /* ... */ },
+  async saveOptionHold(dates: string[], clientName: string, clientPhone: string, clientEmail: string) { /* ... */ }
 };

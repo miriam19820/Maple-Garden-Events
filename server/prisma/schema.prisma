@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Booking {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
 
   // --- פרטי צד א' (חובה) ---
   clientAFullName   String
@@ -25,11 +25,11 @@ model Booking {
   clientBAddress    String?
 
   // --- פרטי האירוע ---
-  calendarDateId    String    @unique
+  calendarDateId    String
   eventDate         EventDate @relation(fields: [calendarDateId], references: [id])
   
   eventType         String
-  timeOfDay         String?
+  timeOfDay         String    // "בוקר", "צהריים", "ערב"
   guestCount        Int
   finalPricePortion Float
 
@@ -42,30 +42,31 @@ model Booking {
   paidAmount          Float    @default(0)
   paymentStatus       String   @default("pending")
   
-  eventCode           String   @unique @default(cuid()) // קוד אירוע סודי לכניסת הלקוח
-  hasMusic            Boolean  @default(true)           // האם האירוע כולל מוזיקה
-  akumApprovalCode    String?                           // קוד אישור מאקו"ם
-  advancePaid         Float    @default(0)              // מקדמה ששולמה
-  totalPaid           Float    @default(0)              // סך הכל שולם
-  securityCheckStatus String   @default("PENDING")      // סטטוס צ'ק ביטחון
-  securityCheckUrl    String?                           // קישור לתמונה של צ'ק הביטחון
-  isContractSigned    Boolean  @default(false)          // האם חוזה נחתם
+  eventCode           String   @unique @default(cuid())
+  hasMusic            Boolean  @default(true)
+  akumApprovalCode    String?
+  advancePaid         Float    @default(0)
+  totalPaid           Float    @default(0)
+  securityCheckStatus String   @default("PENDING")
+  securityCheckUrl    String?
+  isContractSigned    Boolean  @default(false)
 
   // --- היסטוריה ולוגים ---
   createdAt         DateTime @default(now())
   createdBy         String
   updatedAt         DateTime @updatedAt
   updatedBy         String?
+
+  // מונע מלקוח להזמין פעמיים את אותו סוג זמן באותו תאריך
+  @@unique([calendarDateId, timeOfDay])
 }
 
-// מודל לקטגוריות בתפריט
 model MenuCategory {
   id     String @id @default(uuid())
   name   String 
   dishes Dish[] 
 }
 
-// מודל למנה בודדת בתפריט
 model Dish {
   id          String       @id @default(uuid())
   name        String
@@ -74,18 +75,18 @@ model Dish {
   categoryId  String
   category    MenuCategory @relation(fields: [categoryId], references: [id])
 }
-
-// מודל לתאריכים ואופציות בלוח השנה
 model EventDate {
   id              String    @id @default(uuid())
-  date            DateTime  @unique
-  status          String    // AVAILABLE, BOOKED, BLOCKED, OPTION
+  date            DateTime  
+  status          String    
   lockedBy        String?
-  booking         Booking?
+  bookings        Booking[] 
 
-  // --- פרטי הלקוח ששומר אופציה זמנית ---
   clientName      String?
   clientPhone     String?
   clientEmail     String?
-  optionExpiresAt DateTime? // שעת הפקיעה של האופציה
+  optionExpiresAt DateTime?
+
+  // הגדרת Unique עם שם מפורש כדי למנוע התנגשויות
+  @@unique([date], map: "unique_date_constraint")
 }

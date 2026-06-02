@@ -11,6 +11,40 @@ const BookingForm = () => {
 
   const location = useLocation();
 
+  // --- ולידציות ---
+  const validateFullName = (name: string) => name.trim().split(/\s+/).length >= 2;
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(email);
+  const validatePhone = (phone: string) => /^0(5[0-9]|[2-9]\d)-?\d{7}$/.test(phone.replace(/[-\s]/g, '').replace(/^(\d{3})(\d{7})$/, '$1-$2'));
+  const validateIsraeliId = (id: string) => {
+    const clean = id.trim();
+    if (!/^\d{9}$/.test(clean)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      let val = Number(clean[i]) * ((i % 2) + 1);
+      if (val > 9) val -= 9;
+      sum += val;
+    }
+    return sum % 10 === 0;
+  };
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateField = (name: string, value: string) => {
+    let msg = '';
+    if (name === 'clientAFullName' || name === 'clientBFullName') {
+      if (value && !validateFullName(value)) msg = 'יש להזין שם פרטי ושם משפחה';
+    }
+    if (name === 'clientAIdNumber' || name === 'clientBIdNumber') {
+      if (value && !validateIsraeliId(value)) msg = 'תעודת זהות לא תקינה (9 ספרות)';
+    }
+    if (name === 'clientAPhone' || name === 'clientBPhone') {
+      if (value && !validatePhone(value)) msg = 'מספר טלפון לא תקין (לדוגמה: 050-1234567)';
+    }
+    if (name === 'clientAEmail' || name === 'clientBEmail') {
+      if (value && !validateEmail(value)) msg = 'כתובת מייל לא תקינה';
+    }
+    setErrors(prev => ({ ...prev, [name]: msg }));
+  };
 
 
   // זיהוי התאריכים שהגיעו מהניווט
@@ -96,6 +130,8 @@ const BookingForm = () => {
     const { name, value } = e.target;
 
     setFormData(prev => ({ ...prev, [name]: value }));
+    // מנקה שגיאה בזמן הקלדה
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
 
   };
 
@@ -120,6 +156,34 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
     e.preventDefault();
 
     if (isSubmitting) return;
+
+    // בדיקת תקינות לפני שליחה
+    const fieldsToCheck: [string, string][] = [
+      ['clientAFullName', formData.clientAFullName],
+      ['clientAIdNumber', formData.clientAIdNumber],
+      ['clientAPhone', formData.clientAPhone],
+      ['clientAEmail', formData.clientAEmail],
+    ];
+    if (isWedding) {
+      fieldsToCheck.push(
+        ['clientBFullName', formData.clientBFullName],
+        ['clientBIdNumber', formData.clientBIdNumber],
+        ['clientBPhone', formData.clientBPhone],
+        ['clientBEmail', formData.clientBEmail],
+      );
+    }
+    const newErrors: Record<string, string> = {};
+    for (const [name, value] of fieldsToCheck) {
+      if (name.includes('FullName') && !validateFullName(value)) newErrors[name] = 'יש להזין שם פרטי ושם משפחה';
+      if (name.includes('IdNumber') && !validateIsraeliId(value)) newErrors[name] = 'תעודת זהות לא תקינה';
+      if (name.includes('Phone') && !validatePhone(value)) newErrors[name] = 'מספר טלפון לא תקין';
+      if (name.includes('Email') && !validateEmail(value)) newErrors[name] = 'כתובת מייל לא תקינה';
+    }
+    if (Object.values(newErrors).some(e => e)) {
+      setErrors(newErrors);
+      alert('יש לתקן את השדות המסומנים באדום לפני המשך');
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -316,7 +380,7 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
 
                 <input type="number" name="guestCount" required onChange={handleChange} className={styles.input} />
 
-                {formData.guestCount && Number(formData.guestCount) < 350 && (
+                {formData.guestCount && Number(formData.guestCount) < 350 && isWedding && (
 
                   <span style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.3rem', fontWeight: 'bold', display: 'block' }}>
 
@@ -415,15 +479,27 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
 
               <div className={styles.inputRow}>
 
-                <div className={styles.inputGroup}><label>שם מלא </label><input type="text" name="clientAFullName" required onChange={handleChange} className={styles.input} /></div>
+                <div className={styles.inputGroup}>
+                  <label>שם מלא </label>
+                  <input type="text" name="clientAFullName" required onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAFullName ? styles.inputError : ''}`} />
+                  {errors.clientAFullName && <span className={styles.errorMsg}>{errors.clientAFullName}</span>}
+                </div>
 
-                <div className={styles.inputGroup}><label>ת.ז </label><input type="text" name="clientAIdNumber" required onChange={handleChange} className={styles.input} /></div>
+                <div className={styles.inputGroup}>
+                  <label>ת.ז </label>
+                  <input type="text" name="clientAIdNumber" required onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAIdNumber ? styles.inputError : ''}`} />
+                  {errors.clientAIdNumber && <span className={styles.errorMsg}>{errors.clientAIdNumber}</span>}
+                </div>
 
               </div>
 
               <div className={styles.inputRow}>
 
-                <div className={styles.inputGroup}><label>טלפון  </label><input type="tel" name="clientAPhone" required onChange={handleChange} className={styles.input} /></div>
+                <div className={styles.inputGroup}>
+                  <label>טלפון  </label>
+                  <input type="tel" name="clientAPhone" required onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAPhone ? styles.inputError : ''}`} />
+                  {errors.clientAPhone && <span className={styles.errorMsg}>{errors.clientAPhone}</span>}
+                </div>
 
                 <div className={styles.inputGroup}><label>טלפון חלופי</label><input type="tel" name="clientAPhone2" onChange={handleChange} className={styles.input} /></div>
 
@@ -433,7 +509,8 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
 
                 <label>דוא"ל *</label>
 
-                <input type="text" name="clientAEmail" required value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} onBlur={() => setTimeout(() => setActiveEmailField(null), 200)} className={styles.input} autoComplete="off" />
+                <input type="text" name="clientAEmail" required value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} onBlur={(e) => { setTimeout(() => setActiveEmailField(null), 300); setTimeout(() => validateField(e.target.name, e.target.value), 300); }} className={`${styles.input} ${errors.clientAEmail ? styles.inputError : ''}`} autoComplete="off" />
+                {errors.clientAEmail && <span className={styles.errorMsg}>{errors.clientAEmail}</span>}
 
                 {activeEmailField === 'clientAEmail' && formData.clientAEmail.includes('@') && (
 
@@ -467,15 +544,27 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
 
                 <div className={styles.inputRow}>
 
-                  <div className={styles.inputGroup}><label>שם מלא </label><input type="text" name="clientBFullName" required={isWedding} onChange={handleChange} className={styles.input} /></div>
+                  <div className={styles.inputGroup}>
+                    <label>שם מלא </label>
+                    <input type="text" name="clientBFullName" required={isWedding} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBFullName ? styles.inputError : ''}`} />
+                    {errors.clientBFullName && <span className={styles.errorMsg}>{errors.clientBFullName}</span>}
+                  </div>
 
-                  <div className={styles.inputGroup}><label>ת.ז </label><input type="text" name="clientBIdNumber" required={isWedding} onChange={handleChange} className={styles.input} /></div>
+                  <div className={styles.inputGroup}>
+                    <label>ת.ז </label>
+                    <input type="text" name="clientBIdNumber" required={isWedding} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBIdNumber ? styles.inputError : ''}`} />
+                    {errors.clientBIdNumber && <span className={styles.errorMsg}>{errors.clientBIdNumber}</span>}
+                  </div>
 
                 </div>
 
                 <div className={styles.inputRow}>
 
-                  <div className={styles.inputGroup}><label>טלפון  </label><input type="tel" name="clientBPhone" required={isWedding} onChange={handleChange} className={styles.input} /></div>
+                  <div className={styles.inputGroup}>
+                    <label>טלפון  </label>
+                    <input type="tel" name="clientBPhone" required={isWedding} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBPhone ? styles.inputError : ''}`} />
+                    {errors.clientBPhone && <span className={styles.errorMsg}>{errors.clientBPhone}</span>}
+                  </div>
 
                   <div className={styles.inputGroup}><label>טלפון חלופי</label><input type="tel" name="clientBPhone2" onChange={handleChange} className={styles.input} /></div>
 
@@ -485,7 +574,8 @@ const handleEmailSelect = (fieldName: string, suffix: string) => {
 
                   <label>דוא"ל </label>
 
-                  <input type="text" name="clientBEmail" required={isWedding} value={formData.clientBEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientBEmail'); }} onBlur={() => setTimeout(() => setActiveEmailField(null), 200)} className={styles.input} autoComplete="off" />
+                  <input type="text" name="clientBEmail" required={isWedding} value={formData.clientBEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientBEmail'); }} onBlur={(e) => { setTimeout(() => setActiveEmailField(null), 300); setTimeout(() => validateField(e.target.name, e.target.value), 300); }} className={`${styles.input} ${errors.clientBEmail ? styles.inputError : ''}`} autoComplete="off" />
+                  {errors.clientBEmail && <span className={styles.errorMsg}>{errors.clientBEmail}</span>}
 
                   {activeEmailField === 'clientBEmail' && formData.clientBEmail.includes('@') && (
 

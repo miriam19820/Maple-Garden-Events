@@ -1,4 +1,6 @@
-/* פריסת דף הלוח עם כפתורי ניהול בצד */
+/* =========================================
+   פריסת דף הלוח עם כפתורי ניהול בצד
+========================================= */
 .calendar-page-layout {
   display: flex;
   direction: rtl;
@@ -6,6 +8,9 @@
   background: #f8fafc;
 }
 
+/* =========================================
+   תפריט צד (כפתורים)
+========================================= */
 .calendar-side-buttons {
   display: flex;
   flex-direction: column;
@@ -27,9 +32,15 @@
   text-align: center;
   transition: background 0.2s;
 }
-.side-mgmt-btn:hover { background: #ef4444; border-color: #ef4444; }
 
-/* פאנל צד */
+.side-mgmt-btn:hover { 
+  background: #ef4444; 
+  border-color: #ef4444; 
+}
+
+/* =========================================
+   פאנל צד (מודל פעולות)
+========================================= */
 .side-panel-overlay {
   position: fixed;
   inset: 0;
@@ -99,7 +110,11 @@
 }
 .side-panel-body .option-btn:hover { background: #d97706; }
 
-
+/* =========================================
+   מיכל הלוח הראשי
+========================================= */
+.calendar-container {
+  flex: 1;
   max-width: 100%;
   background: #ffffff;
   padding: 10px;
@@ -107,7 +122,9 @@
   user-select: none;
 }
 
-/* ניווט עליון - חצים + פס חודשים */
+/* =========================================
+   ניווט עליון - חצים + פס חודשים
+========================================= */
 .calendar-nav {
   display: flex;
   align-items: center;
@@ -166,6 +183,9 @@
   margin-bottom: 6px;
 }
 
+/* =========================================
+   גריד לוח השנה
+========================================= */
 /* גריד LTR: שבת col1(שמאל), ראשון col7(ימין) */
 .calendar-grid {
   display: grid;
@@ -187,6 +207,9 @@
   border: 1px solid #bae6fd;
 }
 
+/* =========================================
+   עיצוב תא בודד
+========================================= */
 /* תא - RTL פנימי */
 .calendar-cell {
   background: #ffffff;
@@ -235,9 +258,9 @@
 }
 
 .hebrew-text {
-  font-size: 0.72rem;
-  color: #475569;
-  font-weight: 500;
+  color: #333333 !important;
+  font-weight: 600;
+  font-size: 0.9em;
 }
 
 .cell-status-text {
@@ -248,11 +271,19 @@
   padding-bottom: 2px;
 }
 
-/* ===== צבעי סטטוסים ===== */
+/* =========================================
+   צבעי סטטוסים של תאריכים
+========================================= */
 
-/* שבת / יום טוב - אדום מלא */
+/* תאריך פנוי */
+.status-available {
+  background-color: #ffffff;
+}
+
+/* שבת / חג מוגדר מהתורה - אדום מלא (חסום לחלוטין) */
 .status-blocked {
   background-color: #ef4444 !important;
+  cursor: not-allowed !important;
 }
 .status-blocked .hebrew-text,
 .status-blocked .gregorian-num,
@@ -261,35 +292,44 @@
   color: #ffffff !important;
 }
 
-/* שישי / ערב חג - ורוד בהיר */
+/* שישי / צומות / ספירת העומר - ורוד בהיר (אסור לחתונה) */
 .status-forbidden {
   background-color: #fecdd3 !important;
+  cursor: not-allowed !important;
 }
 .status-forbidden .cell-status-text { color: #9f1239; }
 
-/* אופציה - כחול בהיר */
-.status-option {
-  background-color: #dbeafe !important;
-  border: 1px solid #2563eb !important;
+/* 🌟 תאריך דפוק / בעייתי - כתום בהיר (ל"ג בעומר / ערב פסח) */
+.status-problematic {
+  background-color: #ffedd5 !important;
+  border: 1px solid #fb923c !important;
 }
-.status-option .cell-status-text { color: #1d4ed8; }
+.status-problematic .cell-status-text { color: #c2410c; }
 
-/* בדיקה - כתום */
+/* תאריך באופציה (שמור זמנית ללקוח) */
+.status-option {
+  background-color: #fef3c7 !important; /* צהוב/כתום בהיר */
+  border: 2px dashed #f59e0b !important; /* מסגרת מקווקוות כתומה */
+}
+.status-option .cell-status-text { color: #b45309; }
+
+/* סגור סופית - אירוע רשום */
+.status-booked {
+  background-color: #fca5a5 !important; /* אדום בהיר */
+}
+.status-booked .cell-status-text { color: #7f1d1d; }
+
+/* תאריך שנמצא בבדיקה רגעית */
 .status-checking {
   background-color: #ffedd5 !important;
   border: 2px dashed #f97316 !important;
 }
 .status-checking .cell-status-text { color: #c2410c; }
 
-/* סגור - אדום בינוני */
-.status-booked {
-  background-color: #fca5a5 !important;
-}
-.status-booked .cell-status-text { color: #7f1d1d; }
 
-.status-blocked {
-  cursor: not-allowed !important;
-}
+/* =========================================
+   שונות וטעינה
+========================================= */
 .calendar-loading {
   text-align: center;
   padding: 40px;
@@ -297,7 +337,9 @@
   color: #64748b;
 }
 
-/* פרטי ארוע בתא */
+/* =========================================
+   תצוגת אירוע רשום בתוך התא
+========================================= */
 .cell-event {
   border-radius: 4px;
   padding: 3px 5px;
@@ -306,14 +348,17 @@
   cursor: pointer;
 }
 
+/* אירוע סגור - מודגש באדום */
 .event-booked {
   background-color: #ef4444;
   color: #ffffff;
 }
 
+/* אירוע באופציה - מודגש בכתום/זהב */
 .event-option {
-  background-color: #22c55e;
-  color: #ffffff;
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #b45309;
+  border-right: 3px solid #f59e0b;
 }
 
 .event-name {
@@ -324,45 +369,4 @@
 .event-details {
   font-size: 0.68rem;
   opacity: 0.9;
-}
-/* תאריך פנוי */
-.status-available {
-  background-color: #ffffff;
-}
-
-/* תאריך באופציה (מתלבט) */
-.status-option {
-  background-color: #ffe0b2; /* צבע כתום בהיר / אפרסק */
-  border: 2px dashed #ff9800; /* מסגרת מקווקות שמדגישה שזה זמני */
-  cursor: pointer;
-}
-
-/* תאריך סגור סופית */
-.status-booked {
-  background-color: #ef5350; /* אדום */
-  color: white;
-  cursor: not-allowed;
-}
-.hebrew-text {
-  color: #333333 !important; /* אפור כהה ובולט */
-  font-weight: 600; /* קצת מודגש */
-  font-size: 0.9em;
-}
-/* צבע לתאריך שהוא באופציה */
-.status-option {
-  background-color: #fef3c7; /* צהוב בהיר */
-  border: 1px solid #f59e0b; /* גבול צהוב כהה/כתום */
-  color: #92400e;
-}
-
-/* העיצוב של השם בתוך תאריך שהוא אופציה */
-.event-option {
-  background-color: rgba(245, 158, 11, 0.2);
-  color: #b45309;
-  border-right: 3px solid #f59e0b;
-}
-
-/* (אופציונלי) אם חסר לך עיצוב לתאריך פנוי */
-.status-available {
-  background-color: #ffffff;
 }
