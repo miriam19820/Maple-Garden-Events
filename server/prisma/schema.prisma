@@ -136,7 +136,19 @@ model EventForm {
   akumCode            String?
 
   // כשרות
-  kashrut             String?  // בד רובין / מחפוד / אחר
+  kashrut             String?  // רובין / מחפוד / לנדא / בדץ_קהילות / הרב_גרוס
+
+  // תמחור
+  guestPortionCount   Int?     // כמות מנות
+  pricePerPortion     Float?   // מחיר בסיס למנה
+  kashrutSurcharge    Float?   // תוספת כשרות למנה
+  designPrice         Float?   // מחיר עיצוב (4500 בסיס + שדרוג)
+  extrasJson          String?  // JSON: תוספות נבחרות ומחיריהן
+  totalPrice          Float?   // מחיר כולל מחושב
+
+  // חוזה
+  contractSigned      Boolean  @default(false)
+  contractSentAt      DateTime?
 
   // הערות (ממוספרות - JSON array)
   notes               String?  // JSON string של מערך הערות

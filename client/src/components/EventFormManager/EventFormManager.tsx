@@ -753,12 +753,11 @@ const EventFormManager = () => {
             <div className={styles.section}>
               <h4>🎵 אקו״ם</h4>
               <div className={styles.field}>
-                <label>קוד אישור אקו״ם</label>
+                <label>האם שילם</label>
                 <input
-                  type="text"
-                  placeholder='הזן קוד אישור אקו״ם...'
-                  value={formData.akumCode || ''}
-                  onChange={e => handleInputChange('akumCode', e.target.value)}
+                  type="checkbox"
+                    checked={formData.depositCheckStatus || false}
+                    onChange={e => handleCheckboxChange('depositCheckStatus', e.target.checked)}
                 />
               </div>
             </div>

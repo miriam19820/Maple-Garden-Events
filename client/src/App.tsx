@@ -6,6 +6,9 @@ import OptionsManager from './components/OptionsManager/OptionsManager';
 import BookingsManager from './components/BookingsManager/BookingsManager';
 import EventFormManager from './components/EventFormManager/EventFormManager';
 
+// ייבוא הקומפוננטה של התפריט שהכנו
+import MenuDisplay from './components/MenuDisplay/MenuDisplay';
+
 const CalendarWrapper = () => {
   const navigate = useNavigate();
   return (
@@ -36,6 +39,9 @@ function App() {
         <Route path="/options-manager" element={<OptionsManagerPage />} />
         <Route path="/bookings-manager" element={<BookingsManager />} />
         <Route path="/event-form-manager" element={<EventFormManager />} />
+        
+        {/* הנתיב החדש של התפריט */}
+        <Route path="/menu" element={<MenuDisplay />} />
       </Routes>
     </BrowserRouter>
   );

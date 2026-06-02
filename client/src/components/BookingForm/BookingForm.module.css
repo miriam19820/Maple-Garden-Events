@@ -6,15 +6,44 @@
   padding: 2rem;
   direction: rtl;
 }
+/* ... להשאיר את מה שקיים ולהוסיף/לעדכן את אלו: */
 
 .formCard {
-  max-width: 64rem;
-  margin: 0 auto;
-  background-color: #ffffff;
+  background: white;
+  padding: 2rem;
   border-radius: 1rem;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f3f4f6;
-  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+/* כרטיסייה לכל נושא */
+.sectionCard {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* אזור הערות מעוצב */
+.commentsContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  background: #f9fafb;
+  padding: 1rem;
+  border-radius: 0.5rem;
 }
 
 .header {
@@ -236,4 +265,23 @@
   font-size: 0.85rem;
   margin-bottom: 0.4rem;
   font-weight: 600;
+}
+.commentsContainer {
+  margin-top: 30px;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+}
+
+.commentsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .commentsGrid {
+    grid-template-columns: 1fr;
+  }
 }
