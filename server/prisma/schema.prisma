@@ -8,34 +8,34 @@ datasource db {
 }
 
 model Booking {
-  id                String    @id @default(uuid())
+  id                  String    @id @default(uuid())
 
   // --- פרטי צד א' (חובה) ---
-  clientAFullName   String
-  clientAIdNumber   String
-  clientAPhone      String
-  clientAEmail      String?
-  clientAAddress    String?
+  clientAFullName     String
+  clientAIdNumber     String
+  clientAPhone        String
+  clientAEmail        String?
+  clientAAddress      String?
 
   // --- פרטי צד ב' (רשות) ---
-  clientBFullName   String?
-  clientBIdNumber   String?
-  clientBPhone      String?
-  clientBEmail      String?
-  clientBAddress    String?
+  clientBFullName     String?
+  clientBIdNumber     String?
+  clientBPhone        String?
+  clientBEmail        String?
+  clientBAddress      String?
 
   // --- פרטי האירוע ---
-  calendarDateId    String
-  eventDate         EventDate @relation(fields: [calendarDateId], references: [id])
+  calendarDateId      String
+  eventDate           EventDate @relation(fields: [calendarDateId], references: [id])
   
-  eventType         String
-  timeOfDay         String    // "בוקר", "צהריים", "ערב"
-  guestCount        Int
-  finalPricePortion Float
+  eventType           String
+  timeOfDay           String    // "בוקר", "צהריים", "ערב"
+  guestCount          Int
+  finalPricePortion   Float
 
   // --- הערות ---
-  managerComments   String?
-  clientComments    String?
+  managerComments     String?
+  clientComments      String?
 
   // --- כספים, אקו"ם וחוזים ---
   totalPrice          Float
@@ -52,13 +52,16 @@ model Booking {
   isContractSigned    Boolean  @default(false)
 
   // --- היסטוריה ולוגים ---
-  createdAt         DateTime @default(now())
-  createdBy         String
-  updatedAt         DateTime @updatedAt
-  updatedBy         String?
+  createdAt           DateTime @default(now())
+  createdBy           String
+  updatedAt           DateTime @updatedAt
+  updatedBy           String?
 
-  // מונע מלקוח להזמין פעמיים את אותו סוג זמן באותו תאריך
+  // מונע מלקוח להזמין פעמיים את אותו סוג זמן באותו תאריך (הלוגיקה החכמה שלנו)
   @@unique([calendarDateId, timeOfDay])
+
+  // --- טופס הפקת אירוע (מהענף השני) ---
+  eventForm           EventForm?
 }
 
 model MenuCategory {
@@ -75,18 +78,84 @@ model Dish {
   categoryId  String
   category    MenuCategory @relation(fields: [categoryId], references: [id])
 }
+
 model EventDate {
   id              String    @id @default(uuid())
-  date            DateTime  
+  date            DateTime  @unique
   status          String    
   lockedBy        String?
+  
+  // חשוב! כאן אנחנו משאירים מערך של Bookings כדי לאפשר 3 אירועים ביום
   bookings        Booking[] 
 
   clientName      String?
   clientPhone     String?
   clientEmail     String?
   optionExpiresAt DateTime?
+}
 
-  // הגדרת Unique עם שם מפורש כדי למנוע התנגשויות
-  @@unique([date], map: "unique_date_constraint")
+// טופס הפקת אירוע - ממולא חודש לפני האירוע (נוסף מהענף השני)
+model EventForm {
+  id                  String   @id @default(uuid())
+  bookingId           String   @unique
+  booking             Booking  @relation(fields: [bookingId], references: [id])
+
+  // פרטי בסיס
+  eventTime           String?   // שעת קבלת פנים
+  receptionType       String?   // נפרד / מעורב
+  finalGuestCount     Int?
+  seatingType         String?   // מעורב / נפרד
+
+  // חלוקה (רק אם נפרד)
+  menPercent          Int?
+  womenPercent        Int?
+
+  // שולחן כבוד
+  honorTableCount     Int?
+
+  // עיצוב
+  tableclothId        String?   // id של מפה שנבחרה
+  napkinId            String?   // id של מפית שנבחרה
+  centerpiece         String?   // מרכזי שולחן
+  bridgeChair         String?   // כסא כלה
+
+  // ציוד
+  hasLighting         Boolean  @default(false)
+  hasSoundSystem      Boolean  @default(false)
+  hasScreens          Boolean  @default(false)
+  hasFireworks        Boolean  @default(false)
+
+  // משמחים
+  entertainersBar     Int?     // כמות בר
+  entertainersSitting Int?     // כמות ישיבה
+  entertainersMen     Int?
+  entertainersWomen   Int?
+
+  // צ'ק פיקדון
+  depositCheckUrl     String?
+  depositCheckStatus  Boolean  @default(false)
+
+  // אקו"ם
+  akumCode            String?
+
+  // כשרות
+  kashrut             String?  // רובין / מחפוד / לנדא / בדץ_קהילות / הרב_גרוס
+
+  // תמחור
+  guestPortionCount   Int?     // כמות מנות
+  pricePerPortion     Float?   // מחיר בסיס למנה
+  kashrutSurcharge    Float?   // תוספת כשרות למנה
+  designPrice         Float?   // מחיר עיצוב (4500 בסיס + שדרוג)
+  extrasJson          String?  // JSON: תוספות נבחרות ומחיריהן
+  totalPrice          Float?   // מחיר כולל מחושב
+
+  // חוזה
+  contractSigned      Boolean  @default(false)
+  contractSentAt      DateTime?
+
+  // הערות (ממוספרות - JSON array)
+  notes               String?  // JSON string של מערך הערות
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }

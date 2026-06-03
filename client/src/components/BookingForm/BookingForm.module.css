@@ -8,13 +8,31 @@
 }
 
 .formCard {
-  max-width: 64rem;
-  margin: 0 auto;
-  background-color: #ffffff;
+  background: white;
+  padding: 2rem;
   border-radius: 1rem;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f3f4f6;
-  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+/* כרטיסייה לכל נושא */
+.sectionCard {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .header {
@@ -62,8 +80,9 @@
 }
 
 .sectionTitleSecondary {
-  border-bottom-color: #fca5a5; /* Red-300 / Rose color for Bride side */
+  border-bottom-color: #fca5a5; /* Red-300 */
 }
+
 .clientsSection {
   display: grid;
   grid-template-columns: 1fr;
@@ -172,6 +191,7 @@
   background-color: #1f2937;
   transform: translateY(-2px);
 }
+
 .selectedDatesBox {
   background-color: #fdf6e3;
   border: 1px solid #ffd54f;
@@ -187,6 +207,7 @@
   display: block;
   margin-bottom: 5px;
 }
+
 /* --- אזור אקו"ם --- */
 .akumSection {
   grid-column: 1 / -1;
@@ -238,6 +259,7 @@
   font-weight: 600;
 }
 
+/* --- ולידציות שגיאה (מהענף של מרים) --- */
 .inputError {
   border-bottom-color: #ef4444 !important;
 }
@@ -247,4 +269,25 @@
   font-size: 0.75rem;
   margin-top: 0.25rem;
   display: block;
+}
+
+/* --- אזור הערות (מהענף השני) --- */
+.commentsContainer {
+  margin-top: 30px;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+}
+
+.commentsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .commentsGrid {
+    grid-template-columns: 1fr;
+  }
 }
