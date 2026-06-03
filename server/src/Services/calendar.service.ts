@@ -177,12 +177,12 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
 }
 export const calendarService = {
   // שליפה של כל האירועים ביום (עד 3)
-  async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
+async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
     const datesInRange = await (prisma as any).eventDate.findMany({
       where: { date: { gte: startDate, lte: endDate } },
-      include: { bookings: true }
+      include: { bookings: true } // זהו! זה שולף את כל השדות אוטומטית!
     });
-
+    // ... שאר הקוד נשאר בדיוק אותו דבר
     const result = [];
     const current = new Date(startDate);
 

@@ -243,16 +243,20 @@
   gap: 4px;
   padding-top: 8px;
 }
-
 .small-event-pill {
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 0.75rem;
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    /* מאפשר לטקסט לרדת שורה באופן טבעי במקום להיחתך */
+    white-space: normal;
+    word-wrap: break-word;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.1;
+    font-size: 0.7rem; /* פונט קצת יותר קטן כדי שיכנס הכל */
+    padding: 2px;
+    height: auto; /* מאפשר לריבוע לגדול קצת לגובה אם צריך */
 }
+
 
 .event-booked {
   background-color: #fee2e2;

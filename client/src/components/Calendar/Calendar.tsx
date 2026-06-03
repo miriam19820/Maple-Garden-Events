@@ -33,8 +33,36 @@ const formatDateLocal = (date: Date): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-export const Calendar = ({ onDateSelect }: CalendarProps) => {
-  const navigate = useNavigate();
+export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitle = (booking: any) => {
+  // 1. מנקים רווחים נסתרים מסוג האירוע כדי שהקוד יזהה אותו בוודאות
+  const type = (booking.eventType || '').trim(); 
+
+  // 2. פונקציית עזר בטוחה לחילוץ שם משפחה
+  const getLastName = (fullName: string) => {
+    if (!fullName) return '';
+    return fullName.trim().split(' ').pop() || '';
+  };
+
+  const nameA = getLastName(booking.clientAFullName);
+  const nameB = getLastName(booking.clientBFullName);
+
+  // 3. חיבור חכם של השמות - רק אם יש באמת שני צדדים שונים
+  let namesDisplay = '';
+  if (nameA && nameB && nameA !== nameB) {
+    namesDisplay = `${nameA}-${nameB}`;
+  } else {
+    // אם הוזן רק צד אחד במערכת, נציג רק אותו
+    namesDisplay = nameA || nameB; 
+  }
+
+  // 4. תצוגה סופית על הלוח (בלי מקף מיותר בחתונות)
+  if (type === 'חתונה' || type === 'אירוסין') {
+    return `${type} ${namesDisplay}`;
+  }
+  
+  return `${type} - משפחת ${namesDisplay}`;
+};
+ const navigate = useNavigate();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [datesData, setDatesData]     = useState<any[]>([]);
@@ -58,6 +86,8 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   
   // שומרים את התאריך של היום כדי להשוות מול הלוח
   const todayStr = formatDateLocal(new Date());
+     // הפונקציה ששאלת עליה - הדבקנו אותה כאן בתוך הקומפוננטה
+ 
 
   const fetchCalendarData = () => {
     setLoading(true);
@@ -116,6 +146,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
     setIsActionModalOpen(false);
     const dayObj = grid.find(d => d.date === selectedDateForAction);
     if (dayObj) onDateSelect(dayObj);
+ 
   };
 
   return (
@@ -213,14 +244,23 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
                   
                   <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
 
-                  <div className="cell-events-container">
-                      {day.bookings.map((b, idx) => (
-                          <div key={idx} className={`small-event-pill ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}>
-                              {b.timeOfDay} - {b.clientAFullName}
-                          </div>
-                      ))}
+<div className="cell-events-container">
+  {day.bookings.map((b: any, idx: number) => (
+    <div 
+      key={idx} 
+      className={`small-event-pill ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        setSelectedDay(day);
+      }}
+    >
+      {/* כאן אנחנו קוראים לפונקציה החדשה */}
+      {getEventTitle(b)}
+    </div>
+  ))}
+</div>
                   </div>
-                </div>
+              
               );
             })}
           </div>
