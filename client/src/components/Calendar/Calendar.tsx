@@ -55,6 +55,9 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
 
   const startStr = formatDateLocal(startDate);
   const endStr   = formatDateLocal(endDate);
+  
+  // שומרים את התאריך של היום כדי להשוות מול הלוח
+  const todayStr = formatDateLocal(new Date());
 
   const fetchCalendarData = () => {
     setLoading(true);
@@ -139,17 +142,16 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
           <p>מצב בחירת אופציה: נבחרו {optionDates.length} מתוך 3 תאריכים.</p>
           <div className="option-banner-actions">
            <button 
-  className="confirm-options-btn" 
-  onClick={() => {
-    // אנחנו עוברים לדף האופציה החדש ומעבירים לו את התאריכים שנבחרו
-    navigate(`/option`, { state: { selectedDates: optionDates } });
-    setIsOptionMode(false);
-    setOptionDates([]);
-  }} 
-  disabled={optionDates.length === 0}
->
-  המשך להרשמה מלאה
-</button>
+              className="confirm-options-btn" 
+              onClick={() => {
+                navigate(`/option`, { state: { selectedDates: optionDates } });
+                setIsOptionMode(false);
+                setOptionDates([]);
+              }} 
+              disabled={optionDates.length === 0}
+            >
+              המשך להרשמה מלאה
+            </button>
             <button className="cancel-btn" onClick={() => { setIsOptionMode(false); setOptionDates([]); }}>בטל</button>
           </div>
         </div>
@@ -175,12 +177,24 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
             {grid.map(day => {
               const isSelectedOption = optionDates.includes(day.date);
-              const cls = ['calendar-cell', `status-${day.status.toLowerCase()}`, !day.isCurrentMonth ? 'out-of-month' : '', isSelectedOption ? 'selected-for-option' : ''].filter(Boolean).join(' ');
+              
+              // לוגיקה לזיהוי היום והעבר
+              const isToday = day.date === todayStr;
+              const isPast = day.date < todayStr;
+              
+              const cls = [
+                'calendar-cell', 
+                `status-${day.status.toLowerCase()}`, 
+                !day.isCurrentMonth ? 'out-of-month' : '', 
+                isSelectedOption ? 'selected-for-option' : '',
+                isToday ? 'is-today' : '',
+                isPast && day.isCurrentMonth ? 'is-past' : ''
+              ].filter(Boolean).join(' ');
+              
               const dayNum = new Date(day.date + 'T12:00:00').getDate();
-              const isPast = new Date(day.date + 'T12:00:00') < new Date(new Date().toDateString());
               
               return (
-                <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row, opacity: isPast && day.isCurrentMonth ? 0.5 : 1 }} onClick={() => {
+                <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row }} onClick={() => {
                   if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
                   
                   if (day.bookings.length > 0) { setSelectedDay(day); return; }

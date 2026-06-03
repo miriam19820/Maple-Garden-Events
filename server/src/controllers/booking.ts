@@ -43,13 +43,14 @@ export const createBooking = async (req: Request, res: Response) => {
       
       if (isNaN(possibleDate.getTime())) continue;
 
-      // מציאת יום בלוח לפי תאריך (לא לפי ID כי עכשיו יום יכול להיות ריבוי אירועים)
       let eventDate = await prisma.eventDate.findFirst({ where: { date: possibleDate } });
       if (!eventDate) {
         eventDate = await prisma.eventDate.create({ data: { date: possibleDate, status: newStatus, optionExpiresAt: expiryDate } });
       } else {
         await prisma.eventDate.update({ where: { id: eventDate.id }, data: { status: newStatus, optionExpiresAt: expiryDate } });
       }
+
+      const timeString = data.timeOfDay || (data.startTime && data.endTime ? `${data.startTime} - ${data.endTime}` : "לא צוין");
 
       const newBooking = await prisma.booking.create({
         data: {
@@ -63,12 +64,16 @@ export const createBooking = async (req: Request, res: Response) => {
           clientBPhone: clientBPhoneCombined || null,
           clientBEmail: data.clientBEmail || null,
           clientBAddress: clientBAddressCombined || null,
-          calendarDateId: eventDate.id, 
+          
+          eventDate: { 
+            connect: { id: eventDate.id } 
+          },
+          
           eventType: data.eventType,
-          timeOfDay: data.timeOfDay || null,
-          guestCount: Number(data.guestCount),
-          finalPricePortion: Number(data.finalPricePortion),
-          totalPrice: calculatedTotalPrice,
+          timeOfDay: timeString,
+          guestCount: Number(data.guestCount) || 0,
+          finalPricePortion: Number(data.finalPricePortion) || 0,
+          totalPrice: calculatedTotalPrice || 0,
           hasMusic: data.hasMusic !== undefined ? data.hasMusic : true,
           akumApprovalCode: data.akumApprovalCode || null,
           advancePaid: 0,
@@ -108,7 +113,8 @@ export const getAllBookings = async (req: Request, res: Response) => {
 
 export const releaseOptions = async (req: Request, res: Response) => {
   try {
-    const { dateIds } = req.body; 
+    const { dateIds, cancelReason, clientName } = req.body; 
+    
     if (!dateIds || dateIds.length === 0) return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לשחרור.' });
 
     await prisma.eventDate.updateMany({
@@ -116,9 +122,22 @@ export const releaseOptions = async (req: Request, res: Response) => {
       data: { status: 'AVAILABLE', optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null }
     });
 
-    await prisma.booking.deleteMany({ where: { calendarDateId: { in: dateIds } } });
-    res.status(200).json({ success: true, message: 'התאריכים שוחררו בהצלחה.' });
+    await prisma.booking.deleteMany({ 
+      where: { eventDate: { id: { in: dateIds } } } 
+    });
+    
+    if (cancelReason) {
+      await prisma.cancellationLog.create({
+        data: {
+          reason: cancelReason,
+          clientName: clientName || 'לא צוין',
+        }
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'התאריכים שוחררו והסטטיסטיקה נשמרה בהצלחה.' });
   } catch (error) {
+    console.error("Error releasing options:", error);
     res.status(500).json({ success: false, message: 'שגיאה בשחרור התאריכים.' });
   }
 };
@@ -137,7 +156,6 @@ export const bumpOption = async (req: Request, res: Response) => {
     newDeadline.setHours(newDeadline.getHours() + 3);
     await prisma.eventDate.update({ where: { id: dateId }, data: { optionExpiresAt: newDeadline } });
 
-    // כאן נרוץ על מערך ההזמנות ביום (כי עכשיו יכולות להיות כמה אופציות ביום)
     for (const booking of eventDate.bookings) {
         if (booking.clientAEmail) await sendBumpEmail(booking.clientAEmail, booking.clientAFullName, eventDate.date.toString(), newDeadline);
         if (booking.clientAPhone) {
@@ -161,7 +179,7 @@ export const finalizeBooking = async (req: Request, res: Response) => {
       include: { eventDate: true }
     });
 
-    if (!booking) return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
+    if (!booking || !booking.eventDate) return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
 
     await prisma.booking.update({
       where: { id: bookingId },
@@ -175,7 +193,7 @@ export const finalizeBooking = async (req: Request, res: Response) => {
     });
 
     await prisma.eventDate.update({
-      where: { id: booking.calendarDateId },
+      where: { id: booking.eventDate.id },
       data: { status: 'BOOKED', optionExpiresAt: null }
     });
 
@@ -183,5 +201,61 @@ export const finalizeBooking = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error finalizing booking:", error);
     res.status(500).json({ success: false, message: 'שגיאה בסגירת האירוע.' });
+  }
+};
+
+
+export const getCancellationStats = async (req: Request, res: Response) => {
+  try {
+    const { month, year } = req.query; // קבלת חודש ושנה מהבקשה
+
+    let dateFilter = {};
+
+    // אם המנהל בחר חודש ושנה ספציפיים
+    if (month && year) {
+      const startDate = new Date(Number(year), Number(month) - 1, 1);
+      const endDate = new Date(Number(year), Number(month), 1);
+      dateFilter = {
+        createdAt: {
+          gte: startDate, // גדול או שווה לתחילת החודש
+          lt: endDate,    // קטן מתחילת החודש הבא
+        }
+      };
+    } 
+    // אם המנהל בחר רק שנה (סיכום שנתי)
+    else if (year) {
+      const startDate = new Date(Number(year), 0, 1); // 1 בינואר של השנה
+      const endDate = new Date(Number(year) + 1, 0, 1); // 1 בינואר של השנה הבאה
+      dateFilter = {
+        createdAt: {
+          gte: startDate,
+          lt: endDate,
+        }
+      };
+    }
+
+    // שליפת הנתונים מהמסד עם הסינון של התאריכים
+    const stats = await prisma.cancellationLog.groupBy({
+      by: ['reason'],
+      where: dateFilter, // הוספנו את סינון התאריכים כאן!
+      _count: {
+        reason: true,
+      },
+      orderBy: {
+        _count: {
+          reason: 'desc',
+        },
+      },
+    });
+
+    const formattedStats = stats.map(stat => ({
+      reason: stat.reason,
+      count: stat._count.reason,
+    }));
+
+    res.status(200).json({ success: true, data: formattedStats });
+  } catch (error) {
+    console.error("Error fetching cancellation stats:", error);
+    res.status(500).json({ success: false, message: 'שגיאה בשליפת סטטיסטיקת ביטולים.' });
   }
 };

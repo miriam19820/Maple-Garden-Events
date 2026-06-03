@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import styles from './FinalizeModal.module.css';
 
 interface FinalizeModalProps {
-  dateId: string;
+  bookingId: string; // שונה מ-dateId
   clientName: string;
   onClose: () => void;
   onSuccess: () => void;
 }
-
-const FinalizeModal = ({ dateId, clientName, onClose, onSuccess }: FinalizeModalProps) => {
+const FinalizeModal = ({ bookingId, clientName, onClose, onSuccess }: FinalizeModalProps) => {
   const [advancePaid, setAdvancePaid] = useState('');
   const [hasMusic, setHasMusic] = useState(true);
   const [akumCode, setAkumCode] = useState('');
@@ -23,7 +22,7 @@ const FinalizeModal = ({ dateId, clientName, onClose, onSuccess }: FinalizeModal
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          dateId: dateId,
+        bookingId: bookingId,
           advancePaid: advancePaid,
           hasMusic: hasMusic,
           akumApprovalCode: akumCode

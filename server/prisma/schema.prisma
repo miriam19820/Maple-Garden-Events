@@ -33,9 +33,15 @@ model Booking {
   guestCount          Int
   finalPricePortion   Float
 
-  // --- הערות ---
+  // --- הערות ושיווק (השדות החדשים שהוספנו!) ---
   managerComments     String?
   clientComments      String?
+  leadSource          String?   // דרך מי הגיעו אלינו?
+  cancellationReason  String?   // סיבת ביטול האופציה (לסטטיסטיקה)
+
+  // --- הגדרות אופציה (השדות החדשים שהוספנו!) ---
+  isOption            Boolean   @default(false)
+  optionDurationHours Int       @default(48)
 
   // --- כספים, אקו"ם וחוזים ---
   totalPrice          Float
@@ -158,4 +164,11 @@ model EventForm {
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+  model CancellationLog {
+  id         String   @id @default(uuid())
+  reason     String   // סיבת הביטול (למשל: "יקר מדי")
+  clientName String?  // שם הלקוח (אופציונלי, למעקב)
+  createdAt  DateTime @default(now())
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 import styles from './EventFormManager.module.css';
 import CheckCamera from '../CheckCamera/CheckCamera';
+import CancellationStats from '../CancellationStats/CancellationStats'; // <--- הייבוא החדש
 
 interface Booking {
   id: string;
@@ -53,7 +54,10 @@ const EventFormManager = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Booking | null>(null);
-  const [viewMode, setViewMode] = useState<'bookings' | 'forms'>('bookings');
+  
+  // הוספנו את 'stats' למצבי התצוגה האפשריים
+  const [viewMode, setViewMode] = useState<'bookings' | 'forms' | 'stats'>('bookings'); 
+  
   const [formData, setFormData] = useState<EventFormData>({});
   const [depositCheckFile, setDepositCheckFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -275,7 +279,7 @@ const EventFormManager = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <button onClick={() => navigate('/')} className={styles.backBtn}>← חזרה ללוח</button>
-        <h2 className={styles.title}>טופס הפקת אירוע</h2>
+        <h2 className={styles.title}>ניהול אירועים וטפסים</h2>
         {!selected && (
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
@@ -304,13 +308,27 @@ const EventFormManager = () => {
             >
               📋 כל הטפסים
             </button>
+            {/* הכפתור החדש שלנו! */}
+            <button
+              onClick={() => setViewMode('stats')}
+              style={{
+                padding: '8px 16px',
+                background: viewMode === 'stats' ? '#dc2626' : '#ddd',
+                color: viewMode === 'stats' ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              📊 סטטיסטיקות
+            </button>
           </div>
         )}
       </div>
 
       {!selected ? (
         <>
-          {viewMode === 'bookings' ? (
+          {viewMode === 'bookings' && (
             <>
               <input
                 className={styles.searchInput}
@@ -355,7 +373,6 @@ const EventFormManager = () => {
                             <div className={styles.cardDetail}>סוג: {b.eventType}</div>
                             <div className={styles.cardDetail}>מוזמנים: {b.guestCount}</div>
                             <div className={styles.cardStatus}>✓ טופס קיים</div>
-
                           </div>
                         ))}
                       </div>
@@ -364,7 +381,9 @@ const EventFormManager = () => {
                 </>
               )}
             </>
-          ) : (
+          )}
+
+          {viewMode === 'forms' && (
             <>
               <input
                 className={styles.searchInput}
@@ -419,6 +438,13 @@ const EventFormManager = () => {
                 </div>
               )}
             </>
+          )}
+
+          {/* החלק החדש של הסטטיסטיקות! */}
+          {viewMode === 'stats' && (
+            <div style={{ marginTop: '20px' }}>
+              <CancellationStats />
+            </div>
           )}
         </>
       ) : (
