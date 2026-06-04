@@ -33,40 +33,39 @@ model Booking {
   guestCount          Int
   finalPricePortion   Float
 
-  // --- הערות ושיווק (השדות החדשים שהוספנו!) ---
+  // --- הערות ושיווק ---
   managerComments     String?
   clientComments      String?
   leadSource          String?   // דרך מי הגיעו אלינו?
   cancellationReason  String?   // סיבת ביטול האופציה (לסטטיסטיקה)
 
-  // --- הגדרות אופציה (השדות החדשים שהוספנו!) ---
+  // --- הגדרות אופציה ---
   isOption            Boolean   @default(false)
   optionDurationHours Int       @default(48)
 
   // --- כספים, אקו"ם וחוזים ---
   totalPrice          Float
-  paidAmount          Float    @default(0)
-  paymentStatus       String   @default("pending")
+  paidAmount          Float     @default(0)
+  paymentStatus       String    @default("pending")
   
-  eventCode           String   @unique @default(cuid())
-  hasMusic            Boolean  @default(true)
+  eventCode           String    @unique @default(cuid())
+  hasMusic            Boolean   @default(true)
   akumApprovalCode    String?
-  advancePaid         Float    @default(0)
-  totalPaid           Float    @default(0)
-  securityCheckStatus String   @default("PENDING")
+  advancePaid         Float     @default(0)
+  totalPaid           Float     @default(0)
+  securityCheckStatus String    @default("PENDING")
   securityCheckUrl    String?
-  isContractSigned    Boolean  @default(false)
+  isContractSigned    Boolean   @default(false)
 
   // --- היסטוריה ולוגים ---
-  createdAt           DateTime @default(now())
+  createdAt           DateTime  @default(now())
   createdBy           String
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime  @updatedAt
   updatedBy           String?
 
-  // מונע מלקוח להזמין פעמיים את אותו סוג זמן באותו תאריך (הלוגיקה החכמה שלנו)
   @@unique([calendarDateId, timeOfDay])
 
-  // --- טופס הפקת אירוע (מהענף השני) ---
+  // --- טופס הפקת אירוע ---
   eventForm           EventForm?
 }
 
@@ -91,7 +90,6 @@ model EventDate {
   status          String    
   lockedBy        String?
   
-  // חשוב! כאן אנחנו משאירים מערך של Bookings כדי לאפשר 3 אירועים ביום
   bookings        Booking[] 
 
   clientName      String?
@@ -100,19 +98,18 @@ model EventDate {
   optionExpiresAt DateTime?
 }
 
-// טופס הפקת אירוע - ממולא חודש לפני האירוע (נוסף מהענף השני)
 model EventForm {
   id                  String   @id @default(uuid())
   bookingId           String   @unique
   booking             Booking  @relation(fields: [bookingId], references: [id])
 
   // פרטי בסיס
-  eventTime           String?   // שעת קבלת פנים
-  receptionType       String?   // נפרד / מעורב
+  eventTime           String?  // שעת קבלת פנים
+  receptionType       String?  // נפרד / מעורב
   finalGuestCount     Int?
-  seatingType         String?   // מעורב / נפרד
+  seatingType         String?  // מעורב / נפרד
 
-  // חלוקה (רק אם נפרד)
+  // חלוקה
   menPercent          Int?
   womenPercent        Int?
 
@@ -120,10 +117,10 @@ model EventForm {
   honorTableCount     Int?
 
   // עיצוב
-  tableclothId        String?   // id של מפה שנבחרה
-  napkinId            String?   // id של מפית שנבחרה
-  centerpiece         String?   // מרכזי שולחן
-  bridgeChair         String?   // כסא כלה
+  tableclothId        String?  
+  napkinId            String?  
+  centerpiece         String?  
+  bridgeChair         String?  
 
   // ציוד
   hasLighting         Boolean  @default(false)
@@ -132,8 +129,8 @@ model EventForm {
   hasFireworks        Boolean  @default(false)
 
   // משמחים
-  entertainersBar     Int?     // כמות בר
-  entertainersSitting Int?     // כמות ישיבה
+  entertainersBar     Int?     
+  entertainersSitting Int?     
   entertainersMen     Int?
   entertainersWomen   Int?
 
@@ -145,30 +142,75 @@ model EventForm {
   akumCode            String?
 
   // כשרות
-  kashrut             String?  // רובין / מחפוד / לנדא / בדץ_קהילות / הרב_גרוס
+  kashrut             String?  
 
   // תמחור
-  guestPortionCount   Int?     // כמות מנות
-  pricePerPortion     Float?   // מחיר בסיס למנה
-  kashrutSurcharge    Float?   // תוספת כשרות למנה
-  designPrice         Float?   // מחיר עיצוב (4500 בסיס + שדרוג)
-  extrasJson          String?  // JSON: תוספות נבחרות ומחיריהן
-  totalPrice          Float?   // מחיר כולל מחושב
+  guestPortionCount   Int?     
+  pricePerPortion     Float?   
+  kashrutSurcharge    Float?   
+  designPrice         Float?   
+  extrasJson          String?  
+  totalPrice          Float?   
 
   // חוזה
   contractSigned      Boolean  @default(false)
   contractSentAt      DateTime?
 
-  // הערות (ממוספרות - JSON array)
-  notes               String?  // JSON string של מערך הערות
+  // הערות
+  notes               String?  
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
 
-  model CancellationLog {
+model CancellationLog {
   id         String   @id @default(uuid())
-  reason     String   // סיבת הביטול (למשל: "יקר מדי")
-  clientName String?  // שם הלקוח (אופציונלי, למעקב)
+  reason     String   
+  clientName String?  
   createdAt  DateTime @default(now())
+}
+
+// ==========================================
+// מודלים חדשים: הגדרות מערכת ומחירון תוספות
+// ==========================================
+
+model SystemSettings {
+  id                  String   @id @default("global") 
+
+  // --- הגדרות מערכת וכספים בסיסיים ---
+  vatRate             Float    @default(17.0)   
+  defaultAdvance      Float    @default(5000.0) 
+  optionDurationHours Int      @default(48)     
+
+  // --- מנות וכשרות ---
+  basePricePerPortion Float    @default(250.0)  
+  kashrutSurcharge    Float    @default(30.0)   
+  staffPortionPrice   Float    @default(120.0)  
+
+  // --- עיצוב אולם ---
+  designBasePrice     Float    @default(4500.0) 
+  centerpiecePrice    Float    @default(150.0)  
+  bridgeChairPrice    Float    @default(800.0)  
+
+  // --- ציוד ותוספות קבועות ---
+  lightingPrice       Float    @default(2500.0) 
+  soundSystemPrice    Float    @default(2000.0) 
+  screensPrice        Float    @default(1500.0) 
+  fireworksPrice      Float    @default(1000.0) 
+
+  // --- אגרות נוספות ---
+  akumFee             Float    @default(350.0)  
+
+  updatedAt           DateTime @updatedAt
+}
+
+model ExtraService {
+  id          String   @id @default(uuid())
+  name        String   
+  category    String   
+  price       Float    
+  isActive    Boolean  @default(true) 
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

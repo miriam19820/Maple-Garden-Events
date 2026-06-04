@@ -151,13 +151,13 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
   return (
     <div className="calendar-page-layout">
-      <div className="calendar-side-buttons">
+    <div className="calendar-side-buttons">
+        <button className="side-mgmt-btn" onClick={() => navigate('/settings')}>הגדרות מתחם ⚙️</button>
         <button className="side-mgmt-btn" onClick={() => navigate('/options-manager')}>ניהול אופציות</button>
         <button className="side-mgmt-btn" onClick={() => navigate('/bookings-manager')}>ניהול הזמנות</button>
         <button className="side-mgmt-btn" onClick={() => navigate('/greeting')}>שליחת ברכה 💌</button>
         <button className="side-mgmt-btn" onClick={() => navigate('/event-form-manager')}>טופס הפקת אירוע</button>
       </div>
-
       <div className="calendar-container">
       
       <div style={{ padding: '10px 16px', background: '#fff', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', gap: '15px', alignItems: 'center', direction: 'rtl', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>

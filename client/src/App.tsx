@@ -13,6 +13,9 @@ import EventFormManager from './components/EventFormManager/EventFormManager';
 import OptionPage from './components/optionPage/OptionPage';
 import MenuDisplay from './components/MenuDisplay/MenuDisplay';
 
+// --- הייבוא החדש למסך ההגדרות ---
+import { SettingsManager } from './components/SettingsManager/SettingsManager';
+
 const CalendarWrapper = () => {
   const navigate = useNavigate();
   return (
@@ -34,6 +37,17 @@ const OptionsManagerPage = () => {
   );
 };
 
+// עטיפה למסך ההגדרות כדי שיהיה כפתור חזרה יפה ללוח
+const SettingsManagerPage = () => {
+  const navigate = useNavigate();
+  return (
+    <div style={{ direction: 'rtl', padding: '20px', background: '#f8fafc', minHeight: '100vh' }}>
+      <button onClick={() => navigate('/')} style={{ background: '#e2e8f0', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '20px' }}>← חזרה ללוח</button>
+      <SettingsManager />
+    </div>
+  );
+};
+
 function App() {
   return (
     <BrowserRouter>
@@ -50,6 +64,9 @@ function App() {
         <Route path="/event-form-manager" element={<EventFormManager />} />
         <Route path="/option" element={<OptionPage />} />
         <Route path="/menu" element={<MenuDisplay />} />
+
+        {/* -- הראוט החדש למסך ניהול ההגדרות -- */}
+        <Route path="/settings" element={<SettingsManagerPage />} />
       </Routes>
     </BrowserRouter>
   );
