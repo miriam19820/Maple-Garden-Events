@@ -33,13 +33,20 @@ const HEBREW_MONTHS: Record<number, string> = {
 
 function formatHebrewDate(hDate: any): string {
   const day   = hDate.getDate();
-  const month = HEBREW_MONTHS[hDate.getMonth()] || hDate.getMonthName('he');
+  let month = HEBREW_MONTHS[hDate.getMonth()] || hDate.getMonthName('he');
+  
+  // בונוס תצוגה: אם אנחנו בשנה מעוברת והחודש הוא 12, זה אדר א'
+  if (hDate.isLeapYear() && hDate.getMonth() === 12) {
+    month = "אדר א'";
+  }
+
   return `${HEBREW_NUMERALS[day] || day} ב${month}`;
 }
 
 function toNoon(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
 }
+
 export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה'): { type: EventStatus; reason?: string } {
   const jsDay = jsDate.getDay();
   const noon = toNoon(jsDate);
@@ -98,9 +105,12 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
     if (hDay === 22) return { type: EventStatus.FORBIDDEN, reason: 'שמיני עצרת' };
   }
 
-  // --- אדר / אדר ב' (12, 13) - פורים ---
-  if (hMonth === 12 || hMonth === 13) {
-    const isTaAnitEsther = holidays.some((e:any) => e.desc[0] === "Ta'anit Esther");
+  // --- התיקון המקצועי לשנה מעוברת! (פורים רק באדר רגיל או אדר ב') ---
+  const isLeapYear = hDate.isLeapYear();
+  const isPurimMonth = (!isLeapYear && hMonth === 12) || (isLeapYear && hMonth === 13);
+  
+  if (isPurimMonth) {
+    const isTaAnitEsther = holidays.some((e:any) => e.desc[0] === "Ta'anit Esther" || e.desc[0] === "Ta'anit Ester");
     if (isTaAnitEsther || hDay === 13) return { type: EventStatus.FORBIDDEN, reason: 'תענית אסתר' };
     if (hDay === 14) return { type: EventStatus.FORBIDDEN, reason: 'פורים' };
     if (hDay === 15) return { type: EventStatus.FORBIDDEN, reason: 'שושן פורים' };
@@ -136,9 +146,9 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   // --- אייר (2) - ספירת העומר ---
   if (hMonth === 2) {
     if (hDay === 18) {
-       return { type: EventStatus.AVAILABLE }; // ל"ג בעומר - מותר חתונות!
+       return { type: EventStatus.AVAILABLE, reason: 'ל"ג בעומר' };
     } else if (hDay >= 19) {
-       return { type: EventStatus.PROBLEMATIC,  }; // י"ט באייר (ל"ד) והלאה
+       return { type: EventStatus.PROBLEMATIC,  }; 
     } else {
        return { type: EventStatus.FORBIDDEN, reason: 'ספירת העומר ' };
     }
@@ -156,7 +166,7 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   // --- אב (5) ---
   if (hMonth === 5) {
     if (hDay <= 8) return { type: EventStatus.FORBIDDEN, reason: 'תשעת הימים ' };
-    if (hDay >= 10 && hDay <= 30) return { type: EventStatus.PROBLEMATIC, reason: 'בין הזמנים' }; // בלי המילה פחות מתחתנים
+    if (hDay >= 10 && hDay <= 30) return { type: EventStatus.PROBLEMATIC, reason: 'בין הזמנים' };
   }
 
   // --- אלול (6) ---
@@ -167,7 +177,7 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   // --- תשרי (7) ---
   if (hMonth === 7) {
     if (hDay >= 3 && hDay <= 8) return { type: EventStatus.PROBLEMATIC, reason: 'עשרת ימי תשובה' };
-    if (hDay === 11 || hDay === 12) return { type: EventStatus.PROBLEMATIC, reason: 'ערב סוכות' }; // יסומן כתום אבל רק יהיה כתוב "ערב סוכות"
+    if (hDay === 11 || hDay === 12) return { type: EventStatus.PROBLEMATIC, reason: 'ערב סוכות' }; 
   }
 
   // --- טבת (10) ---
@@ -175,14 +185,15 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   
   return { type: EventStatus.AVAILABLE };
 }
+
 export const calendarService = {
   // שליפה של כל האירועים ביום (עד 3)
-async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
+  async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
     const datesInRange = await (prisma as any).eventDate.findMany({
       where: { date: { gte: startDate, lte: endDate } },
-      include: { bookings: true } // זהו! זה שולף את כל השדות אוטומטית!
+      include: { bookings: true }
     });
-    // ... שאר הקוד נשאר בדיוק אותו דבר
+    
     const result = [];
     const current = new Date(startDate);
 
