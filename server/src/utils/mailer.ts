@@ -191,3 +191,57 @@ export const sendManagerFinancialAlertEmail = async (managerEmail: string, alert
     return false;
   }
 };
+
+// ==========================================
+// 5. בקשת משוב לאחר סיום אירוע (חדש!)
+// ==========================================
+export const sendFeedbackRequestEmail = async (clientEmail: string, clientName: string | null, link: string) => {
+  const name = clientName ? clientName.split(' ')[0] : 'לקוחות יקרים';
+  
+  const mailOptions = {
+    from: '"גן אירועים מייפל" <maple.events.il@gmail.com>',
+    to: clientEmail,
+    subject: `איך היה האירוע שלכם? נשמח לשמוע! 🌟`,
+    html: `
+      <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #d8a051;">
+          <img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px; margin-bottom: 10px;" />
+          <h2 style="color: #1f2937; margin: 0;">תודה שחגגתם איתנו! 🎉</h2>
+        </div>
+        <div style="padding: 25px;">
+          <p style="font-size: 1.1rem;">שלום <strong>${name}</strong>,</p>
+          <p style="font-size: 1.05rem; line-height: 1.5;">
+            היה לנו לעונג עצום לארח אתכם ואת האורחים שלכם בגן האירועים <strong>מייפל</strong>.<br/>
+            כדי שנוכל להמשיך לתת את השירות הטוב ביותר ולהשתפר, נשמח מאוד אם תקדישו דקה קטנה לדירוג החוויה שלכם בטופס הבא:
+          </p>
+          
+          <div style="text-align: center; margin: 35px 0;">
+            <a href="${link}" style="background-color: #d97706; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 1.1rem; display: inline-block;">למעבר לטופס המשוב (קצרצר)</a>
+          </div>
+          
+          <p style="font-size: 0.9rem; color: #6b7280; text-align: center;">
+            (שימו לב: מטעמי אבטחה, הקישור אישי וניתן למילוי פעם אחת בלבד)
+          </p>
+          
+          <p style="font-size: 1rem; margin-top: 30px; margin-bottom: 10px;">
+            בתודה מראש ובאהבה,<br/>
+            <strong>צוות מייפל 🍁</strong>
+          </p>
+        </div>
+        <div style="background-color: #f3f4f6; padding: 15px; text-align: center; color: #6b7280; font-size: 0.85rem;">
+          🤖 הודעה זו נשלחה אוטומטית ממערכת מייפל.
+        </div>
+      </div>
+    `,
+    attachments: [{ filename: 'logo.png', path: './src/assets/logo.png', cid: 'mapleLogo' }]
+  };
+
+  try {
+    console.log(`[MAILER SIMULATION] מכין שליחת מייל משוב ל: ${clientEmail}...`);
+    // await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('שגיאה בשליחת מייל משוב:', error);
+    return false;
+  }
+};

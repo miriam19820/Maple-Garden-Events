@@ -23,7 +23,8 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.10",
     "puppeteer": "^25.1.0",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -33,6 +34,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^8.0.0",
     "@types/pdfkit": "^0.17.6",
+    "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.14",
     "prisma": "^6.19.3",
     "ts-node": "^10.9.2",
