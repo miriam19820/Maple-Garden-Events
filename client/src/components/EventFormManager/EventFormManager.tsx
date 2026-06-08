@@ -6,7 +6,7 @@ import CheckCamera from '../CheckCamera/CheckCamera';
 import CancellationStats from '../CancellationStats/CancellationStats';
 // השארתי את הייבוא, אבל את בחירת הכשרות ננהל כאן כדי שהתמונה בוודאות תעבוד לך
 import KashrutSelector from '../KashrutSelector/KashrutSelector';
-import { menuData, menuItemKey } from '../../data/menuData';
+import { menuData, menuItemKey, getSectionLimit, MENU_KEY_SEP } from '../../data/menuData';
 
 interface Booking {
   id: string;
@@ -82,6 +82,7 @@ const EventFormManager = () => {
   // ניהול תמונת הכשרות
   const [kashrutImage, setKashrutImage] = useState<string | null>(null);
   const [isKashrutModalOpen, setIsKashrutModalOpen] = useState(false);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
 
   useEffect(() => {
     // טעינת הזמנות וטפסים
@@ -187,6 +188,10 @@ const EventFormManager = () => {
   })();
   const selectedMenuSet = new Set(selectedMenuKeys);
 
+  // כמה פריטים נבחרו בקטגוריה מסוימת (לפי קידומת המפתח)
+  const countSelectedInSection = (category: string, keys: string[]): number =>
+    keys.filter(k => k.startsWith(category + MENU_KEY_SEP)).length;
+
   const toggleMenuItem = (key: string) => {
     setFormData(prev => {
       let current: string[] = [];
@@ -195,10 +200,20 @@ const EventFormManager = () => {
       } catch {
         current = [];
       }
-      const next = current.includes(key)
-        ? current.filter(k => k !== key)
-        : [...current, key];
-      return { ...prev, selectedMenu: JSON.stringify(next) };
+      // ביטול סימון - תמיד מותר
+      if (current.includes(key)) {
+        return { ...prev, selectedMenu: JSON.stringify(current.filter(k => k !== key)) };
+      }
+      // סימון חדש - אכיפת הגבלת הבחירה של הקטגוריה
+      const section = menuData.find(s => key.startsWith(s.category + MENU_KEY_SEP));
+      if (section) {
+        const { limit } = getSectionLimit(section);
+        if (limit !== null && countSelectedInSection(section.category, current) >= limit) {
+          window.alert(`ניתן לבחור עד ${limit} ב"${section.category}". יש לבטל בחירה קודמת כדי לבחור פריט אחר.`);
+          return prev;
+        }
+      }
+      return { ...prev, selectedMenu: JSON.stringify([...current, key]) };
     });
   };
 
@@ -984,53 +999,128 @@ const EventFormManager = () => {
             <div className={styles.section}>
               <h4>🍽️ בחירת תפריט</h4>
               <p style={{ margin: '0 0 12px 0', color: '#666', fontSize: '13px' }}>
-                סמנו ✓ ליד כל פריט שנבחר לאירוע. הבחירה נשמרת עם הטופס ומופיעה ב-PDF של תיק הלקוח.
-                {' '}<strong>נבחרו {selectedMenuKeys.length} פריטים.</strong>
+                לחצו על "בחירת תפריט" כדי לפתוח את התפריט המלא ולסמן פריטים. הבחירה נשמרת עם הטופס ומופיעה ב-PDF של תיק הלקוח.
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                {menuData.map((section, sIdx) => (
-                  <div key={sIdx}>
-                    <div style={{ fontWeight: 'bold', color: '#2c3e50', borderBottom: '2px solid #667eea', paddingBottom: '4px', marginBottom: '8px' }}>
-                      {section.category}
-                      {section.subtitle && (
-                        <span style={{ fontWeight: 'normal', color: '#888', fontSize: '12px' }}> — {section.subtitle}</span>
-                      )}
-                    </div>
-                    {section.subCategories.map((sub, subIdx) => (
-                      <div key={subIdx} style={{ marginBottom: '10px' }}>
-                        {sub.name && (
-                          <div style={{ fontWeight: 600, color: '#444', fontSize: '14px', margin: '6px 0' }}>{sub.name}</div>
-                        )}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {sub.items.map((item, itemIdx) => {
-                            const key = menuItemKey(section.category, sub.name, item.name);
-                            const checked = selectedMenuSet.has(key);
+              <button
+                type="button"
+                onClick={() => setIsMenuModalOpen(true)}
+                style={{ padding: '10px 24px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}
+              >
+                🍽️ בחירת תפריט{selectedMenuKeys.length > 0 ? ` (${selectedMenuKeys.length} נבחרו)` : ''}
+              </button>
+            </div>
+
+            {/* מודאל בחירת תפריט */}
+            {isMenuModalOpen && (
+              <div
+                onClick={() => setIsMenuModalOpen(false)}
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', zIndex: 9999, padding: '20px', overflowY: 'auto' }}
+              >
+                <div
+                  onClick={e => e.stopPropagation()}
+                  dir="rtl"
+                  style={{ background: 'white', borderRadius: '12px', maxWidth: '760px', width: '100%', margin: '20px auto', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}
+                >
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, color: '#2c3e50' }}>🍽️ בחירת תפריט</h3>
+                    <span style={{ color: '#667eea', fontWeight: 'bold' }}>נבחרו {selectedMenuKeys.length} פריטים</span>
+                  </div>
+                  <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                    {menuData.map((section, sIdx) => {
+                      const { limit, selectBy } = getSectionLimit(section);
+                      const countInSection = countSelectedInSection(section.category, selectedMenuKeys);
+                      const reached = limit !== null && countInSection >= limit;
+                      return (
+                        <div key={sIdx}>
+                          <div style={{ fontWeight: 'bold', color: '#2c3e50', borderBottom: '2px solid #667eea', paddingBottom: '4px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' }}>
+                            <span>
+                              {section.category}
+                              {section.subtitle && (
+                                <span style={{ fontWeight: 'normal', color: '#888', fontSize: '12px' }}> — {section.subtitle}</span>
+                              )}
+                            </span>
+                            {limit !== null && (
+                              <span style={{ fontSize: '12px', fontWeight: 'bold', color: reached ? '#e74c3c' : '#27ae60', whiteSpace: 'nowrap' }}>
+                                נבחרו {countInSection} מתוך {limit}
+                              </span>
+                            )}
+                          </div>
+                          {section.subCategories.map((sub, subIdx) => {
+                            if (selectBy === 'station') {
+                              const key = menuItemKey(section.category, sub.name, sub.name);
+                              const checked = selectedMenuSet.has(key);
+                              const disabled = !checked && reached;
+                              return (
+                                <div key={subIdx} style={{ marginBottom: '10px' }}>
+                                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: disabled ? 'not-allowed' : 'pointer', padding: '6px 8px', borderRadius: '6px', background: checked ? '#eef2ff' : 'transparent', opacity: disabled ? 0.5 : 1 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      disabled={disabled}
+                                      onChange={() => toggleMenuItem(key)}
+                                      style={{ marginTop: '3px', width: '16px', height: '16px', flexShrink: 0, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                                    />
+                                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#444', lineHeight: 1.4 }}>{sub.name}</span>
+                                  </label>
+                                  <div style={{ paddingRight: '32px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                                    {sub.items.map((item, itemIdx) => (
+                                      <span key={itemIdx} style={{ fontSize: '12px', color: '#888', lineHeight: 1.4 }}>{item.name}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
                             return (
-                              <label
-                                key={itemIdx}
-                                style={{
-                                  display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer',
-                                  padding: '6px 8px', borderRadius: '6px',
-                                  background: checked ? '#eef2ff' : 'transparent',
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => toggleMenuItem(key)}
-                                  style={{ marginTop: '3px', width: '16px', height: '16px', flexShrink: 0, cursor: 'pointer' }}
-                                />
-                                <span style={{ fontSize: '13px', color: '#333', lineHeight: 1.4 }}>{item.name}</span>
-                              </label>
+                              <div key={subIdx} style={{ marginBottom: '10px' }}>
+                                {sub.name && (
+                                  <div style={{ fontWeight: 600, color: '#444', fontSize: '14px', margin: '6px 0' }}>{sub.name}</div>
+                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {sub.items.map((item, itemIdx) => {
+                                    const key = menuItemKey(section.category, sub.name, item.name);
+                                    const checked = selectedMenuSet.has(key);
+                                    const disabled = !checked && reached;
+                                    return (
+                                      <label
+                                        key={itemIdx}
+                                        style={{
+                                          display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: disabled ? 'not-allowed' : 'pointer',
+                                          padding: '6px 8px', borderRadius: '6px',
+                                          background: checked ? '#eef2ff' : 'transparent',
+                                          opacity: disabled ? 0.5 : 1,
+                                        }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          disabled={disabled}
+                                          onChange={() => toggleMenuItem(key)}
+                                          style={{ marginTop: '3px', width: '16px', height: '16px', flexShrink: 0, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                                        />
+                                        <span style={{ fontSize: '13px', color: '#333', lineHeight: 1.4 }}>{item.name}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                ))}
+                  <div style={{ padding: '14px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsMenuModalOpen(false)}
+                      style={{ padding: '10px 30px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      שמור וסגור
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* הערות ממוספרות */}
             <div className={styles.section}>

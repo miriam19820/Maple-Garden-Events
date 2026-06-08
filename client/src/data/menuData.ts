@@ -257,3 +257,23 @@ export const parseMenuKey = (key: string): ParsedMenuKey => {
   const [category = '', subCategory = '', item = ''] = key.split(MENU_KEY_SEP);
   return { category, subCategory, item };
 };
+
+// הגבלת בחירה לקטגוריה - נגזרת מהטקסט בכותרת ("8 לבחירה" / "4 עמדות לבחירה")
+export interface SectionLimit {
+  limit: number | null;
+  // 'station' = הבחירה היא ברמת תת-קטגוריה (עמדה), 'item' = ברמת פריט בודד
+  selectBy: 'item' | 'station';
+}
+
+export const getSectionLimit = (section: MenuSection): SectionLimit => {
+  const text = `${section.category} ${section.subtitle}`;
+  const stationMatch = text.match(/(\d+)\s*עמדות\s*לבחירה/);
+  if (stationMatch) {
+    return { limit: parseInt(stationMatch[1], 10), selectBy: 'station' };
+  }
+  const itemMatch = text.match(/(\d+)\s*לבחירה/);
+  if (itemMatch) {
+    return { limit: parseInt(itemMatch[1], 10), selectBy: 'item' };
+  }
+  return { limit: null, selectBy: 'item' };
+};
