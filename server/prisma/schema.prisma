@@ -64,9 +64,10 @@ model Booking {
   updatedBy String?
 
   // --- טופס הפקת אירוע ---
-  eventForm EventForm?
-
-  @@unique([calendarDateId, timeOfDay])
+  eventForm           EventForm?
+  // --- פידבק / משוב ---
+// --- פידבק / משוב ---
+  feedbacks           Feedback[]
 }
 
 model MenuCategory {
@@ -219,12 +220,51 @@ model SystemSettings {
 }
 
 model ExtraService {
-  id       String  @id @default(uuid())
-  name     String
-  category String
-  price    Float
-  isActive Boolean @default(true)
+  id          String   @id @default(uuid())
+  name        String   
+  category    String   
+  price       Float    
+  isActive    Boolean  @default(true) 
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+model Feedback {
+  id            String   @id @default(uuid())
+  
+  // קישור להזמנה (Booking) - שימי לב שהסרנו מכאן את ה- @unique
+  bookingId     String   
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+  
+  // --- חדש: זיהוי הצד ---
+  clientSide    String   // ישמור ערכים כמו: "A" (צד א'), "B" (צד ב'), או "SINGLE" (אירוע רגיל)
+  clientName    String?  // אופציונלי: נשמור את שם הלקוח הספציפי שהמשוב נשלח אליו כדי שיהיה נוח בדאשבורד
+  
+  // שדות דירוג בסולם של 1 עד 5 כוכבים
+  foodRating    Int?     
+  serviceRating Int?     
+  venueRating   Int?     
+  
+  // נתונים מחושבים וטקסט חופשי
+  averageScore  Float?   
+  comments      String?  
+  
+  // מנגנון אבטחה ושליטה
+  token         String   @unique 
+  isCompleted   Boolean  @default(false) 
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // הגבלה חכמה: מונע מצד א' (למשל) למלא את הטופס פעמיים עבור אותה הזמנה
+  @@unique([bookingId, clientSide])
+}
+model KashrutCertificate {
+  id                  String   @id @default(uuid())
+  nameKey             String
+  displayName         String
+  imageUrl            String?
+  validUntil          DateTime?
+  isGlobalCertificate Boolean  @default(false) // שורה חדשה
+  updatedAt           DateTime @updatedAt
 }

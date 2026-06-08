@@ -17,6 +17,15 @@ interface DayData {
   bookings: any[];
   isCurrentMonth: boolean;
 }
+const EVENT_COLORS: Record<string, string> = {
+  'חתונה': '#10B981',       // ירוק
+  'בר מצווה': '#EC4899',    // ורוד
+  'בת מצווה': '#8B5CF6',    // סגול
+  'ברית': '#3B82F6',        // כחול
+  'בריתה': '#F43F5E',       // אדום-ורוד
+  'חינה': '#F59E0B',        // כתום
+  'אירוע עסקי': '#64748B',  // אפור
+};
 
 interface CalendarProps {
   onDateSelect: (day: DayData) => void;
@@ -243,30 +252,51 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   </div>
                   
                   <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
-
 <div className="cell-events-container">
-  {day.bookings.map((b: any, idx: number) => (
-    <div 
-      key={idx} 
-      className={`small-event-pill ${day.status === 'BOOKED' ? 'event-booked' : 'event-option'}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        setSelectedDay(day);
-      }}
-    >
-      {/* כאן אנחנו קוראים לפונקציה החדשה */}
-      {getEventTitle(b)}
-    </div>
-  ))}
-</div>
+                    {day.bookings.map((b: any, idx: number) => {
+                      // שולפים את הצבע (ואם אין התאמה, כחול כברירת מחדל)
+                      const baseColor = EVENT_COLORS[(b.eventType || '').trim()] || '#3B82F6';
+                      
+                      // בודקים אם זה אופציה (כל עוד זה לא סגור לגמרי)
+                      const isOption = day.status !== 'BOOKED';
+                      
+                      // העיצוב המתוקן שיוצר קונטרסט ברור:
+                      const eventStyle = isOption
+                        ? { 
+                            backgroundColor: `${baseColor}26`, // רקע פסטלי עדין לאופציה
+                            border: `1.5px solid ${baseColor}`, // מסגרת חלקה מודגשת
+                            color: '#1e293b',                  // טקסט כהה
+                            fontWeight: '600'
+                          }
+                        : { 
+                            backgroundColor: baseColor,        // צבע מלא וחזק לאירוע סגור!
+                            border: `1.5px solid ${baseColor}`,   
+                            color: '#FFFFFF',                  // טקסט לבן 
+                            fontWeight: 'bold',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.15)' // הצללה קלה להבלטה
+                          };
+
+                      return (
+                        <div 
+                          key={idx} 
+                          className="small-event-pill"
+                          style={eventStyle}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDay(day);
+                          }}
+                        >
+                          {getEventTitle(b)}
+                        </div>
+                      );
+                    })}
                   </div>
-              
+                </div>
               );
             })}
           </div>
         </div>
       )}
-
       {selectedDay && <EventPopup day={selectedDay} onClose={() => setSelectedDay(null)} />}
 
       {isActionModalOpen && (

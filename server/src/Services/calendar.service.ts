@@ -76,7 +76,7 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
 
   // --- ניסן (1) - פסח ---
   if (hMonth === 1) {
-    if (hDay === 14) return { type: EventStatus.FORBIDDEN, reason: 'חג הפסח' }; // במקום פסח רגיל, לבקשתך
+    if (hDay === 14) return { type: EventStatus.FORBIDDEN, reason: 'חג הפסח' }; 
     if (hDay === 15) return { type: EventStatus.FORBIDDEN, reason: 'פסח' };
     if (hDay >= 16 && hDay <= 20) return { type: EventStatus.FORBIDDEN, reason: 'חול המועד פסח' };
     if (hDay === 21) return { type: EventStatus.FORBIDDEN, reason: 'שביעי של פסח' };
@@ -92,7 +92,7 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   if (hMonth === 4 && hDay === 17) return { type: EventStatus.FORBIDDEN, reason: 'י"ז בתמוז' };
 
   // --- אב (5) - תשעה באב ---
-  if (hMonth === 5 && hDay === 9) return { type: EventStatus.FORBIDDEN, reason: 'תשעה באב' }; // חסום להכל
+  if (hMonth === 5 && hDay === 9) return { type: EventStatus.FORBIDDEN, reason: 'תשעה באב' }; 
 
   // --- תשרי (7) - חגי תשרי ---
   if (hMonth === 7) {
@@ -116,7 +116,6 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
     if (hDay === 15) return { type: EventStatus.FORBIDDEN, reason: 'שושן פורים' };
   }
 
-  // חסימת חגים מהתורה כללית ליתר ביטחון
   if (yomTovEvent && hMonth !== 1) return { type: EventStatus.FORBIDDEN, reason: descHe(yomTovEvent) };
 
 
@@ -136,14 +135,12 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   // 4. חוקים מיוחדים לחופות וחתונות בלבד
   // ==========================================
 
-  // --- ניסן (1) ---
   if (hMonth === 1) {
     if (hDay >= 7 && hDay <= 10) return { type: EventStatus.PROBLEMATIC, reason: 'תאריך דפוק' };
     if (hDay >= 11 && hDay <= 13) return { type: EventStatus.FORBIDDEN, reason: 'ערב פסח' };
     if (hDay >= 22) return { type: EventStatus.FORBIDDEN, reason: 'ספירת העומר ' };
   }
 
-  // --- אייר (2) - ספירת העומר ---
   if (hMonth === 2) {
     if (hDay === 18) {
        return { type: EventStatus.AVAILABLE, reason: 'ל"ג בעומר' };
@@ -154,33 +151,27 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
     }
   }
 
-  // --- סיוון (3) ---
   if (hMonth === 3 && hDay <= 2) return { type: EventStatus.PROBLEMATIC, reason: 'תחילת סיוון ' };
 
-  // --- תמוז (4) - בין המצרים ---
   if (hMonth === 4) {
     if (hDay === 16) return { type: EventStatus.PROBLEMATIC, reason: 'ערב י"ז בתמוז' };
     if (hDay >= 18) return { type: EventStatus.FORBIDDEN, reason: 'שלושת השבועות ' };
   }
 
-  // --- אב (5) ---
   if (hMonth === 5) {
     if (hDay <= 8) return { type: EventStatus.FORBIDDEN, reason: 'תשעת הימים ' };
     if (hDay >= 10 && hDay <= 30) return { type: EventStatus.PROBLEMATIC, reason: 'בין הזמנים' };
   }
 
-  // --- אלול (6) ---
   if (hMonth === 6) {
     if (hDay === 29) return { type: EventStatus.PROBLEMATIC, reason: 'ערב ראש השנה' };
   }
 
-  // --- תשרי (7) ---
   if (hMonth === 7) {
     if (hDay >= 3 && hDay <= 8) return { type: EventStatus.PROBLEMATIC, reason: 'עשרת ימי תשובה' };
     if (hDay === 11 || hDay === 12) return { type: EventStatus.PROBLEMATIC, reason: 'ערב סוכות' }; 
   }
 
-  // --- טבת (10) ---
   if (hMonth === 10 && hDay === 10) return { type: EventStatus.PROBLEMATIC, reason: 'עשרה בטבת' };
   
   return { type: EventStatus.AVAILABLE };
@@ -189,7 +180,7 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
 export const calendarService = {
   // שליפה של כל האירועים ביום (עד 3)
   async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
-    const datesInRange = await (prisma as any).eventDate.findMany({
+    const datesInRange = await prisma.eventDate.findMany({
       where: { date: { gte: startDate, lte: endDate } },
       include: { bookings: true }
     });
@@ -225,16 +216,23 @@ export const calendarService = {
     const { timeOfDay } = bookingDetails;
     
     // חסימה בשרת: בדיקה שאין כבר אירוע בבוקר/צהריים/ערב בתאריך הזה
-    const conflict = await (prisma as any).booking.findFirst({
-      where: { calendarDateId: dateId, timeOfDay: timeOfDay }
+    // * שים לב שהשתמשנו ב-prisma.booking במקום (prisma as any).booking
+    const conflict = await prisma.booking.findFirst({
+      where: { 
+        eventDate: { id: dateId }, // דרך נכונה לשלוף לפי קשר ב-Prisma
+        timeOfDay: timeOfDay 
+      }
     });
 
     if (conflict) {
-      throw new Error(`כבר קיים אירוע בשעה ${timeOfDay} בתאריך זה!`);
+      // יצירת השגיאה והוספת סטטוס 400 כדי שהלקוח יקבל הודעה יפה ולא קריסת שרת 500
+      const error = new Error(`כבר קיים אירוע בשעה ${timeOfDay} בתאריך זה!`);
+      (error as any).statusCode = 400;
+      throw error;
     }
 
-    const booking = await (prisma as any).booking.create({
-      data: { ...bookingDetails, calendarDateId: dateId }
+    const booking = await prisma.booking.create({
+      data: { ...bookingDetails, eventDate: { connect: { id: dateId } } }
     });
     
     io.emit('date-updated', { dateId, status: 'BOOKED' });

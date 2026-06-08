@@ -72,6 +72,23 @@ export const sendManagerFinancialAlert = async (managerPhone: string, alertType:
 };
 
 // ==========================================
+// 5. בקשת משוב לאחר סיום אירוע (חדש!)
+// ==========================================
+export const sendFeedbackRequestWhatsApp = async (clientPhone: string, clientName: string | null, link: string) => {
+  const name = clientName ? clientName.split(' ')[0] : 'יקרים שלנו';
+  const message = `היי *${name}*, תודה שחגגתם איתנו! 🎉\n\n` +
+    `היה לנו לעונג לארח אתכם בגן האירועים *מייפל* 🍁.\n` +
+    `נשמח מאוד אם תוכלו להקדיש דקה קטנה מזמנכם כדי לשתף אותנו איך היה, ולעזור לנו להמשיך להשתפר:\n\n` +
+    `${link}\n\n` +
+    `_(שימו לב: הקישור אישי וניתן למילוי פעם אחת בלבד)_\n\n` +
+    `צוות האולם ❤️\n` +
+    `--------------------------\n` +
+    `🤖 _הודעה זו נשלחה אוטומטית מהמערכת._`;
+
+  return simulateWhatsApp(clientPhone, message, 'בקשת משוב');
+};
+
+// ==========================================
 // פונקציית עזר להדפסת הלוגים (סימולציה של שליחה)
 // ==========================================
 const simulateWhatsApp = async (phone: string, message: string, type: string) => {

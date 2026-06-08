@@ -1,14 +1,17 @@
 import cron from 'node-cron';
 import prisma from '../config/prisma';
+import { v4 as uuidv4 } from 'uuid'; // הוספנו ליצירת האסימונים הייחודיים
 import { 
   sendSelectionReminderWhatsApp, 
   sendSecurityCheckReminderWhatsApp, 
-  sendManagerFinancialAlert 
+  sendManagerFinancialAlert,
+  sendFeedbackRequestWhatsApp // <-- ייבוא פונקציית הוואטסאפ החדשה
 } from './whatsapp';
 import {
   sendSelectionReminderEmail,
   sendSecurityCheckReminderEmail,
-  sendManagerFinancialAlertEmail
+  sendManagerFinancialAlertEmail,
+  sendFeedbackRequestEmail // <-- ייבוא פונקציית המייל החדשה
 } from './mailer';
 
 export const startCronJobs = () => {
@@ -110,11 +113,9 @@ export const startCronJobs = () => {
           }
 
           if (missingItems.length > 0) {
-            // הנה הלוגיקה החכמה שלך:
             const isCriticalPeriod = daysUntilEvent <= 10; // שבוע וחצי (10 ימים) ומטה
             const isWeeklyReminderDay = (todayDayOfWeek === 0); // יום ראשון
 
-            // אם אנחנו בתקופה הקריטית (כל יום), או שאנחנו ביום ראשון של השבוע:
             if (isCriticalPeriod || isWeeklyReminderDay) {
               if (clientPhone) await sendSelectionReminderWhatsApp(clientPhone, clientName, missingItems);
               if (clientEmail) await sendSelectionReminderEmail(clientEmail, clientName, missingItems);
@@ -129,4 +130,151 @@ export const startCronJobs = () => {
       console.error('שגיאה בהרצת התראות נודניק:', error);
     }
   });
+
+  // ==========================================
+  // טיימר 3: בקשת משוב לאחר אירוע (רץ כל בוקר ב-10:00)
+  // ==========================================
+  cron.schedule('0 10 * * *', async () => {
+    console.log('--- מתחיל תהליך איתור אירועים מאתמול לשליחת משוב ---');
+    
+    // הגדרת טווח הזמנים של "אתמול"
+    const now = new Date();
+    const startOfYesterday = new Date(now);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    startOfYesterday.setHours(0, 0, 0, 0);
+
+    const endOfYesterday = new Date(now);
+    endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+    endOfYesterday.setHours(23, 59, 59, 999);
+
+    try {
+      // שליפת הזמנות של אירועים שהיו אתמול ובסטטוס "סגור"
+      const finishedBookings = await prisma.booking.findMany({
+        where: {
+          eventDate: {
+            date: {
+              gte: startOfYesterday,
+              lte: endOfYesterday
+            },
+            status: 'BOOKED'
+          }
+        },
+        include: {
+          feedbacks: true // נביא את הפידבקים כדי לוודא שטרם יצרנו
+        }
+      });
+
+      if (finishedBookings.length === 0) {
+        console.log('לא נמצאו אירועים מאתמול.');
+        return;
+      }
+
+      for (const booking of finishedBookings) {
+        // בודקים אם כבר הופק משוב לאירוע הזה (למנוע כפילויות)
+        if (booking.feedbacks && booking.feedbacks.length > 0) {
+          continue; 
+        }
+
+        const feedbacksToCreate = [];
+
+        // 1. יצירת נתונים לצד א'
+        if (booking.clientAPhone) {
+          feedbacksToCreate.push({
+            bookingId: booking.id,
+            clientSide: 'A',
+            clientName: booking.clientAFullName,
+            token: uuidv4(),
+          });
+        }
+
+        // 2. יצירת נתונים לצד ב' (אם קיים)
+        if (booking.clientBFullName && booking.clientBPhone) {
+          feedbacksToCreate.push({
+            bookingId: booking.id,
+            clientSide: 'B',
+            clientName: booking.clientBFullName,
+            token: uuidv4(),
+          });
+        }
+
+        // אם יש לנו צדדים רלוונטיים, נשמור במסד ונייצר להם קישור
+        if (feedbacksToCreate.length > 0) {
+          await prisma.feedback.createMany({
+            data: feedbacksToCreate
+          });
+
+          for (const fb of feedbacksToCreate) {
+            // הקישור למערכת הלקוח
+            const baseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+            const feedbackLink = `${baseUrl}/feedback/${fb.token}`;
+            
+            // שולפים את הטלפון והמייל הרלוונטיים לפי צד הלקוח
+            let phoneToSend = null;
+            let emailToSend = null;
+
+            if (fb.clientSide === 'A') {
+              phoneToSend = booking.clientAPhone?.split(' | ')[0].trim() || null;
+              emailToSend = booking.clientAEmail || null;
+            } else {
+              phoneToSend = booking.clientBPhone?.split(' | ')[0].trim() || null;
+              emailToSend = booking.clientBEmail || null;
+            }
+            
+            // שליחה ל-WhatsApp אם יש מספר
+            if (phoneToSend) {
+              await sendFeedbackRequestWhatsApp(phoneToSend, fb.clientName, feedbackLink);
+              console.log(`✅ נשלח וואטסאפ משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
+            }
+
+            // שליחה למייל אם יש כתובת
+            if (emailToSend) {
+              await sendFeedbackRequestEmail(emailToSend, fb.clientName, feedbackLink);
+              console.log(`✅ נשלח מייל משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
+            }
+          }
+        }
+      }
+
+      console.log('✅ תהליך שליחת משובים הסתיים בהצלחה.');
+
+    } catch (error) {
+      console.error('שגיאה בתהליך שליחת המשובים:', error);
+    }
+  });
+
+  // ==========================================
+  // טיימר 4: התראת תוקף תעודות כשרות (רץ כל בוקר ב-08:00)
+  // ==========================================
+  cron.schedule('0 8 * * *', async () => {
+    console.log('--- בודק תוקף תעודות כשרות ---');
+    const now = new Date();
+    const warningDate = new Date();
+    warningDate.setDate(now.getDate() + 14); // התראה שבועיים מראש
+
+    try {
+      const expiringCerts = await prisma.kashrutCertificate.findMany({
+        where: { 
+          validUntil: { lte: warningDate } 
+        }
+      });
+
+      for (const cert of expiringCerts) {
+        // בודקים אם עבר התוקף או שרק מתקרב
+        const isExpired = cert.validUntil && cert.validUntil < now;
+        const statusText = isExpired ? 'פג תוקף!' : 'עומד לפוג בקרוב.';
+        const dateStr = cert.validUntil ? cert.validUntil.toLocaleDateString('he-IL') : 'לא ידוע';
+        
+        const details = `תעודת הכשרות של "${cert.displayName}" ${statusText} (תאריך פקיעה: ${dateStr}). נא להיכנס למערכת, לעדכן תאריך חדש ולהעלות צילום תעודה מעודכן.`;
+        
+        // שליחת התראה גם למייל וגם לוואטסאפ של המנהל
+        await sendManagerFinancialAlert(MANAGER_PHONE, "תוקף תעודת כשרות", cert.displayName, details);
+        await sendManagerFinancialAlertEmail(MANAGER_EMAIL, "תוקף תעודת כשרות", cert.displayName, details);
+        
+        console.log(`✅ נשלחה התראת כשרות למנהל עבור: ${cert.displayName}`);
+      }
+    } catch (error) {
+      console.error('שגיאה בסריקת תעודות כשרות:', error);
+    }
+  });
+
 };

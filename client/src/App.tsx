@@ -16,6 +16,9 @@ import MenuDisplay from './components/MenuDisplay/MenuDisplay';
 // --- הייבוא החדש למסך ההגדרות ---
 import { SettingsManager } from './components/SettingsManager/SettingsManager';
 
+// --- הייבוא החדש של דף המשוב (נוסף עכשיו) ---
+import FeedbackPage from './components/FeedbackPage/FeedbackPage';
+
 const CalendarWrapper = () => {
   const navigate = useNavigate();
   return (
@@ -67,6 +70,9 @@ function App() {
 
         {/* -- הראוט החדש למסך ניהול ההגדרות -- */}
         <Route path="/settings" element={<SettingsManagerPage />} />
+
+        {/* -- הראוט של עמוד המשוב (נוסף עכשיו) -- */}
+        <Route path="/feedback/:token" element={<FeedbackPage />} />
       </Routes>
     </BrowserRouter>
   );

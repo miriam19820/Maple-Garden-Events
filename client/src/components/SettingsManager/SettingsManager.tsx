@@ -4,6 +4,7 @@ import './SettingsManager.css';
 export const SettingsManager = () => {
   const [globalSettings, setGlobalSettings] = useState<any>({});
   const [extras, setExtras] = useState<any[]>([]);
+  const [kashruts, setKashruts] = useState<any[]>([]);
   
   const [newExtra, setNewExtra] = useState({ name: '', category: 'עיצוב', price: '' });
   const [loading, setLoading] = useState(true);
@@ -14,15 +15,18 @@ export const SettingsManager = () => {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, extrasRes] = await Promise.all([
+      const [settingsRes, extrasRes, kashrutRes] = await Promise.all([
         fetch('http://localhost:5000/api/settings/global'),
-        fetch('http://localhost:5000/api/settings/extras')
+        fetch('http://localhost:5000/api/settings/extras'),
+        fetch('http://localhost:5000/api/kashrut')
       ]);
       const settingsData = await settingsRes.json();
       const extrasData = await extrasRes.json();
+      const kashrutData = await kashrutRes.json();
       
       setGlobalSettings(settingsData);
       setExtras(extrasData);
+      setKashruts(kashrutData);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -41,6 +45,35 @@ export const SettingsManager = () => {
     } catch (error) {
       alert('שגיאה בשמירת הגדרות');
     }
+  };
+const updateKashrut = async (id: string, data: any) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/kashrut/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      // הוספנו בדיקה: אם השרת דוחה את הבקשה, נציג לך למה!
+      if (!response.ok) {
+        alert(`השרת סירב לשמור! קוד שגיאה: ${response.status}. תבדקי את החלון השחור של השרת.`);
+        return;
+      }
+
+      fetchData();
+    } catch (error) {
+      alert('שגיאה בתקשורת מול השרת');
+    }
+  };  const handleImageUpload = (id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64Image = reader.result as string;
+      // עדכון ה-UI מיידית
+      setKashruts(prev => prev.map(k => k.id === id ? { ...k, imageUrl: base64Image } : k));
+      // שליחה לשרת
+      updateKashrut(id, { imageUrl: base64Image });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddExtra = async (e: React.FormEvent) => {
@@ -73,7 +106,22 @@ export const SettingsManager = () => {
     }
   };
 
+  // עדכון מקומי של התאריך בסטייט כדי למנוע קפיצות וניתוקים בזמן ההקלדה
+  const handleDateChangeLocal = (id: string, newDate: string) => {
+    setKashruts(prev => prev.map(k => k.id === id ? { ...k, validUntil: newDate } : k));
+  };
+
+  // פונקציית עזר לפרסור תאריך בטוח לתוך ה-input (מונע את תופעת שנת 0002)
+  const formatDateForInput = (dateString: any) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+  };
+
   if (loading) return <div>טוען הגדרות...</div>;
+
+  // שליפת התעודה הראשונה/המרכזית של האולם
+  const mainKashrut = kashruts[0];
 
   return (
     <div className="settings-container">
@@ -83,6 +131,7 @@ export const SettingsManager = () => {
       </div>
 
       <div className="settings-grid">
+        {/* כרטיס תעריפי בסיס */}
         <div className="settings-card">
           <h2>תעריפי בסיס ומערכת</h2>
           <div className="form-group">
@@ -128,6 +177,7 @@ export const SettingsManager = () => {
           <button className="save-btn" onClick={saveGlobalSettings}>שמור הגדרות בסיס</button>
         </div>
 
+        {/* כרטיס קטלוג תוספות */}
         <div className="settings-card">
           <h2>קטלוג תוספות ושדרוגים (דינמי)</h2>
           <form className="add-extra-form" onSubmit={handleAddExtra}>
@@ -184,12 +234,58 @@ export const SettingsManager = () => {
                   </td>
                 </tr>
               ))}
-              {extras.length === 0 && (
-                <tr><td colSpan={4} style={{textAlign: 'center'}}>לא הוזנו תוספות עדיין</td></tr>
-              )}
             </tbody>
           </table>
         </div>
+
+        {/* חלון ניהול תעודת כשרות יחידה וכללית לאולם (במקום הטבלה) */}
+        <div className="settings-card" style={{gridColumn: '1 / -1'}}>
+          <h2>ניהול תעודת כשרות האולם</h2>
+          <p style={{color: '#666', fontSize: '14px', marginBottom: '15px'}}>התעודה המועלת כאן תוצג אוטומטית בתוסף הפקת האירועים עבור הלקוח.</p>
+          
+          {mainKashrut ? (
+            <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', alignItems: 'center', backgroundColor: '#fdfdfd', padding: '20px', borderRadius: '8px', border: '1px solid #eaeaea' }}>
+              
+              <div className="form-group" style={{ flex: '1', minWidth: '200px' }}>
+                <label style={{fontWeight: 'bold'}}>תאריך תוקף התעודה:</label>
+                <input 
+                  type="date" 
+                  value={formatDateForInput(mainKashrut.validUntil)} 
+                  onChange={(e) => handleDateChangeLocal(mainKashrut.id, e.target.value)} 
+                  onBlur={(e) => updateKashrut(mainKashrut.id, { validUntil: e.target.value })} 
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ flex: '1', minWidth: '250px' }}>
+                <label style={{fontWeight: 'bold'}}>העלאת קובץ תעודה חדש:</label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleImageUpload(mainKashrut.id, e.target.files[0])} 
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '120px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#555', marginBottom: '5px' }}>תצוגה מקדימה:</span>
+                {mainKashrut.imageUrl ? (
+                  <img 
+                    src={mainKashrut.imageUrl} 
+                    alt="תעודת כשרות" 
+                    style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '6px', border: '1px solid #ddd', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', backgroundColor: '#fff', padding: '4px' }} 
+                  />
+                ) : (
+                  <div style={{ width: '80px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #ccc', borderRadius: '6px', color: '#999', fontSize: '12px' }}>אין תמונה</div>
+                )}
+              </div>
+
+            </div>
+          ) : (
+            <div style={{padding: '20px', textAlign: 'center', color: '#666'}}>טוען נתוני תעודת כשרות...</div>
+          )}
+        </div>
+
       </div>
     </div>
   );

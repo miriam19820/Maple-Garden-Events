@@ -7,8 +7,10 @@ import app from './app'; // הוספנו את הייבוא של האפליקצי
 const httpServer = createServer(app);
 
 // הוספנו את המילה export לפני const
+// בקובץ src/server.ts
 export const io = new Server(httpServer, {
-  cors: { origin: "*" }
+  cors: { origin: "*" },
+  maxHttpBufferSize: 1e8 // מעלה את המגבלה ל-100MB
 });
 
 // פונקציית ה-Broadcast שדיברנו עליה
