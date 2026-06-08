@@ -6,6 +6,8 @@ import CheckCamera from '../CheckCamera/CheckCamera';
 import CancellationStats from '../CancellationStats/CancellationStats';
 // השארתי את הייבוא, אבל את בחירת הכשרות ננהל כאן כדי שהתמונה בוודאות תעבוד לך
 import KashrutSelector from '../KashrutSelector/KashrutSelector';
+import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
+
 
 interface Booking {
   id: string;
@@ -49,6 +51,8 @@ interface EventFormData {
   akumCode?: string;
   kashrut?: string;
   notes?: string;
+
+  menuSelections?: Record<string, string[]> | null; // נוסיף | null לכאן
 }
 
 // רשימת ההכשרים
@@ -80,6 +84,16 @@ const EventFormManager = () => {
   // ניהול תמונת הכשרות
   const [kashrutImage, setKashrutImage] = useState<string | null>(null);
   const [isKashrutModalOpen, setIsKashrutModalOpen] = useState(false);
+  
+  // ניהול התפריט (הוספנו סטייט לשליטה על פתיחה וסגירה של המודאל)
+  const [selectedMenu, setSelectedMenu] = useState<Record<string, string[]> | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false); 
+
+  const handleMenuSave = (menuSelections: Record<string, string[]>) => {
+    setSelectedMenu(menuSelections);
+    setIsMenuOpen(false); // סוגר את חלון התפריט אוטומטית אחרי השמירה
+    alert("התפריט נשמר כחלק מפרטי האירוע!");
+  };
 
   useEffect(() => {
     // טעינת הזמנות וטפסים
@@ -123,6 +137,7 @@ const EventFormManager = () => {
           const { id, createdAt, updatedAt, booking, bookingId, ...cleanForm } = form;
           setFormData(cleanForm);
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
+          setSelectedMenu(form.menuSelections || null);
         } else {
           setFormData({});
           setNotesList([]);
@@ -274,7 +289,8 @@ const EventFormManager = () => {
       const dataToSave: EventFormData = {
         ...formData,
         depositCheckUrl: checkUrl || formData.depositCheckUrl,
-        notes: JSON.stringify(notesList)
+        notes: JSON.stringify(notesList),
+        menuSelections: selectedMenu
       };
 
       const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
@@ -831,8 +847,6 @@ const EventFormManager = () => {
                 );
               })()}
             </div>
-                 
-                       
 
             {/* צ'ק פיקדון */}
             <div className={styles.section}>
@@ -953,6 +967,60 @@ const EventFormManager = () => {
               )}
             </div>
 
+            {/* ---> כפתור בחירת תפריט אלגנטי <--- */}
+            <div className={styles.section} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '15px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '20px' }}>
+              <div>
+                <h4 style={{ margin: '0 0 5px 0' }}>🍽️ תפריט האירוע</h4>
+                {selectedMenu ? (
+                  <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 'bold' }}>✓ תפריט נבחר ושמור בטופס</span>
+                ) : (
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>טרם נבחר תפריט לאירוע זה</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(true)}
+                style={{
+                  padding: '10px 20px', background: selectedMenu ? '#3b82f6' : '#d4af37', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
+                }}
+              >
+                {selectedMenu ? 'ערוך תפריט נבחר' : '📋 בחירת תפריט'}
+              </button>
+            </div>
+
+            {/* ---> מודאל צף לבחירת תפריט <--- */}
+            {/* ---> מודאל צף לבחירת תפריט - בתצוגת מסך מלא <--- */}
+           {/* ---> מודאל צף לבחירת תפריט - בתצוגת מסך מלא <--- */}
+            {isMenuOpen && (
+              <div 
+                style={{ position: 'fixed', inset: 0, background: '#f8fafc', display: 'flex', justifyContent: 'center', zIndex: 9999 }}
+              >
+                <div 
+                  onClick={e => e.stopPropagation()} 
+                  style={{ width: '100vw', height: '100vh', position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                >
+                  {/* כפתור סגירה צף ובולט בפינה */}
+                  <button 
+                    onClick={() => setIsMenuOpen(false)}
+                    style={{ position: 'absolute', top: '20px', left: '30px', background: 'white', color: '#ef4444', border: '2px solid #ef4444', borderRadius: '8px', padding: '8px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                    title="סגור חלון"
+                  >
+                    ✕ סגור וחזור לטופס
+                  </button>
+                  
+                  {/* אזור התוכן המרווח שנגלל על כל המסך */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '40px 20px' }}>
+                    <div style={{ maxWidth: '1200px', margin: '0 auto', background: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '30px' }}>
+                      <MenuSelectionForm 
+                         onSaveMenu={handleMenuSave} 
+                         initialSelections={selectedMenu} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+           
             {/* הערות ממוספרות */}
             <div className={styles.section}>
               <h4>📝 הערות (אופציונלי)</h4>
