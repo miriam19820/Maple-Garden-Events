@@ -1,15 +1,12 @@
 .settings-container {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
   direction: rtl;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--maple-font);
 }
 
 .settings-header {
   margin-bottom: 32px;
-  color: #1e293b;
-  border-bottom: 2px solid #e2e8f0;
+  color: var(--maple-text);
+  border-bottom: 2px solid var(--maple-green-light);
   padding-bottom: 16px;
 }
 

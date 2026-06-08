@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
+import { type TimeSlot, SLOT_LABELS, normalizeTimeSlot } from '../../utils/timeSlot';
 
 interface BookingFormProps {
   initialDates?: any[];
@@ -46,9 +47,49 @@ const getHebrewDateString = (dateObj: Date | null) => {
   }
 };
 
+const parseCombinedPhone = (combined: string | null | undefined) => {
+  if (!combined) return { phone: '', phone2: '' };
+  const marker = ' | נוסף: ';
+  const idx = combined.indexOf(marker);
+  if (idx === -1) return { phone: combined, phone2: '' };
+  return { phone: combined.slice(0, idx), phone2: combined.slice(idx + marker.length) };
+};
+
+const parseAddress = (combined: string | null | undefined) => {
+  if (!combined) return { city: '', address: '' };
+  const idx = combined.indexOf(', ');
+  if (idx === -1) return { city: '', address: combined };
+  return { city: combined.slice(0, idx), address: combined.slice(idx + 2) };
+};
+
+const parseStoredTimeOfDay = (stored: string | null | undefined) => {
+  if (!stored) return { timeOfDay: '', startTime: '', endTime: '' };
+  const pipeParts = stored.split('|');
+  const main = pipeParts[0]?.trim() || stored;
+  const timePart = pipeParts[1]?.trim();
+  const partOfDay = ['morning', 'noon', 'evening'];
+  if (partOfDay.includes(main)) {
+    if (timePart?.includes(' - ')) {
+      const [start, end] = timePart.split(' - ');
+      return { timeOfDay: main, startTime: start.trim(), endTime: end.trim() };
+    }
+    return { timeOfDay: main, startTime: '', endTime: '' };
+  }
+  if (stored.includes(' - ')) {
+    const [start, end] = stored.split(' - ');
+    const slot = normalizeTimeSlot(stored, start.trim());
+    return { timeOfDay: slot || '', startTime: start.trim(), endTime: end.trim() };
+  }
+  return { timeOfDay: main, startTime: '', endTime: '' };
+};
+
 const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProps) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEditMode = !!editId;
+  const takenSlots: TimeSlot[] = (location.state?.takenSlots as TimeSlot[]) || [];
+  const isSlotTaken = (slot: TimeSlot) => !isEditMode && takenSlots.includes(slot);
 
   // --- ולידציות ---
   const validateFullName = (name: string) => name.trim().split(/\s+/).length >= 2;
@@ -92,16 +133,17 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   else if (location.state?.selectedDate) datesToProcess = [location.state.selectedDate];
   else if (location.state?.date) datesToProcess = [{ date: location.state.date, hebrewDate: location.state.hebrewDate || '' }];
 
-  const [selectedDatesDisplay] = useState<any[]>(datesToProcess);
-  
-  // זיהוי סטטוס אופציה/הזמנה
+  const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<any[]>(datesToProcess);
+  const [loadingBooking, setLoadingBooking] = useState(isEditMode);
+
   const isOptionMode = forcedIsOption || location.state?.isOption || datesToProcess.length > 1;
-  const [isOption] = useState(isOptionMode);
+  const [isOption, setIsOption] = useState(isOptionMode);
   const [optionDurationHours, setOptionDurationHours] = useState(48);
 
-  // יצירת מספר הזמנה ייחודי לחלוטין (מבוסס על הזמן הנוכחי במילישניות)
   const [baseUniqueId] = useState(() => Date.now().toString().slice(-6));
-  const orderNumber = isOption ? `OPT-${baseUniqueId}` : `EVT-${baseUniqueId}`;
+  const [orderNumber, setOrderNumber] = useState(
+    isOptionMode ? `OPT-${baseUniqueId}` : `EVT-${baseUniqueId}`
+  );
 
   const getDayOfWeek = (dateString: string) => {
     if (!dateString) return '';
@@ -137,12 +179,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   });
 
   useEffect(() => {
+    if (isEditMode) return;
     if (formData.eventType === 'חתונה') {
       setFormData(prev => ({ ...prev, startTime: '18:00', endTime: '00:00', timeOfDay: 'evening' }));
     } else if (formData.eventType === 'ברית') {
       setFormData(prev => ({ ...prev, startTime: '09:00', endTime: '14:00', timeOfDay: 'morning' }));
     }
-  }, [formData.eventType]);
+  }, [formData.eventType, isEditMode]);
 
   const [servingStyle, setServingStyle] = useState('american');
   const [kosherType, setKosherType] = useState('machpud');
@@ -159,6 +202,80 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       setFormData(prev => ({ ...prev, calendarDateId: firstDate || '' }));
     }
   }, [selectedDatesDisplay]);
+
+  useEffect(() => {
+    if (!editId) return;
+
+    const loadBooking = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/bookings/${editId}`);
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          alert(json.message || 'שגיאה בטעינת ההזמנה');
+          navigate('/');
+          return;
+        }
+
+        const b = json.data;
+        const phoneA = parseCombinedPhone(b.clientAPhone);
+        const phoneB = parseCombinedPhone(b.clientBPhone);
+        const addrA = parseAddress(b.clientAAddress);
+        const addrB = parseAddress(b.clientBAddress);
+        const eventDateStr = b.eventDate?.date
+          ? new Date(b.eventDate.date).toISOString().split('T')[0]
+          : '';
+
+        setIsOption(b.eventDate?.status === 'OPTION');
+        setOrderNumber(b.eventCode || b.id.slice(0, 8));
+        if (eventDateStr) {
+          setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: '' }]);
+        }
+
+        const parsedTime = parseStoredTimeOfDay(b.timeOfDay);
+        setFormData({
+          createdBy: b.createdBy || '',
+          clientAFullName: b.clientAFullName || '',
+          clientAIdNumber: b.clientAIdNumber || '',
+          clientAPhone: phoneA.phone,
+          clientAPhone2: phoneA.phone2,
+          clientAEmail: b.clientAEmail || '',
+          clientACity: addrA.city,
+          clientAAddress: addrA.address,
+          clientBFullName: b.clientBFullName || '',
+          clientBIdNumber: b.clientBIdNumber || '',
+          clientBPhone: phoneB.phone,
+          clientBPhone2: phoneB.phone2,
+          clientBEmail: b.clientBEmail || '',
+          clientBCity: addrB.city,
+          clientBAddress: addrB.address,
+          calendarDateId: eventDateStr,
+          eventType: b.eventType || '',
+          timeOfDay: parsedTime.timeOfDay,
+          startTime: parsedTime.startTime,
+          endTime: parsedTime.endTime,
+          guestCount: String(b.guestCount ?? ''),
+          optionalGuestCount: '',
+          finalPricePortion: String(b.finalPricePortion ?? '200'),
+          discountPercent: '',
+          discountAmount: '',
+          vatType: 'not_included',
+          paymentTerms: '',
+          clientComments: b.clientComments || '',
+          menuNotes: '',
+          leadSource: b.leadSource || '',
+        });
+        setContractSigned(!!b.isContractSigned);
+        if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
+      } catch {
+        alert('שגיאה בטעינת ההזמנה');
+        navigate('/');
+      } finally {
+        setLoadingBooking(false);
+      }
+    };
+
+    loadBooking();
+  }, [editId, navigate]);
 
   const [activeEmailField, setActiveEmailField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -231,7 +348,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isOption && !contractSigned) {
+    if (!isEditMode && !isOption && !contractSigned) {
       alert('חובה לסמן את אישור קריאת החוזה וחתימה עליו לפני סגירת האירוע.');
       return;
     }
@@ -253,6 +370,14 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       return;
     }
 
+    if (!isEditMode && formData.timeOfDay) {
+      const slot = normalizeTimeSlot(formData.timeOfDay, formData.startTime);
+      if (slot && takenSlots.includes(slot)) {
+        alert(`משבצת ${SLOT_LABELS[slot]} כבר תפוסה בתאריך זה. בחרי משבצת אחרת.`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -268,11 +393,17 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         isOption: isOption,
         optionDurationHours: optionDurationHours,
         servingStyle, kosherType, upgrades, depositMethod, contractSigned,
+        hasMusic: upgrades.amplification,
         calculatedTotals: totals
       };
       
-      const response = await fetch('http://localhost:5000/api/bookings', {
-        method: 'POST',
+      const url = isEditMode
+        ? `http://localhost:5000/api/bookings/${editId}`
+        : 'http://localhost:5000/api/bookings';
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -280,7 +411,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       const resData = await response.json();
 
       if (response.ok) {
-        alert(isOption ? 'האופציה נשמרה בהצלחה! (ניתן לשלוח הצעת מחיר / חוזה מהמערכת)' : 'האירוע נסגר ונשמר בהצלחה!');
+        alert(
+          isEditMode
+            ? 'ההזמנה עודכנה בהצלחה!'
+            : isOption
+              ? 'האופציה נשמרה בהצלחה! (ניתן לשלוח הצעת מחיר / חוזה מהמערכת)'
+              : 'האירוע נסגר ונשמר בהצלחה!'
+        );
         navigate('/');
       } else {
         alert(`שגיאה בשמירת הנתונים: ${resData.message || 'השרת החזיר שגיאה לא ידועה'}`);
@@ -296,85 +433,104 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const isWedding = formData.eventType === 'חתונה';
   const eventTypesList = ['חתונה', 'אירוסין', 'בר מצווה', 'בת מצווה', 'ברית', 'בריתה', 'חינה', 'הרמת כוסית', 'כנס מקצועי', 'אירוע חברה/עסקי'];
 
+  if (loadingBooking) {
+    return (
+      <div className={styles.container}>
+        <p className={styles.loadingText}>טוען פרטי הזמנה...</p>
+      </div>
+    );
+  }
+
+  const pageTitle = isEditMode
+    ? (isOption ? 'עריכת אופציה' : 'עריכת הזמנה')
+    : (isOption ? 'שמירת אופציה לאירוע' : 'סגירת הזמנת אירוע');
+
   return (
     <div className={styles.container}>
       <div className={styles.formCard}>
         <div className={styles.header}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-            <button onClick={() => navigate('/')} style={{ background: '#e2e8f0', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold' }}>← חזרה ללוח</button>
-            <h2 className={styles.title}>
-               {isOption ? 'שמירת אופציה לאירוע' : 'סגירת הזמנת אירוע'} <span className={styles.titleAccent}>| מייפל</span>
-            </h2>
+          <img src="/logo.png" alt="מיפל" className={styles.headerLogo} />
+          <div className={styles.headerText}>
+            <h2 className={styles.title}>{pageTitle}</h2>
+            {isOption && !isEditMode && (
+              <p className={styles.subtitle}>שמירת תאריכים זמנית — ניתן להשלים ולסגור בהמשך</p>
+            )}
+            {isEditMode && (
+              <p className={styles.subtitle}>ניתן לערוך פרטים עד יום לפני האירוע (התאריך אינו ניתן לשינוי)</p>
+            )}
+            {!isOption && !isEditMode && (
+              <p className={styles.subtitle}>מילוי פרטים וסגירת האירוע</p>
+            )}
           </div>
         </div>
 
         <form className={styles.formBody} onSubmit={handleSubmit} style={{ direction: 'rtl' }}>
           
-          {/* שורת הגדרות כלליות עליונה */}
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-            <div className={styles.inputGroup} style={{ flex: 1, minWidth: '150px', margin: 0 }}>
-              <label style={{ fontWeight: 'bold', color: '#334155' }}>מספר {isOption ? 'אופציה' : 'הזמנה'}</label>
-              <input type="text" value={orderNumber} readOnly className={styles.input} style={{ backgroundColor: '#e2e8f0', cursor: 'not-allowed', color: '#0f172a', fontWeight: 'bold' }} />
+          <div className={styles.metaBar}>
+            <div className={styles.inputGroup}>
+              <label className={styles.metaLabel}>מספר {isOption ? 'אופציה' : 'הזמנה'}</label>
+              <input type="text" value={orderNumber} readOnly className={`${styles.input} ${styles.inputReadonly}`} />
             </div>
             
-            <div className={styles.inputGroup} style={{ flex: 1.5, minWidth: '180px', margin: 0 }}>
-              <label style={{ fontWeight: 'bold', color: '#334155' }}>שם הנציג / סוכן *</label>
+            <div className={styles.inputGroup}>
+              <label className={styles.metaLabel}>שם הנציג / סוכן *</label>
               <select name="createdBy" required value={formData.createdBy} onChange={handleChange} className={styles.input}>
                 <option value="">בחרי נציג מהרשימה</option>
                 {representatives.map(name => <option key={name} value={name}>{name}</option>)}
               </select>
             </div>
 
-            <div className={styles.inputGroup} style={{ flex: 1.5, minWidth: '180px', margin: 0 }}>
-              <label style={{ fontWeight: 'bold', color: '#334155' }}>סוג אירוע *</label>
-              <select name="eventType" required onChange={handleChange} className={styles.input}>
+            <div className={styles.inputGroup}>
+              <label className={styles.metaLabel}>סוג אירוע *</label>
+              <select name="eventType" required value={formData.eventType} onChange={handleChange} className={styles.input}>
                 <option value="">בחרי מסוגי האירועים</option>
                 {eventTypesList.map(type => <option key={type} value={type}>{type}</option>)}
               </select>
             </div>
 
             {isOption && (
-              <div className={styles.inputGroup} style={{ flex: 1, minWidth: '150px', margin: 0 }}>
-                <label style={{ fontWeight: 'bold', color: '#b45309' }}>תוקף אופציה (בשעות)</label>
-                <input type="number" value={optionDurationHours} onChange={(e) => setOptionDurationHours(Number(e.target.value))} className={styles.input} style={{ borderColor: '#f59e0b' }} />
+              <div className={styles.inputGroup}>
+                <label className={styles.metaLabel}>תוקף אופציה (בשעות)</label>
+                <input type="number" value={optionDurationHours} onChange={(e) => setOptionDurationHours(Number(e.target.value))} className={styles.input} />
               </div>
             )}
             
-            <div className={styles.inputGroup} style={{ flex: 1.5, minWidth: '180px', margin: 0 }}>
-              <label style={{ fontWeight: 'bold', color: '#334155' }}>תאריך {isOption ? 'פתיחת האופציה' : 'סגירת האירוע'}</label>
-              <input type="text" value={currentDateDisplay} readOnly className={styles.input} style={{ backgroundColor: '#e2e8f0', cursor: 'not-allowed', color: '#475569', direction: 'ltr', textAlign: 'right' }} />
+            <div className={styles.inputGroup}>
+              <label className={styles.metaLabel}>תאריך {isOption ? 'פתיחת האופציה' : 'סגירת האירוע'}</label>
+              <input type="text" value={currentDateDisplay} readOnly className={`${styles.input} ${styles.inputReadonly}`} style={{ direction: 'ltr', textAlign: 'right' }} />
             </div>
           </div>
           
-          {/* פרטי בעלי השמחה */}
-          <div className={isWedding ? styles.clientsSectionWedding : styles.clientsSectionSingle} style={{ marginTop: '30px' }}>
+          <div className={styles.sectionCard}>
+            <h3 className={styles.sectionHeader}>פרטי בעלי השמחה</h3>
+          <div className={isWedding ? styles.clientsSectionWedding : styles.clientsSectionSingle}>
             <div className={styles.clientBlock}>
               <h3 className={styles.sectionTitlePrimary}>{isWedding ? "פרטי צד החתן" : "פרטי בעל השמחה / הלקוח"}</h3>
               <div className={styles.inputRow}>
                 <div className={styles.inputGroup}>
                   <label>שם מלא </label>
-                  <input type="text" name="clientAFullName" required onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAFullName ? styles.inputError : ''}`} />
+                  <input type="text" name="clientAFullName" required value={formData.clientAFullName} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAFullName ? styles.inputError : ''}`} />
                   {errors.clientAFullName && <span className={styles.errorMsg}>{errors.clientAFullName}</span>}
                 </div>
                 <div className={styles.inputGroup}>
                   <label>תעודת זהות</label>
-                  <input type="text" name="clientAIdNumber" onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAIdNumber ? styles.inputError : ''}`} />
+                  <input type="text" name="clientAIdNumber" value={formData.clientAIdNumber} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAIdNumber ? styles.inputError : ''}`} />
                   {errors.clientAIdNumber && <span className={styles.errorMsg}>{errors.clientAIdNumber}</span>}
                 </div>
               </div>
               <div className={styles.inputRow}>
                 <div className={styles.inputGroup}>
                   <label>מספר טלפון 1 *</label>
-                  <input type="tel" name="clientAPhone" required onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAPhone ? styles.inputError : ''}`} />
+                  <input type="tel" name="clientAPhone" required value={formData.clientAPhone} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientAPhone ? styles.inputError : ''}`} />
                   {errors.clientAPhone && <span className={styles.errorMsg}>{errors.clientAPhone}</span>}
                 </div>
                 <div className={styles.inputGroup}>
                   <label>מספר טלפון 2</label>
-                  <input type="tel" name="clientAPhone2" onChange={handleChange} className={styles.input} />
+                  <input type="tel" name="clientAPhone2" value={formData.clientAPhone2} onChange={handleChange} className={styles.input} />
                 </div>
               </div>
 
-              <div className={styles.inputGroup} style={{ position: 'relative' }}>
+              <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
                 <label>כתובת דוא"ל</label>
                 <input 
                   type="text" 
@@ -395,7 +551,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                         key={s} 
                         onClick={() => handleEmailSelect('clientAEmail', s)} 
                         dir="ltr"
-                        style={{ cursor: 'pointer', padding: '5px', background: '#fff', border: '1px solid #ddd', textAlign: 'right' }}
                       >
                         {formData.clientAEmail.split('@')[0]}{s}
                       </li>
@@ -404,8 +559,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 )}
               </div>
               <div className={styles.inputRow}>
-                <div className={styles.inputGroup}><label>עיר </label><input type="text" name="clientACity" onChange={handleChange} className={styles.input} /></div>
-                <div className={styles.inputGroup}><label>כתובת (רחוב ומספר) </label><input type="text" name="clientAAddress" onChange={handleChange} className={styles.input} /></div>
+                <div className={styles.inputGroup}><label>עיר </label><input type="text" name="clientACity" value={formData.clientACity} onChange={handleChange} className={styles.input} /></div>
+                <div className={styles.inputGroup}><label>כתובת (רחוב ומספר) </label><input type="text" name="clientAAddress" value={formData.clientAAddress} onChange={handleChange} className={styles.input} /></div>
               </div>
             </div>
 
@@ -415,27 +570,27 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 <div className={styles.inputRow}>
                   <div className={styles.inputGroup}>
                     <label>שם מלא </label>
-                    <input type="text" name="clientBFullName" required={isWedding} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBFullName ? styles.inputError : ''}`} />
+                    <input type="text" name="clientBFullName" required={isWedding} value={formData.clientBFullName} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBFullName ? styles.inputError : ''}`} />
                     {errors.clientBFullName && <span className={styles.errorMsg}>{errors.clientBFullName}</span>}
                   </div>
                   <div className={styles.inputGroup}>
                     <label>תעודת זהות</label>
-                    <input type="text" name="clientBIdNumber" onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBIdNumber ? styles.inputError : ''}`} />
+                    <input type="text" name="clientBIdNumber" value={formData.clientBIdNumber} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBIdNumber ? styles.inputError : ''}`} />
                     {errors.clientBIdNumber && <span className={styles.errorMsg}>{errors.clientBIdNumber}</span>}
                   </div>
                 </div>
                 <div className={styles.inputRow}>
                   <div className={styles.inputGroup}>
                     <label>מספר טלפון 1 *</label>
-                    <input type="tel" name="clientBPhone" required={isWedding} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBPhone ? styles.inputError : ''}`} />
+                    <input type="tel" name="clientBPhone" required={isWedding} value={formData.clientBPhone} onChange={handleChange} onBlur={e => validateField(e.target.name, e.target.value)} className={`${styles.input} ${errors.clientBPhone ? styles.inputError : ''}`} />
                     {errors.clientBPhone && <span className={styles.errorMsg}>{errors.clientBPhone}</span>}
                   </div>
                   <div className={styles.inputGroup}>
                     <label>מספר טלפון 2</label>
-                    <input type="tel" name="clientBPhone2" onChange={handleChange} className={styles.input} />
+                    <input type="tel" name="clientBPhone2" value={formData.clientBPhone2} onChange={handleChange} className={styles.input} />
                   </div>
                 </div>
-                <div className={styles.inputGroup} style={{ position: 'relative' }}>
+                <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
                   <label>כתובת דוא"ל </label>
                   <input 
                     type="text" 
@@ -456,7 +611,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                           key={s} 
                           onClick={() => handleEmailSelect('clientBEmail', s)} 
                           dir="ltr"
-                          style={{ cursor: 'pointer', padding: '5px', background: '#fff', border: '1px solid #ddd', textAlign: 'right' }}
                         >
                           {formData.clientBEmail.split('@')[0]}{s}
                         </li>
@@ -465,14 +619,16 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                   )}
                 </div>
                 <div className={styles.inputRow}>
-                  <div className={styles.inputGroup}><label>עיר </label><input type="text" name="clientBCity" onChange={handleChange} className={styles.input} /></div>
-                  <div className={styles.inputGroup}><label>כתובת (רחוב ומספר) </label><input type="text" name="clientBAddress" onChange={handleChange} className={styles.input} /></div>
+                  <div className={styles.inputGroup}><label>עיר </label><input type="text" name="clientBCity" value={formData.clientBCity} onChange={handleChange} className={styles.input} /></div>
+                  <div className={styles.inputGroup}><label>כתובת (רחוב ומספר) </label><input type="text" name="clientBAddress" value={formData.clientBAddress} onChange={handleChange} className={styles.input} /></div>
                 </div>
               </div>
             )}
           </div>
+          </div>
 
-          <h3 className={styles.sectionTitle}>הגדרות אירוע, זמנים ותפריט</h3>
+          <div className={styles.sectionCard}>
+            <h3 className={styles.sectionHeader}>הגדרות אירוע, זמנים ותפריט</h3>
           <div className={styles.eventDetailsGrid}>
             <div className={styles.inputGroup}>
               <label>דרך מי הגיעו? (מקור הגעה)</label>
@@ -481,12 +637,12 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
             
             <div className={styles.inputGroup}>
               <label>{isOption ? 'תאריכים אופציונליים (לועזי)' : 'תאריך אירוע סופי (לועזי)'}</label>
-              <input type="text" name="calendarDateId" value={dateStr} readOnly className={styles.input} style={{ backgroundColor: '#f1f5f9' }} />
+              <input type="text" name="calendarDateId" value={dateStr} readOnly className={`${styles.input} ${styles.inputReadonly}`} />
             </div>
 
             <div className={styles.inputGroup}>
               <label>{isOption ? 'תאריכים אופציונליים (עברי)' : 'תאריך אירוע סופי (עברי)'}</label>
-              <input type="text" value={hebrewDateDisplay} readOnly className={styles.input} style={{ backgroundColor: '#f1f5f9', color: '#1e40af', fontWeight: 'bold' }} />
+              <input type="text" value={hebrewDateDisplay} readOnly className={`${styles.input} ${styles.dateReadonly}`} />
             </div>
 
             {/* --- הוספת זמן אירוע בוקר/צהריים/ערב --- */}
@@ -494,26 +650,36 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
               <label>זמן ביום *</label>
               <select name="timeOfDay" required value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
                 <option value="">בחרי חלק ביום</option>
-                <option value="morning">בוקר</option>
-                <option value="noon">צהריים</option>
-                <option value="evening">ערב</option>
+                <option value="morning" disabled={isSlotTaken('morning')}>
+                  בוקר{isSlotTaken('morning') ? ' (תפוס)' : ''}
+                </option>
+                <option value="noon" disabled={isSlotTaken('noon')}>
+                  צהריים{isSlotTaken('noon') ? ' (תפוס)' : ''}
+                </option>
+                <option value="evening" disabled={isSlotTaken('evening')}>
+                  ערב{isSlotTaken('evening') ? ' (תפוס)' : ''}
+                </option>
               </select>
+              {takenSlots.length > 0 && !isEditMode && (
+                <span className={styles.slotHint}>
+                  משבצות תפוסות: {takenSlots.map((s) => SLOT_LABELS[s]).join(', ')}
+                </span>
+              )}
             </div>
 
-            <div className={styles.inputGroup} style={{ display: 'flex', gap: '10px' }}>
-              <div style={{ flex: 1 }}>
+            <div className={`${styles.inputGroup} ${styles.splitRow}`}>
+              <div className={styles.inputGroup}>
                 <label>משעה מדוייקת</label>
                 <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} className={styles.input} />
               </div>
-              <div style={{ flex: 1 }}>
+              <div className={styles.inputGroup}>
                 <label>עד שעה מדוייקת</label>
                 <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} className={styles.input} />
               </div>
             </div>
-            {/* הערת שעות נוספות לנציג */}
-            <div style={{ gridColumn: '1 / -1', marginTop: '-10px', marginBottom: '10px', fontSize: '0.85rem', color: '#b91c1c' }}>
-              * שים לב: לאחר סיום שעות האירוע המוגדרות תיתכן תוספת תשלום על כל שעה נוספת.
-            </div>
+            <p className={styles.timeNote}>
+              * לאחר סיום שעות האירוע המוגדרות תיתכן תוספת תשלום על כל שעה נוספת.
+            </p>
 
             <div className={styles.inputGroup}>
               <label>צורת הגשה (תפריט)</label>
@@ -527,14 +693,14 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
             {isFoodRelevant && (
               <>
-                <div className={styles.inputGroup} style={{ display: 'flex', gap: '10px' }}>
-                  <div style={{ flex: 1 }}>
+                <div className={styles.splitRow}>
+                  <div className={styles.inputGroup}>
                     <label>כמות מנות (בפועל)</label>
-                    <input type="number" name="guestCount" required onChange={handleChange} className={styles.input} />
+                    <input type="number" name="guestCount" required value={formData.guestCount} onChange={handleChange} className={styles.input} />
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div className={styles.inputGroup}>
                     <label>מנות אופציה (רזרבה)</label>
-                    <input type="number" name="optionalGuestCount" onChange={handleChange} className={styles.input} />
+                    <input type="number" name="optionalGuestCount" value={formData.optionalGuestCount} onChange={handleChange} className={styles.input} />
                   </div>
                 </div>
                 
@@ -557,115 +723,108 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 {/* --- צפייה בתפריט והערות לתפריט --- */}
                 <div className={styles.inputGroup}>
                   <label>צפייה בתפריט הקיים</label>
-                  <div 
-                    onClick={() => window.open('/menu', '_blank')}
-                    className={styles.input} 
-                    style={{ 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                      backgroundColor: '#fef3c7', color: '#d97706', cursor: 'pointer', 
-                      fontWeight: 'bold', border: '1px solid #fde68a', transition: '0.2s'
-                    }}
-                  >
+                  <div onClick={() => window.open('/menu', '_blank')} className={styles.menuLinkBtn} role="button" tabIndex={0}>
                     📄 פתיחה וצפייה בתפריט
                   </div>
                 </div>
               </>
             )}
           </div>
-
-          <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-             <h3 className={styles.sectionTitle} style={{ marginTop: 0 }}>הערות לתפריט ובקשות מיוחדות (נשמר במידה והאירוע נסגר)</h3>
-             <textarea name="menuNotes" value={formData.menuNotes} onChange={handleChange} className={styles.input} rows={2} placeholder="לדוגמה: אלרגיות מיוחדות, בקשה להחלפת מנה מסוימת..." />
           </div>
 
-          <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-             <h3 className={styles.sectionTitle} style={{ marginTop: 0 }}>חבילת תוספות ושדרוגים לאירוע</h3>
-             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: isHallOnly ? 0.4 : 0.7 }}>
-                  <input type="checkbox" checked={isHallOnly ? false : upgrades.baseDesign} readOnly disabled={isHallOnly} />
-                  <span>עיצוב בסיסי {isHallOnly ? '(לא רלוונטי)' : '(חובה) - 4,500 ₪'}</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.amplification} onChange={() => handleUpgradeChange('amplification')} />
-                  <span>הגברה - 1,400 ₪</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.lighting} onChange={() => handleUpgradeChange('lighting')} />
-                  <span>תאורה - 1,800 ₪</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.screens} onChange={() => handleUpgradeChange('screens')} />
-                  <span>מסכים - 800 ₪</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.reception} onChange={() => handleUpgradeChange('reception')} />
-                  <span>קבלת פנים - 2,000 ₪</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.separateReception} onChange={() => handleUpgradeChange('separateReception')} />
-                  <span>קבלת פנים נפרדת - 3,000 ₪</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.extraSecurity} onChange={() => handleUpgradeChange('extraSecurity')} />
-                  <span>מאבטח פיצול כניסה - 650 ₪</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="checkbox" checked={upgrades.fireworks} onChange={() => handleUpgradeChange('fireworks')} />
-                  <span>זיקוקים - 700 ₪</span>
-                </label>
-             </div>
+          <div className={styles.sectionCard}>
+            <h3 className={styles.sectionHeader}>הערות לתפריט ובקשות מיוחדות</h3>
+            <textarea name="menuNotes" value={formData.menuNotes} onChange={handleChange} className={styles.input} rows={2} placeholder="לדוגמה: אלרגיות מיוחדות, בקשה להחלפת מנה מסוימת..." />
           </div>
 
-          <div style={{ marginTop: '30px', background: '#fff', border: '1px solid #cbd5e1', padding: '20px', borderRadius: '8px' }}>
-            <h3 className={styles.sectionTitle} style={{ marginTop: 0 }}>סיכום, פיקדון ותשלום</h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px', background: '#f1f5f9', padding: '15px', borderRadius: '8px' }}>
-              <div className={styles.inputGroup} style={{ margin: 0 }}>
+          <div className={styles.sectionCard}>
+            <h3 className={styles.sectionHeader}>חבילת תוספות ושדרוגים</h3>
+            <div className={styles.upgradesGrid}>
+              <label className={`${styles.upgradeLabel} ${isHallOnly ? styles.upgradeLabelDisabled : ''}`}>
+                <input type="checkbox" checked={isHallOnly ? false : upgrades.baseDesign} readOnly disabled={isHallOnly} />
+                <span>עיצוב בסיסי {isHallOnly ? '(לא רלוונטי)' : '(חובה) - 4,500 ₪'}</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.amplification} onChange={() => handleUpgradeChange('amplification')} />
+                <span>הגברה - 1,400 ₪</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.lighting} onChange={() => handleUpgradeChange('lighting')} />
+                <span>תאורה - 1,800 ₪</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.screens} onChange={() => handleUpgradeChange('screens')} />
+                <span>מסכים - 800 ₪</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.reception} onChange={() => handleUpgradeChange('reception')} />
+                <span>קבלת פנים - 2,000 ₪</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.separateReception} onChange={() => handleUpgradeChange('separateReception')} />
+                <span>קבלת פנים נפרדת - 3,000 ₪</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.extraSecurity} onChange={() => handleUpgradeChange('extraSecurity')} />
+                <span>מאבטח פיצול כניסה - 650 ₪</span>
+              </label>
+              <label className={styles.upgradeLabel}>
+                <input type="checkbox" checked={upgrades.fireworks} onChange={() => handleUpgradeChange('fireworks')} />
+                <span>זיקוקים - 700 ₪</span>
+              </label>
+            </div>
+          </div>
+
+          <div className={styles.sectionCard}>
+            <h3 className={styles.sectionHeader}>סיכום, פיקדון ותשלום</h3>
+
+            <div className={styles.paymentGrid}>
+              <div className={styles.inputGroup}>
                 <label>הנחה כוללת (%)</label>
                 <input type="number" name="discountPercent" value={formData.discountPercent} onChange={handleChange} className={styles.input} placeholder="0" />
               </div>
-              <div className={styles.inputGroup} style={{ margin: 0 }}>
+              <div className={styles.inputGroup}>
                 <label>הנחה בשקלים (₪)</label>
                 <input type="number" name="discountAmount" value={formData.discountAmount} onChange={handleChange} className={styles.input} placeholder="0" />
               </div>
-              <div className={styles.inputGroup} style={{ gridColumn: '1 / -1', margin: 0 }}>
+              <div className={`${styles.inputGroup} ${styles.vatRow}`}>
                 <label>הגדרת מע"מ (18%)</label>
-                <div style={{ display: 'flex', gap: '20px', marginTop: '8px' }}>
-                   <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                     <input type="radio" name="vatType" value="not_included" checked={formData.vatType === 'not_included'} onChange={handleChange} />
-                     לא כולל מע"מ (תוספת בסוף)
-                   </label>
-                   <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                     <input type="radio" name="vatType" value="included" checked={formData.vatType === 'included'} onChange={handleChange} />
-                     כולל מע"מ (המע"מ כלול במחיר המנה)
-                   </label>
+                <div className={styles.radioGroup}>
+                  <label className={styles.radioLabel}>
+                    <input type="radio" name="vatType" value="not_included" checked={formData.vatType === 'not_included'} onChange={handleChange} />
+                    לא כולל מע"מ
+                  </label>
+                  <label className={styles.radioLabel}>
+                    <input type="radio" name="vatType" value="included" checked={formData.vatType === 'included'} onChange={handleChange} />
+                    כולל מע"מ
+                  </label>
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '20px', marginBottom: '15px', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className={styles.depositOptions}>
+              <label className={styles.radioLabel}>
                 <input type="radio" name="deposit" value="credit_card" onChange={(e) => setDepositMethod(e.target.value)} />
                 <span>תשלום באשראי / מזומן</span>
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label className={styles.radioLabel}>
                 <input type="radio" name="deposit" value="check_upload" onChange={(e) => setDepositMethod(e.target.value)} />
                 <span>העלאת צילום צ'ק פיקדון</span>
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#047857', fontWeight: 'bold' }}>
+              <label className={`${styles.radioLabel} ${styles.depositHighlight}`}>
                 <input type="radio" name="deposit" value="check_capture" onChange={(e) => setDepositMethod(e.target.value)} />
                 <span>📸 צילום צ'ק כעת</span>
               </label>
             </div>
-            
+
             {depositMethod === 'check_upload' && (
-              <div style={{ marginBottom: '15px', padding: '10px', background: '#f1f5f9', border: '1px dashed #94a3b8', borderRadius: '4px' }}>
+              <div className={styles.fileUploadBox}>
                 <input type="file" accept="image/*,.pdf" />
               </div>
             )}
 
             {depositMethod === 'check_capture' && (
-              <div style={{ marginBottom: '15px', padding: '10px', background: '#ecfdf5', border: '1px dashed #10b981', borderRadius: '4px' }}>
+              <div className={`${styles.fileUploadBox} ${styles.fileUploadBoxCapture}`}>
                 <input type="file" accept="image/*" capture="environment" />
               </div>
             )}
@@ -675,46 +834,50 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
               <textarea name="paymentTerms" value={formData.paymentTerms} onChange={handleChange} className={styles.input} rows={2} placeholder="פירוט תנאי התשלום שסוכמו..."></textarea>
             </div>
 
-            <div style={{ background: '#fef3c7', padding: '15px', borderRadius: '8px', border: '1px solid #fde68a', marginTop: '15px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={contractSigned} 
-                  onChange={(e) => setContractSigned(e.target.checked)} 
-                  style={{ width: '20px', height: '20px' }}
-                />
-                קראתי את החוזה, אני מאשר את התנאים וחותם {isOption && <span style={{ color: '#b45309', fontWeight: 'normal' }}>- לא חובה בשמירת אופציה</span>}
+            <div className={styles.contractBox}>
+              <label className={styles.contractLabel}>
+                <input type="checkbox" checked={contractSigned} onChange={(e) => setContractSigned(e.target.checked)} />
+                <span>
+                  קראתי את החוזה, אני מאשר את התנאים וחותם
+                  {isOption && <span className={styles.contractOptional}> — לא חובה בשמירת אופציה</span>}
+                </span>
               </label>
             </div>
 
-            <div style={{ marginTop: '20px', textAlign: 'center', background: '#eff6ff', padding: '15px', borderRadius: '8px' }}>
-               <h4 style={{ margin: 0, color: '#1e3a8a', fontSize: '1.2rem' }}>סה"כ הצעה / לתשלום</h4>
-               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', color: '#475569', marginTop: '10px', borderBottom: '1px solid #bfdbfe', paddingBottom: '10px' }}>
-                 <span>סה"כ ביניים: ₪{totals.base.toLocaleString()}</span>
-                 {totals.discountVal > 0 && <span style={{ color: '#dc2626' }}>הנחות: -₪{totals.discountVal.toLocaleString()}</span>}
-                 {totals.vatAmount > 0 && <span>תוספת מע"מ (18%): ₪{totals.vatAmount.toLocaleString()}</span>}
-               </div>
-               <p style={{ margin: '10px 0 0 0', fontSize: '2rem', fontWeight: 'bold', color: '#1d4ed8' }}>
-                 ₪ {totals.finalTotal.toLocaleString()}
-               </p>
-               {isFoodRelevant && formData.guestCount && (
-                 <p style={{ fontSize: '0.9rem', color: '#475569' }}>
-                   (כולל {formData.guestCount} מנות {formData.optionalGuestCount ? `+ ${formData.optionalGuestCount} רזרבה` : ''}, שדרוגים וכשרות {KOSHER_PRICING[kosherType].label})
-                 </p>
-               )}
+            <div className={styles.totalsBox}>
+              <h4 className={styles.totalsTitle}>סה"כ הצעה / לתשלום</h4>
+              <div className={styles.totalsBreakdown}>
+                <span>סה"כ ביניים: ₪{totals.base.toLocaleString()}</span>
+                {totals.discountVal > 0 && <span className={styles.discountLine}>הנחות: -₪{totals.discountVal.toLocaleString()}</span>}
+                {totals.vatAmount > 0 && <span>תוספת מע"מ: ₪{totals.vatAmount.toLocaleString()}</span>}
+              </div>
+              <p className={styles.totalsFinal}>₪ {totals.finalTotal.toLocaleString()}</p>
+              {isFoodRelevant && formData.guestCount && (
+                <p className={styles.totalsNote}>
+                  כולל {formData.guestCount} מנות {formData.optionalGuestCount ? `+ ${formData.optionalGuestCount} רזרבה` : ''}, שדרוגים וכשרות {KOSHER_PRICING[kosherType].label}
+                </p>
+              )}
             </div>
           </div>
-          
-          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
-            <h3 className={styles.sectionTitle}>הערות מיוחדות לניהול (פנימי)</h3>
+
+          <div className={styles.sectionCard}>
+            <h3 className={styles.sectionHeader}>הערות פנימיות לניהול</h3>
             <div className={styles.inputGroup}>
               <textarea name="clientComments" value={formData.clientComments} onChange={handleChange} className={styles.input} rows={2} />
             </div>
           </div>
           
           <div className={styles.actions}>
-            <button type="submit" className={styles.submitBtn} disabled={isSubmitting || (!isOption && !contractSigned)} style={{ opacity: (!isOption && !contractSigned) ? 0.5 : 1 }}>
-              {isSubmitting ? 'שומר נתונים, אנא המתן...' : (isOption ? 'שמירת אופציה (ויצירת הצעת מחיר)' : 'שמירת וסגירת אירוע')}
+            <button
+              type="submit"
+              className={styles.submitBtn}
+              disabled={isSubmitting || (!isEditMode && !isOption && !contractSigned)}
+            >
+              {isSubmitting
+                ? 'שומר נתונים, אנא המתן...'
+                : isEditMode
+                  ? 'שמירת שינויים'
+                  : (isOption ? 'שמירת אופציה (ויצירת הצעת מחיר)' : 'שמירת וסגירת אירוע')}
             </button>
           </div>
         </form>

@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f8fafc;
+  background-color: var(--maple-bg);
   padding: 20px;
   direction: rtl;
   font-family: system-ui, -apple-system, sans-serif;
@@ -80,7 +80,7 @@
 }
 
 .starActive {
-  color: #f59e0b; /* צבע זהב/ענבר */
+  color: var(--maple-green);
 }
 
 .textArea {

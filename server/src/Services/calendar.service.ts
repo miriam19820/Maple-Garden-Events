@@ -2,6 +2,7 @@
 import hebcal from 'hebcal';
 import prisma from "../config/prisma";
 import { io } from "../server";
+import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay } from '../utils/timeSlot';
 
 export enum EventStatus {
   AVAILABLE = 'AVAILABLE',
@@ -196,13 +197,19 @@ export const calendarService = {
       const record = datesInRange.find((d: any) => toLocalDateKey(new Date(d.date)) === dateKey);
       const bookings = record?.bookings || [];
 
+      const dbStatus = record?.status;
+      const hasBookingStatus = dbStatus === EventStatus.OPTION || dbStatus === EventStatus.BOOKED;
+
       result.push({
         id: record?.id || null,
         date: dateKey,
         dayOfWeek: current.getDay(),
         hebrewDate: formatHebrewDate(hDate),
-        // אם יש כבר 3 אירועים, היום נחסם לגמרי אוטומטית!
-        status: bookings.length >= 3 ? EventStatus.BLOCKED : staticSt.type,
+        status: bookings.length >= 3
+          ? EventStatus.BLOCKED
+          : hasBookingStatus
+            ? dbStatus
+            : staticSt.type,
         reason: staticSt.reason || null,
         bookings: bookings 
       });
@@ -213,26 +220,43 @@ export const calendarService = {
 
   // סגירה סופית עם מניעת התנגשויות זמן
   async bookEventFinal(dateId: string, bookingDetails: any) {
-    const { timeOfDay } = bookingDetails;
-    
-    // חסימה בשרת: בדיקה שאין כבר אירוע בבוקר/צהריים/ערב בתאריך הזה
-    // * שים לב שהשתמשנו ב-prisma.booking במקום (prisma as any).booking
-    const conflict = await prisma.booking.findFirst({
-      where: { 
-        eventDate: { id: dateId }, // דרך נכונה לשלוף לפי קשר ב-Prisma
-        timeOfDay: timeOfDay 
-      }
+    const existing = await prisma.booking.findMany({
+      where: { eventDate: { id: dateId } },
     });
 
-    if (conflict) {
-      // יצירת השגיאה והוספת סטטוס 400 כדי שהלקוח יקבל הודעה יפה ולא קריסת שרת 500
-      const error = new Error(`כבר קיים אירוע בשעה ${timeOfDay} בתאריך זה!`);
+    if (existing.length >= 3) {
+      const error = new Error('התאריך מלא — כבר קיימים 3 אירועים (בוקר, צהריים וערב).');
       (error as any).statusCode = 400;
       throw error;
     }
 
+    const slot = normalizeTimeSlot(
+      bookingDetails.timeOfDay,
+      bookingDetails.startTime,
+      bookingDetails.endTime
+    );
+
+    if (!slot) {
+      const error = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
+      (error as any).statusCode = 400;
+      throw error;
+    }
+
+    const taken = getTakenSlots(existing);
+    if (taken.has(slot)) {
+      const error = new Error(`כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה!`);
+      (error as any).statusCode = 400;
+      throw error;
+    }
+
+    const storedTime = formatStoredTimeOfDay(slot, bookingDetails.startTime, bookingDetails.endTime);
+
     const booking = await prisma.booking.create({
-      data: { ...bookingDetails, eventDate: { connect: { id: dateId } } }
+      data: {
+        ...bookingDetails,
+        timeOfDay: storedTime,
+        eventDate: { connect: { id: dateId } },
+      },
     });
     
     io.emit('date-updated', { dateId, status: 'BOOKED' });

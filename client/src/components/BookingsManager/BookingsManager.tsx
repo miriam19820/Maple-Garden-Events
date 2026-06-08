@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import styles from './BookingsManager.module.css';
 
 const BookingsManager = () => {
-  const navigate = useNavigate();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -31,7 +29,6 @@ const BookingsManager = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <button onClick={() => navigate('/')} className={styles.backBtn}>← חזרה ללוח</button>
         <h2 className={styles.title}>ניהול הזמנות</h2>
       </div>
 

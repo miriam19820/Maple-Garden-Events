@@ -1,8 +1,6 @@
 .container {
   direction: rtl;
-  min-height: 100vh;
-  background: #f8fafc;
-  padding: 20px;
+  background: var(--maple-bg);
 }
 
 .card {
@@ -15,7 +13,7 @@
 }
 
 .header {
-  background: #1e293b;
+  background: var(--maple-green-dark);
   padding: 16px 20px;
   display: flex;
   align-items: center;
@@ -23,11 +21,11 @@
 }
 
 .backBtn {
-  background: #334155;
+  background: var(--maple-green);
   border: none;
   border-radius: 8px;
   padding: 8px 14px;
-  color: #f1f5f9;
+  color: #fff;
   font-weight: bold;
   cursor: pointer;
   font-size: 0.85rem;

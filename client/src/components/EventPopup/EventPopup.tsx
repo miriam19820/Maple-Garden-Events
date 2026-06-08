@@ -1,20 +1,60 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { canEditBooking } from '../../utils/bookingEdit';
+import {
+  canAddMoreEvents,
+  getAvailableSlots,
+  SLOT_LABELS,
+  formatTimeOfDayDisplay,
+} from '../../utils/timeSlot';
 import './EventPopup.css';
 
 interface EventPopupProps {
   day: any;
   onClose: () => void;
+  onAddEvent?: () => void;
 }
 
-export const EventPopup = ({ day, onClose }: EventPopupProps) => {
+export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
+  const navigate = useNavigate();
   const bookings = day.bookings || [];
+  const isOptionDay = day.status === 'OPTION';
+  const dateDisplay = day.date.split('-').reverse().join('/');
+  const hebrewDate = day.hebrewDate || '';
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isPast = day.date < todayStr;
+  const availableSlots = getAvailableSlots(bookings);
+  const showAddEvent =
+    !isPast
+    && day.status !== 'BLOCKED'
+    && day.status !== 'FORBIDDEN'
+    && canAddMoreEvents(bookings)
+    && !!onAddEvent;
+
+  const handleEdit = (bookingId: string) => {
+    onClose();
+    navigate(`/booking/edit/${bookingId}`);
+  };
+
+  const handleClose = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClose();
+  };
 
   return (
     <div className="popup-overlay" onClick={onClose}>
-      <div className="popup-content" onClick={(e) => e.stopPropagation()}>
+      <div className="popup-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="popup-header">
-          <h2>פרטי אירועים - {day.date.split('-').reverse().join('/')}</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button type="button" className="close-btn" onClick={handleClose} aria-label="סגור חלון">
+            ✕
+          </button>
+          <div className="popup-header-text">
+            <h2>פרטי אירועים</h2>
+            <p className="popup-header-date">
+              {dateDisplay}
+              {hebrewDate && <span> · {hebrewDate}</span>}
+            </p>
+          </div>
         </div>
 
         <div className="popup-body">
@@ -22,27 +62,43 @@ export const EventPopup = ({ day, onClose }: EventPopupProps) => {
             <p className="no-events-msg">אין אירועים בתאריך זה.</p>
           ) : (
             bookings.map((booking: any, index: number) => {
-              // --- לוגיקת חוסרים חכמה ---
               const isWedding = booking.eventType === 'חתונה' || booking.eventType === 'אירוסין';
-              const missingItems = [];
-              
+              const missingItems: string[] = [];
+
               if (!booking.paidAmount || booking.paidAmount === 0) missingItems.push('מקדמה טרם שולמה');
               if (!booking.isContractSigned) missingItems.push('חוזה טרם נחתם');
               if (!booking.clientAIdNumber) missingItems.push("חסרה ת.ז של צד א'");
               if (isWedding && !booking.clientBIdNumber) missingItems.push("חסרה ת.ז של צד ב'");
               if (!booking.guestCount || booking.guestCount === 0) missingItems.push('לא הוזנה כמות מוזמנים');
 
+              const editable = canEditBooking(day.date);
+
               return (
                 <div key={booking.id || index} className="event-card">
-                  <div className="event-card-header">
-                    <h3>{booking.eventType} - {booking.timeOfDay || 'שעה לא צוינה'}</h3>
-                    <span className={`status-badge ${booking.isOption ? 'option' : 'booked'}`}>
-                      {booking.isOption ? 'אופציה שמורה' : 'סגור ונעול'}
-                    </span>
+                  <div className="event-card-top">
+                    <div className="event-card-title-row">
+                      <h3>{booking.eventType} — {formatTimeOfDayDisplay(booking.timeOfDay)}</h3>
+                      <span className={`status-badge ${isOptionDay ? 'option' : 'booked'}`}>
+                        {isOptionDay ? 'אופציה' : 'הזמנה סגורה'}
+                      </span>
+                    </div>
+                    <div className="event-actions">
+                      <button
+                        type="button"
+                        className="edit-btn"
+                        disabled={!editable || !booking.id}
+                        title={editable ? 'עריכת פרטי ההזמנה' : 'לא ניתן לערוך ביום האירוע או לאחריו'}
+                        onClick={() => booking.id && handleEdit(booking.id)}
+                      >
+                        עריכת פרטים
+                      </button>
+                      {!editable && (
+                        <span className="edit-blocked-msg">לא ניתן לערוך ביום האירוע או לאחריו</span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="event-card-grid">
-                    {/* צד א' */}
                     <div className="info-group">
                       <h4>צד א'</h4>
                       <p><strong>שם:</strong> {booking.clientAFullName}</p>
@@ -51,7 +107,6 @@ export const EventPopup = ({ day, onClose }: EventPopupProps) => {
                       <p><strong>אימייל:</strong> {booking.clientAEmail || 'לא הוזן'}</p>
                     </div>
 
-                    {/* צד ב' (רק אם יש, או אם זו חתונה) */}
                     {(booking.clientBFullName || isWedding) && (
                       <div className="info-group">
                         <h4>צד ב'</h4>
@@ -61,32 +116,27 @@ export const EventPopup = ({ day, onClose }: EventPopupProps) => {
                       </div>
                     )}
 
-                    {/* פרטי העסקה */}
                     <div className="info-group">
                       <h4>פרטי העסקה</h4>
                       <p><strong>מוזמנים:</strong> {booking.guestCount || 'לא ידוע'}</p>
                       <p><strong>מחיר למנה:</strong> ₪{booking.finalPricePortion || 0}</p>
-                      <p><strong>סה"כ לתשלום:</strong> ₪{booking.totalPrice || 0}</p>
-                      <p><strong>שולם עד כה:</strong> ₪{booking.paidAmount || 0}</p>
-                      <p><strong>נציג סוגר:</strong> {booking.createdBy || 'לא ידוע'}</p>
+                      <p><strong>סה"כ:</strong> ₪{booking.totalPrice || 0}</p>
+                      <p><strong>שולם:</strong> ₪{booking.paidAmount || 0}</p>
+                      <p><strong>נציג:</strong> {booking.createdBy || 'לא ידוע'}</p>
                     </div>
 
-                    {/* חוסרים והערות */}
                     <div className={`info-group ${missingItems.length > 0 ? 'alerts-group' : 'all-good-group'}`}>
                       <h4>{missingItems.length > 0 ? 'סטטוס חוסרים' : 'סטטוס עסקה'}</h4>
-                      
                       {missingItems.length > 0 ? (
                         <ul className="missing-list">
-                          {missingItems.map((item, i) => <li key={i}>⚠️ {item}</li>)}
+                          {missingItems.map((item, i) => <li key={i}>{item}</li>)}
                         </ul>
                       ) : (
-                        <p className="all-good">✅ העסקה מושלמת! לא חסר כלום.</p>
+                        <p className="all-good">העסקה מושלמת — לא חסר כלום.</p>
                       )}
-
-                      {/* אם יש הערות מנהל או לקוח, נציג אותן */}
                       {booking.managerComments && (
                         <div className="comments-box">
-                          <strong>הערות מנהל:</strong><br/>{booking.managerComments}
+                          <strong>הערות מנהל:</strong><br />{booking.managerComments}
                         </div>
                       )}
                     </div>
@@ -95,6 +145,21 @@ export const EventPopup = ({ day, onClose }: EventPopupProps) => {
               );
             })
           )}
+        </div>
+
+        <div className="popup-footer">
+          {showAddEvent && (
+            <button
+              type="button"
+              className="popup-add-btn"
+              onClick={() => { onClose(); onAddEvent?.(); }}
+            >
+              + אירוע נוסף ({availableSlots.map((s) => SLOT_LABELS[s]).join(' / ')} פנוי)
+            </button>
+          )}
+          <button type="button" className="popup-close-btn" onClick={handleClose}>
+            סגור
+          </button>
         </div>
       </div>
     </div>

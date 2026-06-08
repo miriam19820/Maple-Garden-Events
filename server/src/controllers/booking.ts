@@ -2,7 +2,22 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { sendBumpEmail } from '../utils/mailer';
 import { sendBumpWhatsApp } from '../utils/whatsapp';
-import { catchAsync } from '../middlewares/errorHandler'; // <-- ייבוא של עוטף השגיאות שלנו
+import { catchAsync } from '../middlewares/errorHandler';
+import { io } from '../server';
+import {
+  normalizeTimeSlot,
+  formatStoredTimeOfDay,
+  getTakenSlots,
+  SLOT_LABELS,
+} from '../utils/timeSlot';
+
+function canEditBookingDate(eventDate: Date): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const eventDay = new Date(eventDate);
+  eventDay.setHours(0, 0, 0, 0);
+  return today < eventDay;
+}
 
 export const createBooking = catchAsync(async (req: Request, res: Response) => {
   const data = req.body;
@@ -43,14 +58,58 @@ export const createBooking = catchAsync(async (req: Request, res: Response) => {
     
     if (isNaN(possibleDate.getTime())) continue;
 
-    let eventDate = await prisma.eventDate.findFirst({ where: { date: possibleDate } });
+    let eventDate = await prisma.eventDate.findFirst({
+      where: { date: possibleDate },
+      include: { bookings: true },
+    });
     if (!eventDate) {
-      eventDate = await prisma.eventDate.create({ data: { date: possibleDate, status: newStatus, optionExpiresAt: expiryDate } });
+      eventDate = await prisma.eventDate.create({
+        data: { date: possibleDate, status: newStatus, optionExpiresAt: expiryDate },
+        include: { bookings: true },
+      });
     } else {
-      await prisma.eventDate.update({ where: { id: eventDate.id }, data: { status: newStatus, optionExpiresAt: expiryDate } });
+      const updatePayload: Record<string, unknown> = {};
+      if (newStatus === 'BOOKED') {
+        updatePayload.status = 'BOOKED';
+        updatePayload.optionExpiresAt = null;
+      } else if (eventDate.status !== 'BOOKED') {
+        updatePayload.status = newStatus;
+        updatePayload.optionExpiresAt = expiryDate;
+      }
+      if (Object.keys(updatePayload).length > 0) {
+        eventDate = await prisma.eventDate.update({
+          where: { id: eventDate.id },
+          data: updatePayload,
+          include: { bookings: true },
+        });
+      }
     }
 
-    const timeString = data.timeOfDay || (data.startTime && data.endTime ? `${data.startTime} - ${data.endTime}` : "לא צוין");
+    const existingBookings = eventDate.bookings || [];
+    if (existingBookings.length >= 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'התאריך מלא — כבר קיימים 3 אירועים (בוקר, צהריים וערב).',
+      });
+    }
+
+    const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
+    if (!slot) {
+      return res.status(400).json({
+        success: false,
+        message: 'יש לבחור משבצת זמן: בוקר, צהריים או ערב.',
+      });
+    }
+
+    const taken = getTakenSlots(existingBookings);
+    if (taken.has(slot)) {
+      return res.status(400).json({
+        success: false,
+        message: `כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה.`,
+      });
+    }
+
+    const timeString = formatStoredTimeOfDay(slot, data.startTime, data.endTime);
 
     const newBooking = await prisma.booking.create({
       data: {
@@ -86,6 +145,7 @@ export const createBooking = catchAsync(async (req: Request, res: Response) => {
       }
     });
     createdBookings.push(newBooking);
+    io.emit('date-updated', { dateId: eventDate.id, status: 'BOOKED' });
   }
 
   res.status(201).json({
@@ -181,6 +241,114 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
   res.status(200).json({ success: true, message: 'האירוע נסגר בהצלחה!' });
 });
 
+
+export const getBookingById = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const booking = await prisma.booking.findUnique({
+    where: { id },
+    include: { eventDate: true },
+  });
+
+  if (!booking) {
+    return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
+  }
+
+  res.status(200).json({ success: true, data: booking });
+});
+
+export const updateBooking = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const data = req.body;
+
+  const booking = await prisma.booking.findUnique({
+    where: { id },
+    include: { eventDate: true },
+  });
+
+  if (!booking || !booking.eventDate) {
+    return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
+  }
+
+  if (!canEditBookingDate(booking.eventDate.date)) {
+    return res.status(403).json({ success: false, message: 'לא ניתן לערוך ביום האירוע או לאחריו.' });
+  }
+
+  const clientAPhoneCombined = data.clientAPhone2
+    ? `${data.clientAPhone} | נוסף: ${data.clientAPhone2}`
+    : data.clientAPhone;
+  const clientAAddressCombined = data.clientACity
+    ? `${data.clientACity}, ${data.clientAAddress}`
+    : data.clientAAddress;
+  const clientBPhoneCombined = data.clientBPhone2
+    ? `${data.clientBPhone} | נוסף: ${data.clientBPhone2}`
+    : data.clientBPhone;
+  const clientBAddressCombined = data.clientBCity
+    ? `${data.clientBCity}, ${data.clientBAddress}`
+    : data.clientBAddress;
+
+  const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
+  if (slot) {
+    const siblings = await prisma.booking.findMany({
+      where: { calendarDateId: booking.eventDate.id, id: { not: id } },
+    });
+    const taken = getTakenSlots(siblings);
+    if (taken.has(slot)) {
+      return res.status(400).json({
+        success: false,
+        message: `כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה.`,
+      });
+    }
+  }
+
+  const timeString = slot
+    ? formatStoredTimeOfDay(slot, data.startTime, data.endTime)
+    : (data.startTime && data.endTime
+      ? `${data.startTime} - ${data.endTime}`
+      : booking.timeOfDay);
+
+  const calculatedTotalPrice =
+    (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0) || booking.totalPrice;
+
+  const updated = await prisma.booking.update({
+    where: { id },
+    data: {
+      clientAFullName: data.clientAFullName,
+      clientAIdNumber: data.clientAIdNumber,
+      clientAPhone: clientAPhoneCombined,
+      clientAEmail: data.clientAEmail || null,
+      clientAAddress: clientAAddressCombined || null,
+      clientBFullName: data.clientBFullName || null,
+      clientBIdNumber: data.clientBIdNumber || null,
+      clientBPhone: clientBPhoneCombined || null,
+      clientBEmail: data.clientBEmail || null,
+      clientBAddress: clientBAddressCombined || null,
+      eventType: data.eventType,
+      timeOfDay: timeString,
+      guestCount: Number(data.guestCount) || 0,
+      finalPricePortion: Number(data.finalPricePortion) || 0,
+      totalPrice: calculatedTotalPrice,
+      hasMusic: data.hasMusic !== undefined ? data.hasMusic : booking.hasMusic,
+      akumApprovalCode: data.akumApprovalCode || null,
+      managerComments: data.managerComments || null,
+      clientComments: data.clientComments || null,
+      createdBy: data.createdBy || booking.createdBy,
+      updatedBy: 'מערכת',
+    },
+    include: { eventDate: true },
+  });
+
+  if (booking.eventDate.status === 'OPTION' && data.optionDurationHours) {
+    const expiryDate = new Date();
+    expiryDate.setHours(expiryDate.getHours() + Number(data.optionDurationHours));
+    await prisma.eventDate.update({
+      where: { id: booking.eventDate.id },
+      data: { optionExpiresAt: expiryDate },
+    });
+  }
+
+  io.emit('date-updated', { dateId: booking.eventDate.id, status: booking.eventDate.status });
+  res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
+});
 
 export const getCancellationStats = catchAsync(async (req: Request, res: Response) => {
   const { month, year } = req.query; 

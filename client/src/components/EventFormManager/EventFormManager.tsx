@@ -325,36 +325,26 @@ const EventFormManager = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <button onClick={() => navigate('/')} className={styles.backBtn}>← חזרה ללוח</button>
-        <h2 className={styles.title}>ניהול אירועים וטפסים</h2>
+        <h2 className={styles.title}>טופס הפקת אירוע</h2>
         {!selected && (
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className={styles.viewTabs}>
             <button
               onClick={() => setViewMode('bookings')}
-              style={{
-                padding: '8px 16px', background: viewMode === 'bookings' ? '#667eea' : '#ddd',
-                color: viewMode === 'bookings' ? 'white' : '#333', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              }}
+              className={`${styles.tabBtn} ${viewMode === 'bookings' ? styles.tabBtnActive : ''}`}
             >
-              🔍 חיפוש הזמנה
+              חיפוש הזמנה
             </button>
             <button
               onClick={() => setViewMode('forms')}
-              style={{
-                padding: '8px 16px', background: viewMode === 'forms' ? '#667eea' : '#ddd',
-                color: viewMode === 'forms' ? 'white' : '#333', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              }}
+              className={`${styles.tabBtn} ${viewMode === 'forms' ? styles.tabBtnActive : ''}`}
             >
-              📋 כל הטפסים
+              כל הטפסים
             </button>
             <button
               onClick={() => setViewMode('stats')}
-              style={{
-                padding: '8px 16px', background: viewMode === 'stats' ? '#dc2626' : '#ddd',
-                color: viewMode === 'stats' ? 'white' : '#333', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              }}
+              className={`${styles.tabBtn} ${styles.tabBtnStats} ${viewMode === 'stats' ? styles.tabBtnActive : ''}`}
             >
-              📊 סטטיסטיקות
+              סטטיסטיקות
             </button>
           </div>
         )}

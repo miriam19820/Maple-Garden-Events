@@ -2,43 +2,61 @@
   direction: rtl;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 24px;
+  font-family: var(--maple-font);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 22px 26px;
+  background: linear-gradient(135deg, var(--maple-green) 0%, var(--maple-green-dark) 100%);
+  border-radius: var(--maple-radius-lg);
   color: white;
-}
-
-.backBtn {
-  padding: 10px 15px;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.backBtn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateX(-5px);
+  box-shadow: var(--maple-shadow);
 }
 
 .title {
   margin: 0;
-  font-size: 24px;
+  font-size: 1.35rem;
   font-weight: 600;
   flex: 1;
-  text-align: center;
+}
+
+.viewTabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tabBtn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--maple-radius-sm);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: all var(--maple-transition);
+}
+
+.tabBtn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tabBtnActive {
+  background: #fff;
+  color: var(--maple-green-dark);
+  border-color: #fff;
+}
+
+.tabBtnStats.tabBtnActive {
+  color: var(--maple-danger);
 }
 
 .searchInput {
@@ -53,8 +71,8 @@
 
 .searchInput:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--maple-green);
+  box-shadow: 0 0 0 3px rgba(90, 143, 107, 0.12);
 }
 
 .empty {
@@ -82,8 +100,8 @@
 }
 
 .card:hover {
-  border-color: #667eea;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+  border-color: var(--maple-green);
+  box-shadow: 0 4px 16px rgba(90, 143, 107, 0.2);
   transform: translateY(-4px);
 }
 
@@ -126,7 +144,7 @@
 
 .formHeader {
   padding: 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--maple-green) 0%, #764ba2 100%);
   color: white;
   position: relative;
 }
@@ -172,7 +190,7 @@
   padding: 16px;
   background: #f8f9fa;
   border-radius: 8px;
-  border-right: 4px solid #667eea;
+  border-right: 4px solid var(--maple-green);
 }
 
 .section h4 {
@@ -224,8 +242,8 @@
 .field select:focus,
 .field textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--maple-green);
+  box-shadow: 0 0 0 3px rgba(90, 143, 107, 0.12);
 }
 
 .field textarea {
@@ -280,9 +298,9 @@
 .uploadBtn {
   flex: 1;
   padding: 10px 12px;
-  border: 2px solid #667eea;
+  border: 2px solid var(--maple-green);
   background: white;
-  color: #667eea;
+  color: var(--maple-green);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -292,7 +310,7 @@
 
 .cameraBtn:hover,
 .uploadBtn:hover {
-  background: #667eea;
+  background: var(--maple-green);
   color: white;
   transform: translateY(-2px);
 }
@@ -338,7 +356,7 @@
 
 .noteNumber {
   font-weight: 600;
-  color: #667eea;
+  color: var(--maple-green);
   min-width: 24px;
 }
 
@@ -377,8 +395,8 @@
 
 .noteInput:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--maple-green);
+  box-shadow: 0 0 0 3px rgba(90, 143, 107, 0.12);
 }
 
 .addNoteBtn {
@@ -424,7 +442,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #667eea;
+  accent-color: var(--maple-green);
 }
 
 .fileName {
@@ -482,7 +500,7 @@
 }
 
 .saveBtn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--maple-green) 0%, #764ba2 100%);
   color: white;
 }
 

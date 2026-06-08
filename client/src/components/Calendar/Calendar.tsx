@@ -18,7 +18,7 @@ interface DayData {
   isCurrentMonth: boolean;
 }
 const EVENT_COLORS: Record<string, string> = {
-  'חתונה': '#10B981',       // ירוק
+  'חתונה': '#B5654A',       // טרקוטה חמה
   'בר מצווה': '#EC4899',    // ורוד
   'בת מצווה': '#8B5CF6',    // סגול
   'ברית': '#3B82F6',        // כחול
@@ -160,18 +160,11 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
   return (
     <div className="calendar-page-layout">
-    <div className="calendar-side-buttons">
-        <button className="side-mgmt-btn" onClick={() => navigate('/settings')}>הגדרות מתחם ⚙️</button>
-        <button className="side-mgmt-btn" onClick={() => navigate('/options-manager')}>ניהול אופציות</button>
-        <button className="side-mgmt-btn" onClick={() => navigate('/bookings-manager')}>ניהול הזמנות</button>
-        <button className="side-mgmt-btn" onClick={() => navigate('/greeting')}>שליחת ברכה 💌</button>
-        <button className="side-mgmt-btn" onClick={() => navigate('/event-form-manager')}>טופס הפקת אירוע</button>
-      </div>
       <div className="calendar-container">
       
-      <div style={{ padding: '10px 16px', background: '#fff', borderRadius: '8px', marginBottom: '16px', border: '1px solid #e2e8f0', display: 'flex', gap: '15px', alignItems: 'center', direction: 'rtl', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-        <strong style={{ color: '#1e293b' }}>בדוק זמינות עבור:</strong>
-        <select value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1rem', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}>
+      <div className="calendar-toolbar">
+        <span className="calendar-toolbar-label">בדוק זמינות עבור:</span>
+        <select className="calendar-toolbar-select" value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)}>
           <option value="חתונה">חתונה</option>
           <option value="אירוע אחר">אירוע אחר</option>
         </select>
@@ -246,7 +239,10 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   } else { setSelectedDateForAction(day.date); setIsActionModalOpen(true); }
                 }}>
                   <div className="cell-header-row">
-                      <span className="gregorian-num">{dayNum}</span>
+                      <span className="gregorian-num">
+                        {dayNum}
+                        {isToday && <span className="today-badge">היום</span>}
+                      </span>
                       {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
                       <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
                   </div>
@@ -257,23 +253,22 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                       // שולפים את הצבע (ואם אין התאמה, כחול כברירת מחדל)
                       const baseColor = EVENT_COLORS[(b.eventType || '').trim()] || '#3B82F6';
                       
-                      // בודקים אם זה אופציה (כל עוד זה לא סגור לגמרי)
-                      const isOption = day.status !== 'BOOKED';
+                      const isOption = day.status === 'OPTION';
                       
                       // העיצוב המתוקן שיוצר קונטרסט ברור:
                       const eventStyle = isOption
                         ? { 
-                            backgroundColor: `${baseColor}26`, // רקע פסטלי עדין לאופציה
-                            border: `1.5px solid ${baseColor}`, // מסגרת חלקה מודגשת
-                            color: '#1e293b',                  // טקסט כהה
-                            fontWeight: '600'
+                            backgroundColor: `${baseColor}18`,
+                            border: `1.5px dashed ${baseColor}`,
+                            color: baseColor,
+                            fontWeight: '700'
                           }
                         : { 
-                            backgroundColor: baseColor,        // צבע מלא וחזק לאירוע סגור!
-                            border: `1.5px solid ${baseColor}`,   
-                            color: '#FFFFFF',                  // טקסט לבן 
-                            fontWeight: 'bold',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.15)' // הצללה קלה להבלטה
+                            backgroundColor: baseColor,
+                            border: `1.5px solid ${baseColor}`,
+                            color: '#FFFFFF',
+                            fontWeight: '700',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
                           };
 
                       return (
@@ -297,7 +292,16 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
           </div>
         </div>
       )}
-      {selectedDay && <EventPopup day={selectedDay} onClose={() => setSelectedDay(null)} />}
+      {selectedDay && (
+        <EventPopup
+          day={selectedDay}
+          onClose={() => setSelectedDay(null)}
+          onAddEvent={() => {
+            setSelectedDateForAction(selectedDay.date);
+            setIsActionModalOpen(true);
+          }}
+        />
+      )}
 
       {isActionModalOpen && (
         <div className="side-panel-overlay" onClick={() => setIsActionModalOpen(false)}>

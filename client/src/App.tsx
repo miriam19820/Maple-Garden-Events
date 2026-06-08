@@ -1,78 +1,58 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Calendar } from './components/Calendar/Calendar';
+import { getTakenSlots } from './utils/timeSlot';
+import { AppLayout } from './components/AppLayout/AppLayout';
 import BookingForm from './components/BookingForm/BookingForm';
 import OptionsManager from './components/OptionsManager/OptionsManager';
 import BookingsManager from './components/BookingsManager/BookingsManager';
-
-// --- הייבואים מהענף שלך ---
 import GreetingBlast from './components/GreetingBlast/GreetingBlast';
-
-// --- הייבואים מהענף השני ---
 import EventFormManager from './components/EventFormManager/EventFormManager';
 import OptionPage from './components/optionPage/OptionPage';
 import MenuDisplay from './components/MenuDisplay/MenuDisplay';
-
-// --- הייבוא החדש למסך ההגדרות ---
 import { SettingsManager } from './components/SettingsManager/SettingsManager';
-
-// --- הייבוא החדש של דף המשוב (נוסף עכשיו) ---
 import FeedbackPage from './components/FeedbackPage/FeedbackPage';
 
 const CalendarWrapper = () => {
   const navigate = useNavigate();
   return (
-    <Calendar 
-      onDateSelect={(day) => {
-        navigate('/booking', { state: { date: day.date, hebrewDate: day.hebrewDate } });
-      }} 
-    />
+    <AppLayout>
+      <Calendar
+        onDateSelect={(day) => {
+          navigate('/booking', {
+            state: {
+              date: day.date,
+              hebrewDate: day.hebrewDate,
+              takenSlots: Array.from(getTakenSlots(day.bookings || [])),
+            },
+          });
+        }}
+      />
+    </AppLayout>
   );
 };
 
-const OptionsManagerPage = () => {
-  const navigate = useNavigate();
-  return (
-    <div style={{ direction: 'rtl', padding: '20px' }}>
-      <button onClick={() => navigate('/')} style={{ background: '#e2e8f0', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '20px' }}>← חזרה ללוח</button>
-      <OptionsManager />
-    </div>
-  );
-};
-
-// עטיפה למסך ההגדרות כדי שיהיה כפתור חזרה יפה ללוח
-const SettingsManagerPage = () => {
-  const navigate = useNavigate();
-  return (
-    <div style={{ direction: 'rtl', padding: '20px', background: '#f8fafc', minHeight: '100vh' }}>
-      <button onClick={() => navigate('/')} style={{ background: '#e2e8f0', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', marginBottom: '20px' }}>← חזרה ללוח</button>
-      <SettingsManager />
-    </div>
-  );
-};
+const PageShell = ({ children }: { children: React.ReactNode }) => (
+  <AppLayout>
+    <div className="page-content">{children}</div>
+  </AppLayout>
+);
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<CalendarWrapper />} />
-        <Route path="/booking" element={<BookingForm />} />
-        <Route path="/options-manager" element={<OptionsManagerPage />} />
-        <Route path="/bookings-manager" element={<BookingsManager />} />
-        
-        {/* -- הראוט מהענף שלך -- */}
-        <Route path="/greeting" element={<GreetingBlast />} />
-        
-        {/* -- הראוטים מהענף השני -- */}
-        <Route path="/event-form-manager" element={<EventFormManager />} />
-        <Route path="/option" element={<OptionPage />} />
-        <Route path="/menu" element={<MenuDisplay />} />
-
-        {/* -- הראוט החדש למסך ניהול ההגדרות -- */}
-        <Route path="/settings" element={<SettingsManagerPage />} />
-
-        {/* -- הראוט של עמוד המשוב (נוסף עכשיו) -- */}
-        <Route path="/feedback/:token" element={<FeedbackPage />} />
+        <Route path="/booking" element={<AppLayout><BookingForm /></AppLayout>} />
+        <Route path="/booking/edit/:id" element={<AppLayout><BookingForm /></AppLayout>} />
+        <Route path="/options-manager" element={<PageShell><OptionsManager /></PageShell>} />
+        <Route path="/bookings-manager" element={<PageShell><BookingsManager /></PageShell>} />
+        <Route path="/greeting" element={<PageShell><GreetingBlast /></PageShell>} />
+        <Route path="/event-form-manager" element={<AppLayout><EventFormManager /></AppLayout>} />
+        <Route path="/option" element={<AppLayout><OptionPage /></AppLayout>} />
+        <Route path="/menu" element={<AppLayout fullHeight={false}><MenuDisplay /></AppLayout>} />
+        <Route path="/settings" element={<PageShell><SettingsManager /></PageShell>} />
+        <Route path="/feedback/:token" element={<AppLayout><FeedbackPage /></AppLayout>} />
       </Routes>
     </BrowserRouter>
   );
