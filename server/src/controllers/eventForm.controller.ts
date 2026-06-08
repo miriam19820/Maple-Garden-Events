@@ -8,7 +8,6 @@ export const eventFormController = {
   // חיפוש הזמנות לפי שם או ת"ז
   async searchBookings(req: Request, res: Response) {
     try {
-      // וידוא בטוח שהשאילתה היא מחרוזת טקסט
       const q = typeof req.query.q === 'string' ? req.query.q : '';
 
       const bookings = await prisma.booking.findMany({
@@ -34,15 +33,33 @@ export const eventFormController = {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
       
-      // מחלצים את הנתונים
-      const { id, createdAt, updatedAt, booking: _booking, bookingId: _bid, ...formData } = req.body;
+      // מחלצים את הנתונים - מוציאים את ה-tables מה-body כדי לטפל בהם בנפרד
+      const { id, createdAt, updatedAt, booking: _booking, bookingId: _bid, tables, ...formData } = req.body;
 
+      // שמירה ב-DB כולל טבלאות השולחנות
       const form = await prisma.eventForm.upsert({
-        where:  { bookingId },
-        update: { ...formData },
+        where: { bookingId },
+        update: { 
+          ...formData,
+          tables: tables ? {
+            deleteMany: {}, // מוחקים את המיקומים הישנים
+            create: tables.map((table: any) => ({
+              tableNumber: table.id,
+              positionX: table.x,
+              positionY: table.y,
+            }))
+          } : undefined
+        },
         create: { 
           bookingId, 
-          ...formData 
+          ...formData,
+          tables: tables ? {
+            create: tables.map((table: any) => ({
+              tableNumber: table.id,
+              positionX: table.x,
+              positionY: table.y,
+            }))
+          } : undefined
         }
       });
 
@@ -68,25 +85,14 @@ export const eventFormController = {
 
           const pdfBuffer = await generateEventFormPDF(pdfData);
 
-          // שליחת מייל
           const clientEmail = booking.clientAEmail || booking.clientBEmail;
           if (clientEmail) {
-            await sendPDFToClient(
-              clientEmail,
-              booking.clientAFullName,
-              booking.eventDate.date.toString(),
-              pdfBuffer
-            );
+            await sendPDFToClient(clientEmail, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
           }
 
-          // שליחת WhatsApp אם יש מספר
           const clientPhone = booking.clientAPhone || booking.clientBPhone;
           if (clientPhone) {
-            await sendWhatsAppMessage(
-              clientPhone,
-              booking.clientAFullName,
-              booking.eventDate.date.toString()
-            );
+            await sendWhatsAppMessage(clientPhone, booking.clientAFullName, booking.eventDate.date.toString());
           }
         } catch (emailError) {
           console.warn('Failed to send PDF:', emailError);
@@ -106,7 +112,10 @@ export const eventFormController = {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
       const form = await prisma.eventForm.findUnique({
         where: { bookingId },
-        include: { booking: { include: { eventDate: true } } }
+        include: { 
+          booking: { include: { eventDate: true } },
+          tables: true // מוסיף את השולחנות לשליפה
+        }
       });
       res.json(form);
     } catch (e) {
@@ -136,16 +145,12 @@ export const eventFormController = {
         where: { id: bookingId },
         include: { 
           eventDate: true,
-          eventForm: true
+          eventForm: { include: { tables: true } } // כולל טבלאות ב-PDF
         }
       });
 
-      if (!booking) {
-        return res.status(404).json({ error: 'הזמנה לא נמצאה' });
-      }
-
-      if (!booking.eventForm) {
-        return res.status(404).json({ error: 'טופס הפקת אירוע לא נמצא' });
+      if (!booking || !booking.eventForm) {
+        return res.status(404).json({ error: 'הזמנה או טופס לא נמצאו' });
       }
 
       const pdfData = {

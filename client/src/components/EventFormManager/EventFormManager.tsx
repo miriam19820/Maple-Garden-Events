@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recha
 import styles from './EventFormManager.module.css';
 import CheckCamera from '../CheckCamera/CheckCamera';
 import CancellationStats from '../CancellationStats/CancellationStats'; // <--- הייבוא החדש
-
+import { FloorPlanBuilder, type TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 interface Booking {
   id: string;
   clientAFullName: string;
@@ -63,7 +63,8 @@ const EventFormManager = () => {
   const [submitting, setSubmitting] = useState(false);
   const [notesList, setNotesList] = useState<string[]>([]);
   const [newNote, setNewNote] = useState('');
-
+const [tables, setTables] = useState<TableData[]>([]);
+const [showFloorPlan, setShowFloorPlan] = useState(false);
   useEffect(() => {
     fetch('http://localhost:5000/api/bookings')
       .then(r => r.json())
@@ -233,6 +234,8 @@ const EventFormManager = () => {
       alert('אנא מלא את כל השדות החובה:\n✓ שעה וקבלת פנים\n✓ סוג ישיבה\n✓ מוזמנים סופיים\n✓ חלוקה (אחוזים)\n✓ צ"ק פיקדון\n✓ כשרות\n\nהערות = אופציונלי');
       return;
     }
+
+    
 
     setSubmitting(true);
     try {
