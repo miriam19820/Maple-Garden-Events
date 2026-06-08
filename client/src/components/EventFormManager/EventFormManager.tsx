@@ -6,6 +6,7 @@ import CheckCamera from '../CheckCamera/CheckCamera';
 import CancellationStats from '../CancellationStats/CancellationStats';
 // השארתי את הייבוא, אבל את בחירת הכשרות ננהל כאן כדי שהתמונה בוודאות תעבוד לך
 import KashrutSelector from '../KashrutSelector/KashrutSelector';
+import { menuData, menuItemKey } from '../../data/menuData';
 
 interface Booking {
   id: string;
@@ -49,6 +50,7 @@ interface EventFormData {
   akumCode?: string;
   kashrut?: string;
   notes?: string;
+  selectedMenu?: string; // JSON של מערך מפתחות פריטי תפריט שנבחרו
 }
 
 // רשימת ההכשרים
@@ -173,6 +175,31 @@ const EventFormManager = () => {
       ...prev,
       [field]: checked
     }));
+  };
+
+  // --- בחירת תפריט ---
+  const selectedMenuKeys: string[] = (() => {
+    try {
+      return formData.selectedMenu ? JSON.parse(formData.selectedMenu) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const selectedMenuSet = new Set(selectedMenuKeys);
+
+  const toggleMenuItem = (key: string) => {
+    setFormData(prev => {
+      let current: string[] = [];
+      try {
+        current = prev.selectedMenu ? JSON.parse(prev.selectedMenu) : [];
+      } catch {
+        current = [];
+      }
+      const next = current.includes(key)
+        ? current.filter(k => k !== key)
+        : [...current, key];
+      return { ...prev, selectedMenu: JSON.stringify(next) };
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -951,6 +978,58 @@ const EventFormManager = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* בחירת תפריט */}
+            <div className={styles.section}>
+              <h4>🍽️ בחירת תפריט</h4>
+              <p style={{ margin: '0 0 12px 0', color: '#666', fontSize: '13px' }}>
+                סמנו ✓ ליד כל פריט שנבחר לאירוע. הבחירה נשמרת עם הטופס ומופיעה ב-PDF של תיק הלקוח.
+                {' '}<strong>נבחרו {selectedMenuKeys.length} פריטים.</strong>
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {menuData.map((section, sIdx) => (
+                  <div key={sIdx}>
+                    <div style={{ fontWeight: 'bold', color: '#2c3e50', borderBottom: '2px solid #667eea', paddingBottom: '4px', marginBottom: '8px' }}>
+                      {section.category}
+                      {section.subtitle && (
+                        <span style={{ fontWeight: 'normal', color: '#888', fontSize: '12px' }}> — {section.subtitle}</span>
+                      )}
+                    </div>
+                    {section.subCategories.map((sub, subIdx) => (
+                      <div key={subIdx} style={{ marginBottom: '10px' }}>
+                        {sub.name && (
+                          <div style={{ fontWeight: 600, color: '#444', fontSize: '14px', margin: '6px 0' }}>{sub.name}</div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {sub.items.map((item, itemIdx) => {
+                            const key = menuItemKey(section.category, sub.name, item.name);
+                            const checked = selectedMenuSet.has(key);
+                            return (
+                              <label
+                                key={itemIdx}
+                                style={{
+                                  display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer',
+                                  padding: '6px 8px', borderRadius: '6px',
+                                  background: checked ? '#eef2ff' : 'transparent',
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleMenuItem(key)}
+                                  style={{ marginTop: '3px', width: '16px', height: '16px', flexShrink: 0, cursor: 'pointer' }}
+                                />
+                                <span style={{ fontSize: '13px', color: '#333', lineHeight: 1.4 }}>{item.name}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* הערות ממוספרות */}

@@ -36,8 +36,47 @@ interface EventFormPDFData {
     akumCode?: string | null;
     kashrut?: string | null;
     notes?: string | null;
+    selectedMenu?: string | null;
   };
 }
+
+// פיצוח מפתח פריט תפריט: "קטגוריה|||תת-קטגוריה|||פריט"
+const MENU_KEY_SEP = '|||';
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const buildSelectedMenuSection = (selectedMenu?: string | null): string => {
+  let keys: string[] = [];
+  try {
+    keys = selectedMenu ? JSON.parse(selectedMenu) : [];
+  } catch {
+    keys = [];
+  }
+  if (!keys.length) return '';
+
+  // קיבוץ הפריטים לפי קטגוריה כדי לשמור על מבנה התפריט
+  const grouped = new Map<string, string[]>();
+  for (const key of keys) {
+    const [category = 'תפריט', , item = ''] = key.split(MENU_KEY_SEP);
+    if (!item) continue;
+    if (!grouped.has(category)) grouped.set(category, []);
+    grouped.get(category)!.push(item);
+  }
+
+  const blocks = [...grouped.entries()].map(([category, items]) => `
+    <div style="margin-bottom:8px;">
+      <div style="font-weight:bold;color:#2c3e50;margin-bottom:3px;">${escapeHtml(category)}</div>
+      <ul class="notes-list">
+        ${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+
+  return `
+  <div class="section">
+    <div class="section-title">🍽️ תפריט נבחר (${keys.length} פריטים)</div>
+    ${blocks}
+  </div>`;
+};
 
 const translateReceptionType = (type?: string | null) =>
   ({ separate: 'נפרד', mixed: 'מעורב' }[type || ''] || 'לא צוין');
@@ -147,6 +186,8 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
     </table>
     ${f.depositCheckUrl ? `<img class="check-img" src="${f.depositCheckUrl}" alt="צ'ק פיקדון"/>` : ''}
   </div>
+
+  ${buildSelectedMenuSection(f.selectedMenu)}
 
   ${notesList.length > 0 ? `
   <div class="section">

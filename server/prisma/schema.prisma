@@ -162,6 +162,9 @@ model EventForm {
   // הערות
   notes               String?  
 
+  // בחירת תפריט - JSON של מערך מפתחות פריטי תפריט שנבחרו לאירוע
+  selectedMenu        String?  
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
