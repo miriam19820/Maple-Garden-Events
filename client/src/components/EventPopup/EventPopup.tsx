@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { canEditBooking } from '../../utils/bookingEdit';
 import {
   canAddMoreEvents,
-  getAvailableSlots,
-  SLOT_LABELS,
+  formatAvailableSlotsLabel,
   formatTimeOfDayDisplay,
 } from '../../utils/timeSlot';
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
@@ -26,7 +25,7 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
   const hebrewDate = day.hebrewDate || '';
   const todayStr = new Date().toISOString().split('T')[0];
   const isPast = day.date < todayStr;
-  const availableSlots = getAvailableSlots(bookings);
+  const availableSlotsLabel = formatAvailableSlotsLabel(bookings);
   const showAddEvent =
     !isPast
     && day.status !== 'BLOCKED'
@@ -183,7 +182,7 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
               className="popup-add-btn"
               onClick={() => { onClose(); onAddEvent?.(); }}
             >
-              + אירוע נוסף ({availableSlots.map((s) => SLOT_LABELS[s]).join(' / ')} פנוי)
+              + אירוע נוסף ({availableSlotsLabel})
             </button>
           )}
           <button type="button" className="popup-close-btn" onClick={handleClose}>

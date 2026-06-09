@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
 import { socket } from '../../services/socketService';
-
 interface DayData {
   id: string | null;
   date: string;
@@ -225,7 +224,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
               ].filter(Boolean).join(' ');
               
               const dayNum = new Date(day.date + 'T12:00:00').getDate();
-              
+
               return (
                 <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row }} onClick={() => {
                   if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
@@ -248,7 +247,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   </div>
                   
                   <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
-<div className="cell-events-container">
+                  <div className="cell-events-container">
                     {day.bookings.map((b: any, idx: number) => {
                       // שולפים את הצבע (ואם אין התאמה, כחול כברירת מחדל)
                       const baseColor = EVENT_COLORS[(b.eventType || '').trim()] || '#3B82F6';
@@ -297,8 +296,9 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
           day={selectedDay}
           onClose={() => setSelectedDay(null)}
           onAddEvent={() => {
-            setSelectedDateForAction(selectedDay.date);
-            setIsActionModalOpen(true);
+            const dayToBook = selectedDay;
+            setSelectedDay(null);
+            onDateSelect(dayToBook);
           }}
         />
       )}

@@ -26,11 +26,13 @@ export function normalizeTimeSlot(
   const raw = (timeOfDay || '').trim();
   if (!raw && !startTime) return null;
 
-  const lower = raw.toLowerCase();
+  const slotPart = raw.includes('|') ? raw.split('|')[0]?.trim() : raw;
+  const lower = slotPart.toLowerCase();
   if (SLOT_ALIASES[lower]) return SLOT_ALIASES[lower];
-  if (SLOT_ALIASES[raw]) return SLOT_ALIASES[raw];
+  if (SLOT_ALIASES[slotPart]) return SLOT_ALIASES[slotPart];
 
-  const hourSource = startTime || raw.split(' - ')[0]?.trim();
+  const timePart = raw.includes('|') ? raw.split('|')[1]?.trim() : raw;
+  const hourSource = startTime || timePart?.split(' - ')[0]?.trim();
   if (hourSource) {
     const hour = parseInt(hourSource.split(':')[0], 10);
     if (!isNaN(hour)) {

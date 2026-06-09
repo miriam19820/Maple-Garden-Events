@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
-import { type TimeSlot, SLOT_LABELS, normalizeTimeSlot } from '../../utils/timeSlot';
+import { type TimeSlot, TIME_SLOTS, SLOT_LABELS, normalizeTimeSlot } from '../../utils/timeSlot';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { NotesList } from '../NotesList/NotesList';
+import MenuDisplay from '../MenuDisplay/MenuDisplay';
 
 interface BookingFormProps {
   initialDates?: any[];
@@ -92,6 +93,9 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const isEditMode = !!editId;
   const takenSlots: TimeSlot[] = (location.state?.takenSlots as TimeSlot[]) || [];
   const isSlotTaken = (slot: TimeSlot) => !isEditMode && takenSlots.includes(slot);
+  const availableSlots = isEditMode
+    ? TIME_SLOTS
+    : TIME_SLOTS.filter((slot) => !takenSlots.includes(slot));
 
   // --- ולידציות ---
   const validateFullName = (name: string) => name.trim().split(/\s+/).length >= 2;
@@ -178,15 +182,49 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   const [menuNotesList, setMenuNotesList] = useState<string[]>([]);
   const [internalNotesList, setInternalNotesList] = useState<string[]>([]);
+  const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isMenuViewOpen) return;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMenuViewOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isMenuViewOpen]);
+
+  useEffect(() => {
+    if (isEditMode || takenSlots.length === 0) return;
+    const free = TIME_SLOTS.filter((slot) => !takenSlots.includes(slot));
+    if (free.length === 1) {
+      setFormData((prev) => (prev.timeOfDay === free[0] ? prev : { ...prev, timeOfDay: free[0] }));
+    } else if (formData.timeOfDay && takenSlots.includes(formData.timeOfDay as TimeSlot)) {
+      setFormData((prev) => ({ ...prev, timeOfDay: '' }));
+    }
+  }, [isEditMode, takenSlots.join(',')]);
 
   useEffect(() => {
     if (isEditMode) return;
     if (formData.eventType === 'חתונה') {
-      setFormData(prev => ({ ...prev, startTime: '18:00', endTime: '00:00', timeOfDay: 'evening' }));
+      setFormData((prev) => ({
+        ...prev,
+        startTime: '18:00',
+        endTime: '00:00',
+        timeOfDay: takenSlots.includes('evening') ? prev.timeOfDay : 'evening',
+      }));
     } else if (formData.eventType === 'ברית') {
-      setFormData(prev => ({ ...prev, startTime: '09:00', endTime: '14:00', timeOfDay: 'morning' }));
+      setFormData((prev) => ({
+        ...prev,
+        startTime: '09:00',
+        endTime: '14:00',
+        timeOfDay: takenSlots.includes('morning') ? prev.timeOfDay : 'morning',
+      }));
     }
-  }, [formData.eventType, isEditMode]);
+  }, [formData.eventType, isEditMode, takenSlots.join(',')]);
 
   const [servingStyle, setServingStyle] = useState('american');
   const [kosherType, setKosherType] = useState('machpud');
@@ -680,20 +718,16 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
             <div className={styles.inputGroup}>
               <label>זמן ביום *</label>
               <select name="timeOfDay" required value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
-                <option value="">בחרי חלק ביום</option>
-                <option value="morning" disabled={isSlotTaken('morning')}>
-                  בוקר{isSlotTaken('morning') ? ' (תפוס)' : ''}
-                </option>
-                <option value="noon" disabled={isSlotTaken('noon')}>
-                  צהריים{isSlotTaken('noon') ? ' (תפוס)' : ''}
-                </option>
-                <option value="evening" disabled={isSlotTaken('evening')}>
-                  ערב{isSlotTaken('evening') ? ' (תפוס)' : ''}
-                </option>
+                {availableSlots.length !== 1 && <option value="">בחרי חלק ביום</option>}
+                {availableSlots.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {SLOT_LABELS[slot]}
+                  </option>
+                ))}
               </select>
-              {takenSlots.length > 0 && !isEditMode && (
+              {!isEditMode && takenSlots.length > 0 && availableSlots.length > 0 && (
                 <span className={styles.slotHint}>
-                  משבצות תפוסות: {takenSlots.map((s) => SLOT_LABELS[s]).join(', ')}
+                  פנוי: {availableSlots.map((s) => SLOT_LABELS[s]).join(', ')}
                 </span>
               )}
             </div>
@@ -754,7 +788,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 {/* --- צפייה בתפריט והערות לתפריט --- */}
                 <div className={styles.inputGroup}>
                   <label>צפייה בתפריט הקיים</label>
-                  <div onClick={() => window.open('/menu', '_blank')} className={styles.menuLinkBtn} role="button" tabIndex={0}>
+                  <div
+                    onClick={() => setIsMenuViewOpen(true)}
+                    onKeyDown={(e) => e.key === 'Enter' && setIsMenuViewOpen(true)}
+                    className={styles.menuLinkBtn}
+                    role="button"
+                    tabIndex={0}
+                  >
                     📄 פתיחה וצפייה בתפריט
                   </div>
                 </div>
@@ -919,6 +959,24 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           </div>
         </form>
       </div>
+
+      {isMenuViewOpen && (
+        <div className={styles.menuOverlay}>
+          <div className={styles.menuModal}>
+            <button
+              type="button"
+              className={styles.menuCloseBtn}
+              onClick={() => setIsMenuViewOpen(false)}
+              aria-label="סגירת תפריט"
+            >
+              ✕ סגור
+            </button>
+            <div className={styles.menuModalContent}>
+              <MenuDisplay />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
