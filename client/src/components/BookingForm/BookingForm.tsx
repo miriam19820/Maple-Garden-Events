@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
 import { type TimeSlot, SLOT_LABELS, normalizeTimeSlot } from '../../utils/timeSlot';
+import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
+import { NotesList } from '../NotesList/NotesList';
 
 interface BookingFormProps {
   initialDates?: any[];
@@ -140,10 +142,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [isOption, setIsOption] = useState(isOptionMode);
   const [optionDurationHours, setOptionDurationHours] = useState(48);
 
-  const [baseUniqueId] = useState(() => Date.now().toString().slice(-6));
-  const [orderNumber, setOrderNumber] = useState(
-    isOptionMode ? `OPT-${baseUniqueId}` : `EVT-${baseUniqueId}`
-  );
+  const [orderNumber, setOrderNumber] = useState('');
 
   const getDayOfWeek = (dateString: string) => {
     if (!dateString) return '';
@@ -174,9 +173,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     discountPercent: '', discountAmount: '', 
     vatType: 'not_included', 
     paymentTerms: '', 
-    clientComments: '', menuNotes: '', // תוספת menuNotes!
     leadSource: '',
   });
+
+  const [menuNotesList, setMenuNotesList] = useState<string[]>([]);
+  const [internalNotesList, setInternalNotesList] = useState<string[]>([]);
 
   useEffect(() => {
     if (isEditMode) return;
@@ -202,6 +203,35 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       setFormData(prev => ({ ...prev, calendarDateId: firstDate || '' }));
     }
   }, [selectedDatesDisplay]);
+
+  useEffect(() => {
+    if (isEditMode) return;
+
+    const dateCount = Math.max(selectedDatesDisplay.length, 1);
+    const prefix = isOption ? 'OPT' : 'EVT';
+
+    const loadNextCode = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:5000/api/bookings/next-code?prefix=${prefix}&count=${dateCount}`
+        );
+        const json = await res.json();
+        if (!res.ok || !json.success) return;
+
+        const codes: string[] = json.data.codes || [];
+        if (codes.length === 0) return;
+        if (codes.length === 1) {
+          setOrderNumber(codes[0]);
+        } else {
+          setOrderNumber(`${codes[0]} – ${codes[codes.length - 1]}`);
+        }
+      } catch {
+        // keep empty until server responds
+      }
+    };
+
+    loadNextCode();
+  }, [isEditMode, isOption, selectedDatesDisplay.length]);
 
   useEffect(() => {
     if (!editId) return;
@@ -260,10 +290,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           discountAmount: '',
           vatType: 'not_included',
           paymentTerms: '',
-          clientComments: b.clientComments || '',
-          menuNotes: '',
           leadSource: b.leadSource || '',
         });
+        const notesBundle = parseNotesBundle(b.clientComments || '');
+        setMenuNotesList(notesBundle.menu);
+        setInternalNotesList(notesBundle.internal);
         setContractSigned(!!b.isContractSigned);
         if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
       } catch {
@@ -381,13 +412,12 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     setIsSubmitting(true);
 
     try {
-      // נשלב את הערות התפריט יחד עם הערות הלקוח הכלליות כדי שייכנס לשרת תחת שדה קיים
-      const combinedComments = formData.menuNotes ? `${formData.clientComments}\n\n[הערות תפריט]: ${formData.menuNotes}` : formData.clientComments;
-
       const payload = {
         ...formData,
-        clientComments: combinedComments,
-        orderNumber, // שולחים את מספר ההזמנה המדויק לשרת
+        clientComments: serializeNotesBundle({
+          menu: menuNotesList,
+          internal: internalNotesList,
+        }),
         createdAt: new Date().toISOString(), 
         allSelectedDates: selectedDatesDisplay,
         isOption: isOption,
@@ -411,12 +441,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       const resData = await response.json();
 
       if (response.ok) {
+        const savedCode = resData.data?.[0]?.eventCode || resData.data?.eventCode;
         alert(
           isEditMode
             ? 'ההזמנה עודכנה בהצלחה!'
             : isOption
-              ? 'האופציה נשמרה בהצלחה! (ניתן לשלוח הצעת מחיר / חוזה מהמערכת)'
-              : 'האירוע נסגר ונשמר בהצלחה!'
+              ? `האופציה נשמרה בהצלחה!${savedCode ? `\nמספר אופציה: ${savedCode}` : ''}`
+              : `האירוע נסגר ונשמר בהצלחה!${savedCode ? `\nמספר הזמנה: ${savedCode}` : ''}`
         );
         navigate('/');
       } else {
@@ -734,7 +765,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
           <div className={styles.sectionCard}>
             <h3 className={styles.sectionHeader}>הערות לתפריט ובקשות מיוחדות</h3>
-            <textarea name="menuNotes" value={formData.menuNotes} onChange={handleChange} className={styles.input} rows={2} placeholder="לדוגמה: אלרגיות מיוחדות, בקשה להחלפת מנה מסוימת..." />
+            <NotesList
+              notes={menuNotesList}
+              onChange={setMenuNotesList}
+              placeholder="לדוגמה: אלרגיות מיוחדות, בקשה להחלפת מנה מסוימת..."
+            />
           </div>
 
           <div className={styles.sectionCard}>
@@ -862,9 +897,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
           <div className={styles.sectionCard}>
             <h3 className={styles.sectionHeader}>הערות פנימיות לניהול</h3>
-            <div className={styles.inputGroup}>
-              <textarea name="clientComments" value={formData.clientComments} onChange={handleChange} className={styles.input} rows={2} />
-            </div>
+            <NotesList
+              notes={internalNotesList}
+              onChange={setInternalNotesList}
+              placeholder="הוסף הערה פנימית..."
+            />
           </div>
           
           <div className={styles.actions}>

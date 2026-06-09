@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { startCronJobs } from './utils/cronJobs';
+import { initOrderSequence } from './utils/eventCode';
 import app from './app'; // הוספנו את הייבוא של האפליקציה המלאה שלנו מ-app.ts!
 
 // יצירת שרת HTTP שמחזיק גם את Express (עם כל הנתיבים) וגם את Socket.io
@@ -21,4 +22,11 @@ export const broadcastUpdate = (action: string, data: any) => {
 // --- כאן אנחנו מפעילים את הרובוט שלנו! ---
 startCronJobs();
 
-httpServer.listen(5000, () => console.log('🚀 Server running on port 5000'));
+initOrderSequence()
+  .then(() => {
+    httpServer.listen(5000, () => console.log('🚀 Server running on port 5000'));
+  })
+  .catch((err) => {
+    console.error('Failed to initialize order sequence:', err);
+    process.exit(1);
+  });

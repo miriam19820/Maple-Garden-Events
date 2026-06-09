@@ -72,7 +72,11 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
         }),
       });
       const result = await res.json();
-      if (result.success) { alert('האירוע נסגר בהצלחה.'); onSuccess(); }
+      if (result.success) {
+        const code = result.data?.eventCode;
+        alert(code ? `האירוע נסגר בהצלחה!\nמספר הזמנה: ${code}` : 'האירוע נסגר בהצלחה.');
+        onSuccess();
+      }
       else alert(result.message || 'שגיאה בסגירת האירוע');
     } catch { alert('שגיאת תקשורת.'); }
     finally { setIsSubmitting(false); }

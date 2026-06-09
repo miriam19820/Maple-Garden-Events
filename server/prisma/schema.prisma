@@ -48,7 +48,7 @@ model Booking {
   paidAmount    Float  @default(0)
   paymentStatus String @default("pending")
 
-  eventCode           String  @unique @default(cuid())
+  eventCode           String  @unique
   hasMusic            Boolean @default(true)
   akumApprovalCode    String?
   advancePaid         Float   @default(0)
@@ -215,6 +215,14 @@ model SystemSettings {
 
   // --- אגרות נוספות ---
   akumFee Float @default(350.0)
+
+  // --- מונה מספרי הזמנה ---
+  nextEventNumber Int @default(0)
+
+  // --- תוספות (שמורות ב-DB) ---
+  receptionPrice         Float @default(2000.0)
+  separateReceptionPrice Float @default(3000.0)
+  extraSecurityPrice     Float @default(650.0)
 
   updatedAt DateTime @updatedAt
 }

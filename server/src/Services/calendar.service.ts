@@ -3,6 +3,7 @@ import hebcal from 'hebcal';
 import prisma from "../config/prisma";
 import { io } from "../server";
 import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay } from '../utils/timeSlot';
+import { allocateEventCode } from '../utils/eventCode';
 
 export enum EventStatus {
   AVAILABLE = 'AVAILABLE',
@@ -250,12 +251,14 @@ export const calendarService = {
     }
 
     const storedTime = formatStoredTimeOfDay(slot, bookingDetails.startTime, bookingDetails.endTime);
+    const eventCode = await allocateEventCode('EVT');
 
     const booking = await prisma.booking.create({
       data: {
         ...bookingDetails,
         timeOfDay: storedTime,
         eventDate: { connect: { id: dateId } },
+        eventCode,
       },
     });
     

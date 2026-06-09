@@ -10,6 +10,12 @@ import {
   getTakenSlots,
   SLOT_LABELS,
 } from '../utils/timeSlot';
+import {
+  allocateEventCode,
+  convertOptionCodeToEventCode,
+  peekNextEventCodes,
+  type EventCodePrefix,
+} from '../utils/eventCode';
 
 function canEditBookingDate(eventDate: Date): boolean {
   const today = new Date();
@@ -110,6 +116,7 @@ export const createBooking = catchAsync(async (req: Request, res: Response) => {
     }
 
     const timeString = formatStoredTimeOfDay(slot, data.startTime, data.endTime);
+    const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT');
 
     const newBooking = await prisma.booking.create({
       data: {
@@ -139,13 +146,15 @@ export const createBooking = catchAsync(async (req: Request, res: Response) => {
         totalPaid: 0,
         securityCheckStatus: 'PENDING',
         isContractSigned: false,
+        isOption: newStatus === 'OPTION',
         managerComments: data.managerComments || null,
         clientComments: data.clientComments || null,
         createdBy: isManager ? "מנהל מערכת" : "נציג מכירות",
+        eventCode,
       }
     });
     createdBookings.push(newBooking);
-    io.emit('date-updated', { dateId: eventDate.id, status: 'BOOKED' });
+    io.emit('date-updated', { dateId: eventDate.id, status: newStatus });
   }
 
   res.status(201).json({
@@ -222,7 +231,12 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
 
   if (!booking || !booking.eventDate) return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
 
-  await prisma.booking.update({
+  let eventCode = convertOptionCodeToEventCode(booking.eventCode);
+  if (!eventCode) {
+    eventCode = await allocateEventCode('EVT');
+  }
+
+  const updated = await prisma.booking.update({
     where: { id: bookingId },
     data: {
       hasMusic,
@@ -230,6 +244,8 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
       advancePaid: Number(advancePaid),
       paidAmount: Number(advancePaid),
       paymentStatus: 'PARTIAL',
+      isOption: false,
+      eventCode,
     }
   });
 
@@ -238,7 +254,8 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
     data: { status: 'BOOKED', optionExpiresAt: null }
   });
 
-  res.status(200).json({ success: true, message: 'האירוע נסגר בהצלחה!' });
+  io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
+  res.status(200).json({ success: true, message: 'האירוע נסגר בהצלחה!', data: updated });
 });
 
 
@@ -348,6 +365,20 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
 
   io.emit('date-updated', { dateId: booking.eventDate.id, status: booking.eventDate.status });
   res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
+});
+
+export const getNextEventCode = catchAsync(async (req: Request, res: Response) => {
+  const prefix: EventCodePrefix = req.query.prefix === 'EVT' ? 'EVT' : 'OPT';
+  const count = Math.min(Math.max(Number(req.query.count) || 1, 1), 10);
+  const codes = await peekNextEventCodes(prefix, count);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      code: codes[0],
+      codes,
+    },
+  });
 });
 
 export const getCancellationStats = catchAsync(async (req: Request, res: Response) => {

@@ -9,6 +9,7 @@ import {
   bumpOption,
   finalizeBooking,
   getCancellationStats,
+  getNextEventCode,
 } from '../controllers/booking';
 import { sendGreeting } from '../controllers/greeting';
 
@@ -17,6 +18,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // הראוט החדש לסטטיסטיקות חייב להיות לפני הראוטים האחרים
 router.get('/stats/cancellations', getCancellationStats); 
+router.get('/next-code', getNextEventCode);
 
 router.post('/', createBooking);
 router.get('/', getAllBookings);
