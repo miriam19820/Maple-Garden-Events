@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+
 import {
   createBooking,
   getAllBookings,
@@ -9,6 +10,7 @@ import {
   bumpOption,
   finalizeBooking,
   getCancellationStats,
+  addEventAddition // <-- הוספנו את הייבוא לכאן
 } from '../controllers/booking';
 import { sendGreeting } from '../controllers/greeting';
 
@@ -26,5 +28,8 @@ router.post('/release', releaseOptions);
 router.post('/bump', bumpOption);
 router.post('/finalize', finalizeBooking);
 router.post('/send-greeting', upload.single('attachment'), sendGreeting);
+
+// <-- הנתיב החדש שלנו לשמירת תוספות בזמן אירוע -->
+router.post('/:id/additions', addEventAddition);
 
 export default router;

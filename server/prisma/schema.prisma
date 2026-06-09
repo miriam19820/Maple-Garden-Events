@@ -24,6 +24,7 @@ model Booking {
   clientBEmail    String?
   clientBAddress  String?
 
+
   // --- פרטי האירוע ---
   calendarDateId String
   eventDate      EventDate @relation(fields: [calendarDateId], references: [id])
@@ -56,6 +57,7 @@ model Booking {
   securityCheckStatus String  @default("PENDING")
   securityCheckUrl    String?
   isContractSigned    Boolean @default(false)
+  additions   EventAddition[]
 
   // --- היסטוריה ולוגים ---
   createdAt DateTime @default(now())
@@ -268,3 +270,18 @@ model KashrutCertificate {
   isGlobalCertificate Boolean  @default(false) // שורה חדשה
   updatedAt           DateTime @updatedAt
 }
+// מודל חדש לתוספות במהלך אירוע
+model EventAddition {
+  id            String   @id @default(uuid())
+  bookingId     String
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+  description   String   // תיאור התוספת (למשל: "הוספת 2 שולחנות רזרבה")
+  cost          Float    // עלות התוספת
+  staffName     String   // שם איש הצוות שאחראי
+  signature     String   @db.Text // חתימת הלקוח (תישמר כמחרוזת Base64 של תמונה)
+  agreedToTerms Boolean  // אישור הלקוח
+  createdAt     DateTime @default(now()) // חותמת זמן אוטומטית שאי אפשר לזייף
+}
+
+// שימי לב: במודל Booking הקיים שלך, צריך להוסיף את השורה הבאה כדי ליצור את הקשר:
+// additions EventAddition[]

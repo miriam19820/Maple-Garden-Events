@@ -154,15 +154,13 @@ export const createBooking = catchAsync(async (req: Request, res: Response) => {
     data: createdBookings
   });
 });
-
 export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
   const bookings = await prisma.booking.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { eventDate: true, eventForm: true }
+    include: { eventDate: true, eventForm: true, additions: true } // הוספנו משיכה של התוספות מהדאטה בייס!
   });
   res.status(200).json({ success: true, count: bookings.length, data: bookings });
 });
-
 export const releaseOptions = catchAsync(async (req: Request, res: Response) => {
   const { dateIds, cancelReason, clientName } = req.body; 
   
@@ -396,3 +394,44 @@ export const getCancellationStats = catchAsync(async (req: Request, res: Respons
 
   res.status(200).json({ success: true, data: formattedStats });
 });
+
+
+ export const addEventAddition = async (req: Request, res: Response) => {
+  try {
+    const bookingId = req.params.id as string; 
+    const { description, cost, staffName, signature, agreedToTerms } = req.body;
+
+    if (!agreedToTerms) {
+      return res.status(400).json({ error: 'חובה להסכים לתנאי התשלום' });
+    }
+
+    // שמירה במסד הנתונים
+    const newAddition = await prisma.eventAddition.create({
+      data: {
+        bookingId,
+        description,
+        cost: Number(cost),
+        staffName,
+        signature,
+        agreedToTerms
+      }
+    });
+
+    // עדכון המחיר הכולל בהזמנה
+    const currentBooking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (currentBooking) {
+      const currentTotal = Number(currentBooking.totalPrice) || 0;
+      const additionCost = Number(cost) || 0;
+      
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { totalPrice: currentTotal + additionCost }
+      });
+    }
+
+    res.status(201).json({ message: 'התוספת נשמרה בהצלחה!', addition: newAddition });
+  } catch (error) {
+    console.error('Error adding event addition:', error);
+    res.status(500).json({ error: 'שגיאת שרת פנימית בעת שמירת התוספת' });
+  }
+};
