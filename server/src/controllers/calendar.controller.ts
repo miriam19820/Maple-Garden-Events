@@ -16,6 +16,8 @@ export const calendarController = {
       );
       res.json(dates);
     } catch (error) {
+      // הוספנו את ההדפסה הזו כדי לראות את השגיאה האמיתית בטרמינל!
+      console.error('❌ שגיאה מפורטת ב-getAllDates:', error);
       res.status(500).json({ error: 'שגיאה בשליפת התאריכים' });
     }
   },

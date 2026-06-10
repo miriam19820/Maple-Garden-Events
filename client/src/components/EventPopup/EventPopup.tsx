@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { canEditBooking } from '../../utils/bookingEdit';
 import {
   canAddMoreEvents,
-  getAvailableSlots,
-  SLOT_LABELS,
+  formatAvailableSlotsLabel,
   formatTimeOfDayDisplay,
 } from '../../utils/timeSlot';
+import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
+import { NotesList } from '../NotesList/NotesList';
 import './EventPopup.css';
 
 interface EventPopupProps {
@@ -23,7 +25,7 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
   const hebrewDate = day.hebrewDate || '';
   const todayStr = new Date().toISOString().split('T')[0];
   const isPast = day.date < todayStr;
-  const availableSlots = getAvailableSlots(bookings);
+  const availableSlotsLabel = formatAvailableSlotsLabel(bookings);
   const showAddEvent =
     !isPast
     && day.status !== 'BLOCKED'
@@ -41,13 +43,21 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
     onClose();
   };
 
-  return (
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return createPortal(
     <div className="popup-overlay" onClick={onClose}>
-      <div className="popup-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div
+        className="popup-content"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="popup-header">
-          <button type="button" className="close-btn" onClick={handleClose} aria-label="סגור חלון">
-            ✕
-          </button>
           <div className="popup-header-text">
             <h2>פרטי אירועים</h2>
             <p className="popup-header-date">
@@ -62,7 +72,7 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
             <p className="no-events-msg">אין אירועים בתאריך זה.</p>
           ) : (
             bookings.map((booking: any, index: number) => {
-              const isWedding = booking.eventType === 'חתונה' || booking.eventType === 'אירוסין';
+              const isWedding = booking.eventType === 'חתונה';
               const missingItems: string[] = [];
 
               if (!booking.paidAmount || booking.paidAmount === 0) missingItems.push('מקדמה טרם שולמה');
@@ -72,12 +82,16 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
               if (!booking.guestCount || booking.guestCount === 0) missingItems.push('לא הוזנה כמות מוזמנים');
 
               const editable = canEditBooking(day.date);
+              const clientNotes = parseNotesBundle(booking.clientComments);
 
               return (
                 <div key={booking.id || index} className="event-card">
                   <div className="event-card-top">
                     <div className="event-card-title-row">
-                      <h3>{booking.eventType} — {formatTimeOfDayDisplay(booking.timeOfDay)}</h3>
+                      <h3>
+                        {booking.eventCode && <span className="event-code-badge">#{booking.eventCode} · </span>}
+                        {booking.eventType} — {formatTimeOfDayDisplay(booking.timeOfDay)}
+                      </h3>
                       <span className={`status-badge ${isOptionDay ? 'option' : 'booked'}`}>
                         {isOptionDay ? 'אופציה' : 'הזמנה סגורה'}
                       </span>
@@ -107,12 +121,13 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                       <p><strong>אימייל:</strong> {booking.clientAEmail || 'לא הוזן'}</p>
                     </div>
 
-                    {(booking.clientBFullName || isWedding) && (
+                    {isWedding && (
                       <div className="info-group">
                         <h4>צד ב'</h4>
                         <p><strong>שם:</strong> {booking.clientBFullName || 'לא הוזן'}</p>
                         <p><strong>טלפון:</strong> {booking.clientBPhone || 'לא הוזן'}</p>
                         <p><strong>ת.ז:</strong> {booking.clientBIdNumber || 'לא הוזן'}</p>
+                        <p><strong>אימייל:</strong> {booking.clientBEmail || 'לא הוזן'}</p>
                       </div>
                     )}
 
@@ -134,9 +149,22 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                       ) : (
                         <p className="all-good">העסקה מושלמת — לא חסר כלום.</p>
                       )}
-                      {booking.managerComments && (
+                      {parseNotes(booking.managerComments).length > 0 && (
                         <div className="comments-box">
-                          <strong>הערות מנהל:</strong><br />{booking.managerComments}
+                          <strong>הערות מנהל:</strong>
+                          <NotesList notes={parseNotes(booking.managerComments)} />
+                        </div>
+                      )}
+                      {clientNotes.menu.length > 0 && (
+                        <div className="comments-box">
+                          <strong>הערות לתפריט:</strong>
+                          <NotesList notes={clientNotes.menu} />
+                        </div>
+                      )}
+                      {clientNotes.internal.length > 0 && (
+                        <div className="comments-box">
+                          <strong>הערות פנימיות:</strong>
+                          <NotesList notes={clientNotes.internal} />
                         </div>
                       )}
                     </div>
@@ -154,7 +182,7 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
               className="popup-add-btn"
               onClick={() => { onClose(); onAddEvent?.(); }}
             >
-              + אירוע נוסף ({availableSlots.map((s) => SLOT_LABELS[s]).join(' / ')} פנוי)
+              + אירוע נוסף ({availableSlotsLabel})
             </button>
           )}
           <button type="button" className="popup-close-btn" onClick={handleClose}>
@@ -162,6 +190,7 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styles from './BookingsManager.module.css';
 import LiveAdditionForm from '../LiveAdditionForm/LiveAdditionForm';
-
+import { apiFetch } from '../../services/api';
 const BookingsManager = () => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11,7 +11,7 @@ const BookingsManager = () => {
   const [showAdditionForm, setShowAdditionForm] = useState(false); 
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/bookings')
+   apiFetch('http://localhost:5000/api/bookings')
       .then(r => r.json())
       .then(res => {
         if (res.success) setBookings(res.data.filter((b: any) => b.eventDate?.status === 'BOOKED'));

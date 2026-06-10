@@ -16,6 +16,7 @@ import optionRoutes from './routes/option.routes';
 import settingsRoutes from './routes/settings.routes'; 
 import feedbackRoutes from './routes/feedback.routes';
 import kashrutRoutes from './routes/kashrut.routes';
+import authRoutes from './routes/auth.routes'; // <--- תוקן: הוספנו את ייבוא ראוט ההתחברות
 
 // בדיקת משתני סביבה לפני שהשרת מתחיל לעבוד באמת
 validateEnv();
@@ -45,7 +46,8 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 3. חיבור הראוטים
-app.use('/api/kashrut', kashrutRoutes);
+app.use('/api/auth',        authRoutes); // <--- תוקן: חיבור הראוט שמקשיב ל- /api/auth/login
+app.use('/api/kashrut',     kashrutRoutes);
 app.use('/api/menu',        menuRoutes);
 app.use('/api/calendar',    calendarRoutes);
 app.use('/api/bookings',    bookingRoutes);

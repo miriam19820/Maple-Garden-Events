@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { validate } from '../middlewares/validate';
+import { createBookingSchema } from '../validators/booking.validator';
+import { requireAuth } from '../middlewares/auth';
 
 import {
   createBooking,
@@ -10,17 +13,20 @@ import {
   bumpOption,
   finalizeBooking,
   getCancellationStats,
-  addEventAddition // <-- הוספנו את הייבוא לכאן
+  addEventAddition,     // מהגרסה שלך
+  getNextEventCode,     // מהגרסה של מרים
 } from '../controllers/booking';
 import { sendGreeting } from '../controllers/greeting';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// הראוט החדש לסטטיסטיקות חייב להיות לפני הראוטים האחרים
-router.get('/stats/cancellations', getCancellationStats); 
 
-router.post('/', createBooking);
+// הראוטים השונים
+router.get('/stats/cancellations', getCancellationStats); 
+router.get('/next-code', getNextEventCode); // השאירי את זה
+
+router.post('/', validate(createBookingSchema), createBooking);
 router.get('/', getAllBookings);
 router.get('/:id', getBookingById);
 router.put('/:id', updateBooking);
@@ -28,8 +34,9 @@ router.post('/release', releaseOptions);
 router.post('/bump', bumpOption);
 router.post('/finalize', finalizeBooking);
 router.post('/send-greeting', upload.single('attachment'), sendGreeting);
+router.post('/', requireAuth, validate(createBookingSchema), createBooking);
 
-// <-- הנתיב החדש שלנו לשמירת תוספות בזמן אירוע -->
-router.post('/:id/additions', addEventAddition);
+// הנתיב לשמירת תוספות בזמן אירוע
+router.post('/:id/additions', addEventAddition); // השאירי את זה
 
 export default router;

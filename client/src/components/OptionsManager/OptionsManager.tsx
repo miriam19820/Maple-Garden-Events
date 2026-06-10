@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styles from './OptionsManager.module.css';
 import OptionActionModal from '../OptionActionModal/OptionActionModal';
 import { socket } from '../../services/socketService';
+import { apiFetch } from '../../services/api';
 
 const HEBREW_NUMERALS: Record<number, string> = {
   1:'א',2:'ב',3:'ג',4:'ד',5:'ה',6:'ו',7:'ז',8:'ח',9:'ט',10:'י',
@@ -35,7 +36,7 @@ const OptionsManager = () => {
   const fetchOptions = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/bookings');
+      const response = await apiFetch('http://localhost:5000/api/bookings');
       const result = await response.json();
       if (result.success) {
         setOptions(result.data.filter((b: any) => b.eventDate?.status === 'OPTION'));
@@ -57,7 +58,7 @@ const OptionsManager = () => {
   const handleRelease = async (dateId: string) => {
     if (!window.confirm('האם את בטוחה שאת רוצה לשחרר את התאריך הזה?')) return;
     try {
-      const res = await fetch('http://localhost:5000/api/bookings/release', {
+      const res = await apiFetch('http://localhost:5000/api/bookings/release', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dateIds: [dateId] }),
@@ -71,7 +72,7 @@ const OptionsManager = () => {
   const handleBump = async (dateId: string) => {
     if (!window.confirm('האם לשלוח ללקוח התראת דחיפות ולקצר את הדד-ליין ל-3 שעות?')) return;
     try {
-      const res = await fetch('http://localhost:5000/api/bookings/bump', {
+      const res = await apiFetch('http://localhost:5000/api/bookings/bump', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dateId }),

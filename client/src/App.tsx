@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Calendar } from './components/Calendar/Calendar';
 import { getTakenSlots } from './utils/timeSlot';
@@ -12,6 +12,7 @@ import OptionPage from './components/optionPage/OptionPage';
 import MenuDisplay from './components/MenuDisplay/MenuDisplay';
 import { SettingsManager } from './components/SettingsManager/SettingsManager';
 import FeedbackPage from './components/FeedbackPage/FeedbackPage';
+import { Login } from './components/Login/Login'; // ייבוא מסך ההתחברות שיצרנו
 
 const CalendarWrapper = () => {
   const navigate = useNavigate();
@@ -39,20 +40,45 @@ const PageShell = ({ children }: { children: React.ReactNode }) => (
 );
 
 function App() {
+  // בודק אם המנהל כבר התחבר בעבר (האם יש טוקן שמור בדפדפן)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    !!localStorage.getItem('managerToken')
+  );
+
+  // פונקציה שתופעל לאחר התחברות מוצלחת ממסך הלוגין
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+  };
+
+  // רכיב "שומר סף" שמסתיר עמודים אם המשתמש לא מחובר
+  const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!isAuthenticated) {
+      return <Login onLoginSuccess={handleLoginSuccess} />;
+    }
+    return <>{children}</>;
+  };
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<CalendarWrapper />} />
-        <Route path="/booking" element={<AppLayout><BookingForm /></AppLayout>} />
-        <Route path="/booking/edit/:id" element={<AppLayout><BookingForm /></AppLayout>} />
-        <Route path="/options-manager" element={<PageShell><OptionsManager /></PageShell>} />
-        <Route path="/bookings-manager" element={<PageShell><BookingsManager /></PageShell>} />
-        <Route path="/greeting" element={<PageShell><GreetingBlast /></PageShell>} />
-        <Route path="/event-form-manager" element={<AppLayout><EventFormManager /></AppLayout>} />
-        <Route path="/option" element={<AppLayout><OptionPage /></AppLayout>} />
-        <Route path="/menu" element={<AppLayout fullHeight={false}><MenuDisplay /></AppLayout>} />
-        <Route path="/settings" element={<PageShell><SettingsManager /></PageShell>} />
+        {/* =======================================
+            נתיבים ציבוריים ללקוחות (ללא התחברות) 
+            ======================================= */}
         <Route path="/feedback/:token" element={<AppLayout><FeedbackPage /></AppLayout>} />
+
+        {/* =======================================
+            נתיבים פרטיים למנהלים (חסומים בסיסמה) 
+            ======================================= */}
+        <Route path="/" element={<ProtectedRoute><CalendarWrapper /></ProtectedRoute>} />
+        <Route path="/booking" element={<ProtectedRoute><AppLayout><BookingForm /></AppLayout></ProtectedRoute>} />
+        <Route path="/booking/edit/:id" element={<ProtectedRoute><AppLayout><BookingForm /></AppLayout></ProtectedRoute>} />
+        <Route path="/options-manager" element={<ProtectedRoute><PageShell><OptionsManager /></PageShell></ProtectedRoute>} />
+        <Route path="/bookings-manager" element={<ProtectedRoute><PageShell><BookingsManager /></PageShell></ProtectedRoute>} />
+        <Route path="/greeting" element={<ProtectedRoute><PageShell><GreetingBlast /></PageShell></ProtectedRoute>} />
+        <Route path="/event-form-manager" element={<ProtectedRoute><AppLayout><EventFormManager /></AppLayout></ProtectedRoute>} />
+        <Route path="/option" element={<ProtectedRoute><AppLayout><OptionPage /></AppLayout></ProtectedRoute>} />
+        <Route path="/menu" element={<ProtectedRoute><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><PageShell><SettingsManager /></PageShell></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );

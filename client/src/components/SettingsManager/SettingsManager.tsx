@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './SettingsManager.css';
+// הוספנו את פונקציית ה-fetch המאובטחת שלנו
+import { apiFetch } from '../../services/api';
 
 export const SettingsManager = () => {
   const [globalSettings, setGlobalSettings] = useState<any>({});
@@ -16,9 +18,10 @@ export const SettingsManager = () => {
   const fetchData = async () => {
     try {
       const [settingsRes, extrasRes, kashrutRes] = await Promise.all([
-        fetch('http://localhost:5000/api/settings/global'),
-        fetch('http://localhost:5000/api/settings/extras'),
-        fetch('http://localhost:5000/api/kashrut')
+        // הוחלף ל-apiFetch
+        apiFetch('http://localhost:5000/api/settings/global'),
+        apiFetch('http://localhost:5000/api/settings/extras'),
+        apiFetch('http://localhost:5000/api/kashrut')
       ]);
       const settingsData = await settingsRes.json();
       const extrasData = await extrasRes.json();
@@ -36,7 +39,8 @@ export const SettingsManager = () => {
 
   const saveGlobalSettings = async () => {
     try {
-      await fetch('http://localhost:5000/api/settings/global', {
+      // הוחלף ל-apiFetch
+      await apiFetch('http://localhost:5000/api/settings/global', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(globalSettings)
@@ -46,9 +50,11 @@ export const SettingsManager = () => {
       alert('שגיאה בשמירת הגדרות');
     }
   };
-const updateKashrut = async (id: string, data: any) => {
+
+  const updateKashrut = async (id: string, data: any) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/kashrut/${id}`, {
+      // הוחלף ל-apiFetch
+      const response = await apiFetch(`http://localhost:5000/api/kashrut/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -64,7 +70,9 @@ const updateKashrut = async (id: string, data: any) => {
     } catch (error) {
       alert('שגיאה בתקשורת מול השרת');
     }
-  };  const handleImageUpload = (id: string, file: File) => {
+  };  
+  
+  const handleImageUpload = (id: string, file: File) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Image = reader.result as string;
@@ -81,7 +89,8 @@ const updateKashrut = async (id: string, data: any) => {
     if (!newExtra.name || !newExtra.price) return alert('נא למלא שם ומחיר');
 
     try {
-      await fetch('http://localhost:5000/api/settings/extras', {
+      // הוחלף ל-apiFetch
+      await apiFetch('http://localhost:5000/api/settings/extras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newExtra)
@@ -95,7 +104,8 @@ const updateKashrut = async (id: string, data: any) => {
 
   const toggleExtraStatus = async (id: string, currentStatus: boolean) => {
     try {
-      await fetch(`http://localhost:5000/api/settings/extras/${id}`, {
+      // הוחלף ל-apiFetch
+      await apiFetch(`http://localhost:5000/api/settings/extras/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus })

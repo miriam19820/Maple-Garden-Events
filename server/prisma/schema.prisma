@@ -8,67 +8,46 @@ datasource db {
 }
 
 model Booking {
-  id String @id @default(uuid())
-
-  // --- פרטי צד א' (חובה) ---
-  clientAFullName String
-  clientAIdNumber String
-  clientAPhone    String
-  clientAEmail    String?
-  clientAAddress  String?
-
-  // --- פרטי צד ב' (רשות) ---
-  clientBFullName String?
-  clientBIdNumber String?
-  clientBPhone    String?
-  clientBEmail    String?
-  clientBAddress  String?
-
-
-  // --- פרטי האירוע ---
-  calendarDateId String
-  eventDate      EventDate @relation(fields: [calendarDateId], references: [id])
-
-  eventType         String
-  timeOfDay         String // "בוקר", "צהריים", "ערב"
-  guestCount        Int
-  finalPricePortion Float
-
-  // --- הערות ושיווק ---
-  managerComments    String?
-  clientComments     String?
-  leadSource         String? // דרך מי הגיעו אלינו?
-  cancellationReason String? // סיבת ביטול האופציה (לסטטיסטיקה)
-
-  // --- הגדרות אופציה ---
-  isOption            Boolean @default(false)
-  optionDurationHours Int     @default(48)
-
-  // --- כספים, אקו"ם וחוזים ---
-  totalPrice    Float
-  paidAmount    Float  @default(0)
-  paymentStatus String @default("pending")
-
-  eventCode           String  @unique @default(cuid())
-  hasMusic            Boolean @default(true)
+  id                  String          @id @default(uuid())
+  clientAFullName     String
+  clientAIdNumber     String
+  clientAPhone        String
+  clientAEmail        String?
+  clientAAddress      String?
+  clientBFullName     String?
+  clientBIdNumber     String?
+  clientBPhone        String?
+  clientBEmail        String?
+  clientBAddress      String?
+  calendarDateId      String
+  eventType           String
+  timeOfDay           String
+  guestCount          Int
+  finalPricePortion   Float
+  managerComments     String?
+  clientComments      String?
+  totalPrice          Float
+  paidAmount          Float           @default(0)
+  paymentStatus       String          @default("pending")
+  eventCode           String          @unique
+  hasMusic            Boolean         @default(true)
   akumApprovalCode    String?
-  advancePaid         Float   @default(0)
-  totalPaid           Float   @default(0)
-  securityCheckStatus String  @default("PENDING")
+  advancePaid         Float           @default(0)
+  totalPaid           Float           @default(0)
+  securityCheckStatus String          @default("PENDING")
   securityCheckUrl    String?
-  isContractSigned    Boolean @default(false)
-  additions   EventAddition[]
-
-  // --- היסטוריה ולוגים ---
-  createdAt DateTime @default(now())
-  createdBy String
-  updatedAt DateTime @updatedAt
-  updatedBy String?
-
-  // --- טופס הפקת אירוע ---
+  isContractSigned    Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  createdBy           String
+  updatedAt           DateTime        @updatedAt
+  updatedBy           String?
+  cancellationReason  String?
+  isOption            Boolean         @default(false)
+  leadSource          String?
+  optionDurationHours Int             @default(48)
+  eventDate           EventDate       @relation(fields: [calendarDateId], references: [id])
+  additions           EventAddition[]
   eventForm           EventForm?
-  // --- פידבק / משוב ---
-// --- פידבק / משוב ---
   feedbacks           Feedback[]
 }
 
@@ -88,83 +67,56 @@ model Dish {
 }
 
 model EventDate {
-  id       String   @id @default(uuid())
-  date     DateTime @unique
-  status   String
-  lockedBy String?
-
-  bookings Booking[]
-
+  id              String    @id @default(uuid())
+  date            DateTime  @unique
+  status          String
+  lockedBy        String?
   clientName      String?
   clientPhone     String?
   clientEmail     String?
   optionExpiresAt DateTime?
+  bookings        Booking[]
 }
 
 model EventForm {
-  id        String  @id @default(uuid())
-  bookingId String  @unique
-  booking   Booking @relation(fields: [bookingId], references: [id])
-
-  // פרטי בסיס
-  eventTime       String? // שעת קבלת פנים
-  receptionType   String? // נפרד / מעורב
-  finalGuestCount Int?
-  seatingType     String? // מעורב / נפרד
-
-  // חלוקה
-  menPercent   Int?
-  womenPercent Int?
-
-  // שולחן כבוד
-  honorTableCount Int?
-
-  // עיצוב
-  tableclothId String?
-  napkinId     String?
-  centerpiece  String?
-  bridgeChair  String?
-
-  // ציוד
-  hasLighting    Boolean @default(false)
-  hasSoundSystem Boolean @default(false)
-  hasScreens     Boolean @default(false)
-  hasFireworks   Boolean @default(false)
-
-  // משמחים
+  id                  String          @id @default(uuid())
+  bookingId           String          @unique
+  eventTime           String?
+  receptionType       String?
+  finalGuestCount     Int?
+  seatingType         String?
+  menPercent          Int?
+  womenPercent        Int?
+  honorTableCount     Int?
+  tableclothId        String?
+  napkinId            String?
+  centerpiece         String?
+  bridgeChair         String?
+  hasLighting         Boolean         @default(false)
+  hasSoundSystem      Boolean         @default(false)
+  hasScreens          Boolean         @default(false)
+  hasFireworks        Boolean         @default(false)
   entertainersBar     Int?
   entertainersSitting Int?
   entertainersMen     Int?
   entertainersWomen   Int?
-
-  // צ'ק פיקדון
-  depositCheckUrl    String?
-  depositCheckStatus Boolean @default(false)
-
-  // אקו"ם
-  akumCode String?
-
-  // כשרות
-  kashrut String?
-
-  // תמחור
-  guestPortionCount Int?
-  pricePerPortion   Float?
-  kashrutSurcharge  Float?
-  designPrice       Float?
-  extrasJson        String?
-  totalPrice        Float?
-
-  // חוזה
-  contractSigned Boolean   @default(false)
-  contractSentAt DateTime?
-
-  // הערות
-  notes String?
-
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  tables    TablePosition[]
+  depositCheckUrl     String?
+  depositCheckStatus  Boolean         @default(false)
+  akumCode            String?
+  kashrut             String?
+  guestPortionCount   Int?
+  pricePerPortion     Float?
+  kashrutSurcharge    Float?
+  designPrice         Float?
+  extrasJson          String?
+  totalPrice          Float?
+  contractSigned      Boolean         @default(false)
+  contractSentAt      DateTime?
+  notes               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  booking             Booking         @relation(fields: [bookingId], references: [id])
+  tables              TablePosition[]
 }
 
 model CancellationLog {
@@ -174,114 +126,87 @@ model CancellationLog {
   createdAt  DateTime @default(now())
 }
 
-// מודל חדש לשמירת מיקום של כל שולחן
 model TablePosition {
   id          String    @id @default(uuid())
   eventFormId String
+  tableNumber Int
+  positionX   Float
+  positionY   Float
   eventForm   EventForm @relation(fields: [eventFormId], references: [id], onDelete: Cascade)
 
-  tableNumber Int // מספר השולחן
-  positionX   Float // מיקום על ציר X
-  positionY   Float // מיקום על ציר Y
-
-  @@unique([eventFormId, tableNumber]) // מוודא שאין אותו מספר שולחן פעמיים באותו טופס
+  @@unique([eventFormId, tableNumber])
 }
 
-// ==========================================
-// מודלים חדשים: הגדרות מערכת ומחירון תוספות
-// ==========================================
-
 model SystemSettings {
-  id String @id @default("global")
-
-  // --- הגדרות מערכת וכספים בסיסיים ---
-  vatRate             Float @default(17.0)
-  defaultAdvance      Float @default(5000.0)
-  optionDurationHours Int   @default(48)
-
-  // --- מנות וכשרות ---
-  basePricePerPortion Float @default(250.0)
-  kashrutSurcharge    Float @default(30.0)
-  staffPortionPrice   Float @default(120.0)
-
-  // --- עיצוב אולם ---
-  designBasePrice  Float @default(4500.0)
-  centerpiecePrice Float @default(150.0)
-  bridgeChairPrice Float @default(800.0)
-
-  // --- ציוד ותוספות קבועות ---
-  lightingPrice    Float @default(2500.0)
-  soundSystemPrice Float @default(2000.0)
-  screensPrice     Float @default(1500.0)
-  fireworksPrice   Float @default(1000.0)
-
-  // --- אגרות נוספות ---
-  akumFee Float @default(350.0)
-
-  updatedAt DateTime @updatedAt
+  id                     String   @id @default("global")
+  vatRate                Float    @default(17.0)
+  defaultAdvance         Float    @default(5000.0)
+  optionDurationHours    Int      @default(48)
+  basePricePerPortion    Float    @default(250.0)
+  kashrutSurcharge       Float    @default(30.0)
+  staffPortionPrice      Float    @default(120.0)
+  designBasePrice        Float    @default(4500.0)
+  centerpiecePrice       Float    @default(150.0)
+  bridgeChairPrice       Float    @default(800.0)
+  lightingPrice          Float    @default(2500.0)
+  soundSystemPrice       Float    @default(2000.0)
+  screensPrice           Float    @default(1500.0)
+  fireworksPrice         Float    @default(1000.0)
+  akumFee                Float    @default(350.0)
+  updatedAt              DateTime @updatedAt
+  extraSecurityPrice     Float    @default(650.0)
+  nextEventNumber        Int      @default(0)
+  receptionPrice         Float    @default(2000.0)
+  separateReceptionPrice Float    @default(3000.0)
 }
 
 model ExtraService {
-  id          String   @id @default(uuid())
-  name        String   
-  category    String   
-  price       Float    
-  isActive    Boolean  @default(true) 
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  name      String
+  category  String
+  price     Float
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
 model Feedback {
   id            String   @id @default(uuid())
-  
-  // קישור להזמנה (Booking) - שימי לב שהסרנו מכאן את ה- @unique
-  bookingId     String   
-  booking       Booking  @relation(fields: [bookingId], references: [id])
-  
-  // --- חדש: זיהוי הצד ---
-  clientSide    String   // ישמור ערכים כמו: "A" (צד א'), "B" (צד ב'), או "SINGLE" (אירוע רגיל)
-  clientName    String?  // אופציונלי: נשמור את שם הלקוח הספציפי שהמשוב נשלח אליו כדי שיהיה נוח בדאשבורד
-  
-  // שדות דירוג בסולם של 1 עד 5 כוכבים
-  foodRating    Int?     
-  serviceRating Int?     
-  venueRating   Int?     
-  
-  // נתונים מחושבים וטקסט חופשי
-  averageScore  Float?   
-  comments      String?  
-  
-  // מנגנון אבטחה ושליטה
-  token         String   @unique 
-  isCompleted   Boolean  @default(false) 
-  
+  bookingId     String
+  clientSide    String
+  clientName    String?
+  foodRating    Int?
+  serviceRating Int?
+  venueRating   Int?
+  averageScore  Float?
+  comments      String?
+  token         String   @unique
+  isCompleted   Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  booking       Booking  @relation(fields: [bookingId], references: [id])
 
-  // הגבלה חכמה: מונע מצד א' (למשל) למלא את הטופס פעמיים עבור אותה הזמנה
   @@unique([bookingId, clientSide])
 }
+
 model KashrutCertificate {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   nameKey             String
   displayName         String
   imageUrl            String?
   validUntil          DateTime?
-  isGlobalCertificate Boolean  @default(false) // שורה חדשה
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime  @updatedAt
+  isGlobalCertificate Boolean   @default(false)
 }
-// מודל חדש לתוספות במהלך אירוע
+
 model EventAddition {
   id            String   @id @default(uuid())
   bookingId     String
+  description   String
+  cost          Float
+  staffName     String
+  signature     String
+  agreedToTerms Boolean
+  createdAt     DateTime @default(now())
   booking       Booking  @relation(fields: [bookingId], references: [id])
-  description   String   // תיאור התוספת (למשל: "הוספת 2 שולחנות רזרבה")
-  cost          Float    // עלות התוספת
-  staffName     String   // שם איש הצוות שאחראי
-  signature     String   @db.Text // חתימת הלקוח (תישמר כמחרוזת Base64 של תמונה)
-  agreedToTerms Boolean  // אישור הלקוח
-  createdAt     DateTime @default(now()) // חותמת זמן אוטומטית שאי אפשר לזייף
 }
-
-// שימי לב: במודל Booking הקיים שלך, צריך להוסיף את השורה הבאה כדי ליצור את הקשר:
-// additions EventAddition[]
