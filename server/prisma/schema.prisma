@@ -49,6 +49,7 @@ model Booking {
   additions           EventAddition[]
   eventForm           EventForm?
   feedbacks           Feedback[]
+  clientSignatureUrl String?
 }
 
 model MenuCategory {

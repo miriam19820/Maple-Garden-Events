@@ -4,6 +4,8 @@ import { sendBumpEmail } from '../utils/mailer';
 import { sendBumpWhatsApp } from '../utils/whatsapp';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
+import { generateEventFormPDF } from '../utils/pdfGenerator';
+ import { sendPDFToClient } from '../Services/emailService';
 import { io } from '../server';
 import {
   normalizeTimeSlot,
@@ -25,13 +27,12 @@ function canEditBookingDate(eventDate: Date): boolean {
   eventDay.setHours(0, 0, 0, 0);
   return today < eventDay;
 }
-
 export const createBooking = catchAsync(async (req: AuthRequest, res: Response) => {
   const data = req.body;
-  // שולף את התפקיד בצורה מאובטחת מהטוקן שעבר אימות!
   const isManager = req.user?.role === 'manager'; 
   const currentUserName = req.user?.name || "נציג מערכת";
   let datesToProcess: any[] = [];
+  
   if (data.allSelectedDates && data.allSelectedDates.length > 0) {
     datesToProcess = data.allSelectedDates;
   } else if (data.calendarDateId) {
@@ -61,7 +62,6 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   let createdBookings: any[] = [];
   let eventsToEmit: { dateId: string, status: string }[] = [];
 
-  // --- שלב 2: שימוש בטרנזקציה כדי להבטיח אמינות נתונים מוחלטת ---
   await prisma.$transaction(async (tx) => {
     createdBookings = [];
     eventsToEmit = [];
@@ -103,7 +103,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       const existingBookings = eventDate.bookings || [];
       if (existingBookings.length >= 3) {
         const err: any = new Error('התאריך מלא — כבר קיימים 3 אירועים (בוקר, צהריים וערב).');
-        err.statusCode = 400; // הגדרת סטטוס כדי שה-ErrorHandler יחזיר תשובה נכונה ללקוח
+        err.statusCode = 400;
         throw err;
       }
 
@@ -151,7 +151,9 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           advancePaid: 0,
           totalPaid: 0,
           securityCheckStatus: 'PENDING',
-          isContractSigned: false,
+          // התיקון: שמירת נתוני החתימה מהטופס
+          isContractSigned: data.contractSigned || false,
+          clientSignatureUrl: data.clientSignature || null,
           isOption: newStatus === 'OPTION',
           managerComments: data.managerComments || null,
           clientComments: data.clientComments || null,
@@ -161,122 +163,64 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       });
       createdBookings.push(newBooking);
       
-      // שומרים את נתוני הסוקט בצד, ונשדר רק אחרי שהטרנזקציה הסתיימה בהצלחה
       eventsToEmit.push({ dateId: eventDate.id, status: newStatus });
     }
   });
 
-  // אם הגענו לכאן, הטרנזקציה הצליחה והנתונים נשמרו בוודאות. כעת ניתן לשדר.
   eventsToEmit.forEach(ev => io.emit('date-updated', ev));
+  // --- יצירת PDF ושליחה במייל (רלוונטי גם לאופציה וגם לאירוע סגור) ---
+// --- יצירת PDF ושליחה במייל (רלוונטי גם לאופציה וגם לאירוע סגור) ---
+  if (data.contractSigned && data.clientSignature && createdBookings.length > 0) {
+    try {
+      const savedBooking = createdBookings[0];
+      
+      // תיקון: חילוץ התאריך הראשון מתוך המערך שהלקוח שלח
+      const firstDateItem = datesToProcess[0];
+      const firstDateString = typeof firstDateItem === 'object' && firstDateItem !== null ? firstDateItem.date : firstDateItem;
+
+      const pdfData = {
+        eventCode: savedBooking.eventCode,
+        isOption: newStatus === 'OPTION', // מעביר ל-PDF שזו רק אופציה כדי שישים סימן מים!
+        clientAFullName: savedBooking.clientAFullName,
+        clientAIdNumber: savedBooking.clientAIdNumber,
+        clientAPhone: savedBooking.clientAPhone || undefined,
+        clientAEmail: savedBooking.clientAEmail || undefined,
+        clientBFullName: savedBooking.clientBFullName || undefined,
+        clientBIdNumber: savedBooking.clientBIdNumber || undefined,
+        clientBPhone: savedBooking.clientBPhone || undefined,
+        clientBEmail: savedBooking.clientBEmail || undefined,
+        eventDate: new Date(firstDateString).toString(), // <-- התיקון כאן
+        guestCount: savedBooking.guestCount,
+        eventType: savedBooking.eventType,
+        timeOfDay: savedBooking.timeOfDay || undefined,
+        clientSignatureUrl: data.clientSignature,
+        eventForm: {} // טופס ריק בשלב זה
+      };
+
+      const contractPdfBuffer = await generateEventFormPDF(pdfData);
+      const clientEmail = savedBooking.clientAEmail || savedBooking.clientBEmail;
+      
+      if (clientEmail) {
+        await sendPDFToClient(
+          clientEmail, 
+          savedBooking.clientAFullName, 
+          new Date(firstDateString).toString(), // <-- והתיקון כאן
+          contractPdfBuffer
+        );
+      }
+    } catch (pdfError) {
+      console.error("שגיאה בהפקת או שליחת החוזה הראשוני למייל:", pdfError);
+    }
+  }
 
   res.status(201).json({
     success: true,
-    message: newStatus === 'OPTION' ? 'האופציות נשמרו בהצלחה!' : 'האירוע נשמר ונסגר בהצלחה!',
+    message: newStatus === 'OPTION' ? 'האופציות נשמרו והצעת המחיר נשלחה במייל!' : 'האירוע נשמר והחוזה נשלח!',
     data: createdBookings
-  });
-});
-
-export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  const bookings = await prisma.booking.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { eventDate: true, eventForm: true, additions: true } 
-  });
-  res.status(200).json({ success: true, count: bookings.length, data: bookings });
-});
-
-export const releaseOptions = catchAsync(async (req: Request, res: Response) => {
-  const { dateIds, cancelReason, clientName } = req.body; 
-  
-  if (!dateIds || dateIds.length === 0) return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לשחרור.' });
-
-  // טרנזקציה להבטחת סנכרון במחיקה
-  await prisma.$transaction(async (tx) => {
-    await tx.eventDate.updateMany({
-      where: { id: { in: dateIds } },
-      data: { status: 'AVAILABLE', optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null }
-    });
-
-    await tx.booking.deleteMany({ 
-      where: { eventDate: { id: { in: dateIds } } } 
-    });
     
-    if (cancelReason) {
-      await tx.cancellationLog.create({
-        data: {
-          reason: cancelReason,
-          clientName: clientName || 'לא צוין',
-        }
-      });
-    }
   });
-
-  res.status(200).json({ success: true, message: 'התאריכים שוחררו והסטטיסטיקה נשמרה בהצלחה.' });
 });
-
-export const bumpOption = catchAsync(async (req: Request, res: Response) => {
-  const { dateId } = req.body;
-  const eventDate = await prisma.eventDate.findUnique({
-    where: { id: dateId },
-    include: { bookings: true } 
-  });
-
-  if (!eventDate || eventDate.status !== 'OPTION') return res.status(400).json({ success: false, message: 'התאריך אינו מוגדר כאופציה.' });
-
-  const newDeadline = new Date();
-  newDeadline.setHours(newDeadline.getHours() + 3);
-  await prisma.eventDate.update({ where: { id: dateId }, data: { optionExpiresAt: newDeadline } });
-
-  for (const booking of eventDate.bookings) {
-      if (booking.clientAEmail) await sendBumpEmail(booking.clientAEmail, booking.clientAFullName, eventDate.date.toString(), newDeadline);
-      if (booking.clientAPhone) {
-          await sendBumpWhatsApp(booking.clientAPhone.split(' | ')[0].trim(), booking.clientAFullName, eventDate.date.toString(), newDeadline);
-      }
-  }
-
-  res.status(200).json({ success: true, message: 'הדד-ליין קוצר.', newDeadline });
-});
-
-export const finalizeBooking = catchAsync(async (req: Request, res: Response) => {
-  const { bookingId, advancePaid, akumApprovalCode, hasMusic } = req.body;
-
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: { eventDate: true }
-  });
-
-  if (!booking || !booking.eventDate) return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
-
-  let eventCode = convertOptionCodeToEventCode(booking.eventCode);
-  if (!eventCode) {
-    eventCode = await allocateEventCode('EVT');
-  }
-
-  // טרנזקציה לעדכון ההזמנה והתאריך במקביל
-  const updated = await prisma.$transaction(async (tx) => {
-    const updatedBooking = await tx.booking.update({
-      where: { id: bookingId },
-      data: {
-        hasMusic,
-        akumApprovalCode,
-        advancePaid: Number(advancePaid),
-        paidAmount: Number(advancePaid),
-        paymentStatus: 'PARTIAL',
-        isOption: false,
-        eventCode,
-      }
-    });
-
-    await tx.eventDate.update({
-      where: { id: booking.eventDate.id },
-      data: { status: 'BOOKED', optionExpiresAt: null }
-    });
-
-    return updatedBooking;
-  });
-
-  io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
-  res.status(200).json({ success: true, message: 'האירוע נסגר בהצלחה!', data: updated });
-});
+ 
 
 export const getBookingById = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
@@ -291,7 +235,6 @@ export const getBookingById = catchAsync(async (req: Request, res: Response) => 
 
   res.status(200).json({ success: true, data: booking });
 });
-
 export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const data = req.body;
@@ -345,7 +288,6 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   const calculatedTotalPrice =
     (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0) || booking.totalPrice;
 
-  // טרנזקציה לעדכון במקביל
   const updated = await prisma.$transaction(async (tx) => {
     const updatedBooking = await tx.booking.update({
       where: { id },
@@ -370,6 +312,9 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
         managerComments: data.managerComments || null,
         clientComments: data.clientComments || null,
         createdBy: data.createdBy || booking.createdBy,
+        // התיקון: עדכון נתוני החתימה במידה ונחתם בעריכה
+        isContractSigned: data.contractSigned !== undefined ? data.contractSigned : booking.isContractSigned,
+        clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
         updatedBy: 'מערכת',
       },
       include: { eventDate: true },
@@ -390,7 +335,6 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   io.emit('date-updated', { dateId: booking.eventDate.id, status: booking.eventDate.status });
   res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
 });
-
 export const getNextEventCode = catchAsync(async (req: Request, res: Response) => {
   const prefix: EventCodePrefix = req.query.prefix === 'EVT' ? 'EVT' : 'OPT';
   const count = Math.min(Math.max(Number(req.query.count) || 1, 1), 10);
@@ -493,4 +437,172 @@ export const addEventAddition = async (req: Request, res: Response) => {
     console.error('Error adding event addition:', error);
     res.status(500).json({ error: 'שגיאת שרת פנימית בעת שמירת התוספת' });
   }
+  
 };
+export const finalizeBooking = catchAsync(async (req: Request, res: Response) => {
+  // 1. קבלת הנתונים מהמודאל
+  const { bookingId, advancePaid, akumApprovalCode, hasMusic, clientSignature, tables } = req.body;
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { eventDate: true, eventForm: true }
+  });
+
+  if (!booking || !booking.eventDate) return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
+
+  let eventCode = convertOptionCodeToEventCode(booking.eventCode);
+  if (!eventCode) {
+    eventCode = await allocateEventCode('EVT');
+  }
+
+  // 2. טרנזקציה לעדכון ההזמנה, שמירת החתימה ושמירת סידור השולחנות
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedBooking = await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        hasMusic,
+        akumApprovalCode,
+        advancePaid: Number(advancePaid),
+        paidAmount: Number(advancePaid),
+        paymentStatus: 'PARTIAL',
+        isOption: false,
+        eventCode,
+        isContractSigned: true, 
+        clientSignatureUrl: clientSignature 
+      }
+    });
+
+    await tx.eventDate.update({
+      where: { id: booking.eventDate.id },
+      data: { status: 'BOOKED', optionExpiresAt: null }
+    });
+
+    // שמירת ה-Floor Plan לטופס ההפקה
+    if (tables && Array.isArray(tables)) {
+      await tx.eventForm.upsert({
+        where: { bookingId },
+        update: {
+          tables: {
+            deleteMany: {},
+            create: tables.map((table: any) => ({
+              tableNumber: table.id,
+              positionX: table.x,
+              positionY: table.y,
+            }))
+          }
+        },
+        create: {
+          bookingId,
+          tables: {
+            create: tables.map((table: any) => ({
+              tableNumber: table.id,
+              positionX: table.x,
+              positionY: table.y,
+            }))
+          }
+        }
+      });
+    }
+
+    return updatedBooking;
+  });
+
+  // 3. הפקת ה-PDF ושליחה במייל ללקוח
+  if (clientSignature) {
+    try {
+      const pdfData = {
+        eventCode: updated.eventCode,
+        clientAFullName: updated.clientAFullName,
+        clientAIdNumber: updated.clientAIdNumber,
+        clientAPhone: updated.clientAPhone || undefined,
+        clientAEmail: updated.clientAEmail || undefined,
+        clientBFullName: updated.clientBFullName || undefined,
+        clientBIdNumber: updated.clientBIdNumber || undefined,
+        clientBPhone: updated.clientBPhone || undefined,
+        clientBEmail: updated.clientBEmail || undefined,
+        eventDate: booking.eventDate.date.toString(),
+        guestCount: updated.guestCount,
+        eventType: updated.eventType,
+        timeOfDay: updated.timeOfDay || undefined,
+        clientSignatureUrl: clientSignature,
+        eventForm: booking.eventForm || {} 
+      };
+
+      const contractPdfBuffer = await generateEventFormPDF(pdfData);
+      
+      const clientEmail = updated.clientAEmail || updated.clientBEmail;
+      if (clientEmail) {
+        await sendPDFToClient(
+          clientEmail, 
+          updated.clientAFullName, 
+          booking.eventDate.date.toString(), 
+          contractPdfBuffer
+        );
+      }
+    } catch (pdfError) {
+      console.error("שגיאה בהפקת או שליחת חוזה ה-PDF:", pdfError);
+    }
+  }
+
+  io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
+  res.status(200).json({ success: true, message: 'האירוע נסגר והחוזה נחתם בהצלחה!', data: updated });
+});
+export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
+  const bookings = await prisma.booking.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { eventDate: true, eventForm: true, additions: true } 
+  });
+  res.status(200).json({ success: true, count: bookings.length, data: bookings });
+});
+
+export const releaseOptions = catchAsync(async (req: Request, res: Response) => {
+  const { dateIds, cancelReason, clientName } = req.body; 
+  
+  if (!dateIds || dateIds.length === 0) return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לשחרור.' });
+
+  // טרנזקציה להבטחת סנכרון במחיקה
+  await prisma.$transaction(async (tx) => {
+    await tx.eventDate.updateMany({
+      where: { id: { in: dateIds } },
+      data: { status: 'AVAILABLE', optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null }
+    });
+
+    await tx.booking.deleteMany({ 
+      where: { eventDate: { id: { in: dateIds } } } 
+    });
+    
+    if (cancelReason) {
+      await tx.cancellationLog.create({
+        data: {
+          reason: cancelReason,
+          clientName: clientName || 'לא צוין',
+        }
+      });
+    }
+  });
+
+  res.status(200).json({ success: true, message: 'התאריכים שוחררו והסטטיסטיקה נשמרה בהצלחה.' });
+});
+
+export const bumpOption = catchAsync(async (req: Request, res: Response) => {
+  const { dateId } = req.body;
+  const eventDate = await prisma.eventDate.findUnique({
+    where: { id: dateId },
+    include: { bookings: true } 
+  });
+
+  if (!eventDate || eventDate.status !== 'OPTION') return res.status(400).json({ success: false, message: 'התאריך אינו מוגדר כאופציה.' });
+
+  const newDeadline = new Date();
+  newDeadline.setHours(newDeadline.getHours() + 3);
+  await prisma.eventDate.update({ where: { id: dateId }, data: { optionExpiresAt: newDeadline } });
+
+  for (const booking of eventDate.bookings) {
+      if (booking.clientAEmail) await sendBumpEmail(booking.clientAEmail, booking.clientAFullName, eventDate.date.toString(), newDeadline);
+      if (booking.clientAPhone) {
+          await sendBumpWhatsApp(booking.clientAPhone.split(' | ')[0].trim(), booking.clientAFullName, eventDate.date.toString(), newDeadline);
+      }
+  }
+
+  res.status(200).json({ success: true, message: 'הדד-ליין קוצר.', newDeadline });
+});
