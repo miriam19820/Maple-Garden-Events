@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
+import { PrismaClient } from '@prisma/client'; 
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const prisma = new PrismaClient(); 
 
 export const login = async (req: Request, res: Response) => {
   const { token } = req.body;
@@ -26,22 +28,21 @@ export const login = async (req: Request, res: Response) => {
     const googleUserEmail = payload.email.toLowerCase().trim();
     const userName = payload.name || 'מנהל מערכת';
 
-    // 2. בדיקת הרשאות (ניקוי רווחים ואותיות קטנות)
-    const allowedEmails = (process.env.ALLOWED_EMAILS || '')
-      .split(',')
-      .map(email => email.trim().toLowerCase());
+    // 2. בדיקת הרשאות מול מסד הנתונים (Prisma)
+    // כאן השתמשנו ב-googleUserEmail שחילצנו הרגע מהטוקן
+    const user = await prisma.authorizedUser.findUnique({
+      where: { email: googleUserEmail }
+    });
 
-    console.log("--- בדיקת התחברות ---");
-    console.log("מייל מגוגל (נקי):", googleUserEmail);
-    console.log("רשימת מורשים:", allowedEmails);
-
-    if (!allowedEmails.includes(googleUserEmail)) {
+    if (!user) {
       console.log("❌ גישה נדחתה עבור:", googleUserEmail);
       return res.status(403).json({ 
         success: false, 
         message: 'אין למשתמש זה הרשאות גישה למערכת.' 
       });
     }
+
+    console.log("✅ גישה אושרה עבור:", googleUserEmail);
 
     // 3. ייצור טוקן פנימי
     const secret = process.env.JWT_SECRET || 'fallback_secret';

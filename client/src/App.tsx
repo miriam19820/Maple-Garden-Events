@@ -13,6 +13,7 @@ import MenuDisplay from './components/MenuDisplay/MenuDisplay';
 import { SettingsManager } from './components/SettingsManager/SettingsManager';
 import FeedbackPage from './components/FeedbackPage/FeedbackPage';
 import { Login } from './components/Login/Login'; // ייבוא מסך ההתחברות שיצרנו
+import Gallery from './components/Gallery/Gallery';
 
 const CalendarWrapper = () => {
   const navigate = useNavigate();
@@ -79,6 +80,7 @@ function App() {
         <Route path="/option" element={<ProtectedRoute><AppLayout><OptionPage /></AppLayout></ProtectedRoute>} />
         <Route path="/menu" element={<ProtectedRoute><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><PageShell><SettingsManager /></PageShell></ProtectedRoute>} />
+        <Route path="/gallery" element={<AppLayout><Gallery /></AppLayout>} />
       </Routes>
     </BrowserRouter>
   );

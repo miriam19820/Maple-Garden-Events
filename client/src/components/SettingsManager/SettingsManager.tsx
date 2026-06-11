@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './SettingsManager.css';
-// הוספנו את פונקציית ה-fetch המאובטחת שלנו
 import { apiFetch } from '../../services/api';
+// הוספנו את הייבוא של הקומפוננטה החדשה:
+import { AuthorizedUsers } from './AuthorizedUsers';
+
 
 export const SettingsManager = () => {
   const [globalSettings, setGlobalSettings] = useState<any>({});
@@ -18,7 +20,6 @@ export const SettingsManager = () => {
   const fetchData = async () => {
     try {
       const [settingsRes, extrasRes, kashrutRes] = await Promise.all([
-        // הוחלף ל-apiFetch
         apiFetch('http://localhost:5000/api/settings/global'),
         apiFetch('http://localhost:5000/api/settings/extras'),
         apiFetch('http://localhost:5000/api/kashrut')
@@ -39,7 +40,6 @@ export const SettingsManager = () => {
 
   const saveGlobalSettings = async () => {
     try {
-      // הוחלף ל-apiFetch
       await apiFetch('http://localhost:5000/api/settings/global', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -53,14 +53,12 @@ export const SettingsManager = () => {
 
   const updateKashrut = async (id: string, data: any) => {
     try {
-      // הוחלף ל-apiFetch
       const response = await apiFetch(`http://localhost:5000/api/kashrut/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       
-      // הוספנו בדיקה: אם השרת דוחה את הבקשה, נציג לך למה!
       if (!response.ok) {
         alert(`השרת סירב לשמור! קוד שגיאה: ${response.status}. תבדקי את החלון השחור של השרת.`);
         return;
@@ -76,9 +74,7 @@ export const SettingsManager = () => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Image = reader.result as string;
-      // עדכון ה-UI מיידית
       setKashruts(prev => prev.map(k => k.id === id ? { ...k, imageUrl: base64Image } : k));
-      // שליחה לשרת
       updateKashrut(id, { imageUrl: base64Image });
     };
     reader.readAsDataURL(file);
@@ -89,7 +85,6 @@ export const SettingsManager = () => {
     if (!newExtra.name || !newExtra.price) return alert('נא למלא שם ומחיר');
 
     try {
-      // הוחלף ל-apiFetch
       await apiFetch('http://localhost:5000/api/settings/extras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,7 +99,6 @@ export const SettingsManager = () => {
 
   const toggleExtraStatus = async (id: string, currentStatus: boolean) => {
     try {
-      // הוחלף ל-apiFetch
       await apiFetch(`http://localhost:5000/api/settings/extras/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -116,12 +110,10 @@ export const SettingsManager = () => {
     }
   };
 
-  // עדכון מקומי של התאריך בסטייט כדי למנוע קפיצות וניתוקים בזמן ההקלדה
   const handleDateChangeLocal = (id: string, newDate: string) => {
     setKashruts(prev => prev.map(k => k.id === id ? { ...k, validUntil: newDate } : k));
   };
 
-  // פונקציית עזר לפרסור תאריך בטוח לתוך ה-input (מונע את תופעת שנת 0002)
   const formatDateForInput = (dateString: any) => {
     if (!dateString) return '';
     const d = new Date(dateString);
@@ -130,7 +122,6 @@ export const SettingsManager = () => {
 
   if (loading) return <div>טוען הגדרות...</div>;
 
-  // שליפת התעודה הראשונה/המרכזית של האולם
   const mainKashrut = kashruts[0];
 
   return (
@@ -248,7 +239,7 @@ export const SettingsManager = () => {
           </table>
         </div>
 
-        {/* חלון ניהול תעודת כשרות יחידה וכללית לאולם (במקום הטבלה) */}
+        {/* חלון ניהול תעודת כשרות */}
         <div className="settings-card" style={{gridColumn: '1 / -1'}}>
           <h2>ניהול תעודת כשרות האולם</h2>
           <p style={{color: '#666', fontSize: '14px', marginBottom: '15px'}}>התעודה המועלת כאן תוצג אוטומטית בתוסף הפקת האירועים עבור הלקוח.</p>
@@ -294,6 +285,11 @@ export const SettingsManager = () => {
           ) : (
             <div style={{padding: '20px', textAlign: 'center', color: '#666'}}>טוען נתוני תעודת כשרות...</div>
           )}
+        </div>
+
+        {/* הוספנו את רכיב ניהול המשתמשים כאן למטה - פורס על כל הרוחב */}
+        <div style={{gridColumn: '1 / -1'}}>
+          <AuthorizedUsers />
         </div>
 
       </div>
