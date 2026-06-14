@@ -19,12 +19,15 @@ export const AuthorizedUsers = () => {
   }, []);
 
   const handleAddEmail = async () => {
-    if (!email) return;
+    // ✅ רשת ביטחון: מוודא סופית שהמייל באותיות קטנות וללא רווחים לפני השליחה
+    const emailToSave = email.toLowerCase().trim();
+    if (!emailToSave) return;
+    
     try {
       const res = await apiFetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: emailToSave })
       });
       if (!res.ok) throw new Error('שגיאה בהוספה');
       window.location.reload(); 
@@ -59,7 +62,8 @@ export const AuthorizedUsers = () => {
           type="email" 
           placeholder="הקלידי מייל של מנהל חדש..." 
           value={email} 
-          onChange={(e) => setEmail(e.target.value)}
+          // ✅ התיקון כאן: כל אות שמוקלדת הופכת מיד לקטנה, ורווחים נמחקים
+          onChange={(e) => setEmail(e.target.value.toLowerCase().trim())}
           style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
         />
         <button 

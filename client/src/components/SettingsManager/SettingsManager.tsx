@@ -17,27 +17,30 @@ export const SettingsManager = () => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+ const fetchData = async () => {
     try {
       const [settingsRes, extrasRes, kashrutRes] = await Promise.all([
         apiFetch('http://localhost:5000/api/settings/global'),
         apiFetch('http://localhost:5000/api/settings/extras'),
         apiFetch('http://localhost:5000/api/kashrut')
       ]);
+      
       const settingsData = await settingsRes.json();
       const extrasData = await extrasRes.json();
       const kashrutData = await kashrutRes.json();
       
       setGlobalSettings(settingsData);
-      setExtras(extrasData);
-      setKashruts(kashrutData);
+      
+      // התיקון שלנו: מוודאים שקיבלנו באמת מערך לפני ששומרים בסטייט
+      setExtras(Array.isArray(extrasData) ? extrasData : []);
+      setKashruts(Array.isArray(kashrutData) ? kashrutData : []);
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching settings:', error);
       alert('שגיאה בטעינת נתונים');
     }
   };
-
   const saveGlobalSettings = async () => {
     try {
       await apiFetch('http://localhost:5000/api/settings/global', {
