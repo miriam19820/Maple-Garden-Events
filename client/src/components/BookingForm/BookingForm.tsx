@@ -99,6 +99,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
     calendarDateId: '', eventType: '', timeOfDay: '', startTime: '', endTime: '',
     guestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: '', clientSignatureUrl: '',
+    akumApprovalCode: '', hasMusic: false,
   });
 
   const [menuNotesList, setMenuNotesList] = useState<string[]>([]);
@@ -167,6 +168,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
           calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime, endTime: parsedTime.endTime,
           guestCount: String(b.guestCount ?? ''), optionalGuestCount: '', finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
+          akumApprovalCode: b.akumApprovalCode || '', hasMusic: !!b.hasMusic,
         });
         const notesBundle = parseNotesBundle(b.clientComments || '');
         setMenuNotesList(notesBundle.menu);
@@ -251,9 +253,10 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     try {
       const payload = {
         ...formData,
+        hasMusic: isWedding ? true : formData.hasMusic, // חובה לחתונה
         clientComments: serializeNotesBundle({ menu: menuNotesList, internal: internalNotesList }),
         createdAt: new Date().toISOString(), allSelectedDates: selectedDatesDisplay, isOption, optionDurationHours,
-        servingStyle, kosherType, upgrades, depositMethod, contractSigned, hasMusic: upgrades.amplification, calculatedTotals: totals, clientSignature: signatureData 
+        servingStyle, kosherType, upgrades, depositMethod, contractSigned, calculatedTotals: totals, clientSignature: signatureData 
       };
 
       const url = isEditMode ? `http://localhost:5000/api/bookings/${editId}` : 'http://localhost:5000/api/bookings';
@@ -333,7 +336,57 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
             </div>
           )}
           
-          {/* כפתור השמירה הראשי (בלי הכפתור הכחול המיותר) */}
+          {/* 🎵 קופסת התשלום לאקו"ם (מותנה סוג אירוע/מוזיקה) 🎵 */}
+          {!isOption && (
+            <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
+              <span style={{ display: 'block', fontWeight: 'bold', color: '#92400e', marginBottom: '8px' }}>
+                 🎵 הסדרת רישיון אקו"ם
+              </span>
+              
+              {!isWedding && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', cursor: 'pointer', color: '#b45309', fontWeight: '500' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formData.hasMusic} 
+                    onChange={(e) => setFormData(prev => ({ ...prev, hasMusic: e.target.checked }))} 
+                    style={{ width: '16px', height: '16px', accentColor: '#d97706' }}
+                  />
+                  יש מוזיקה באירוע (דורש תשלום לאקו"ם)
+                </label>
+              )}
+
+              {(isWedding || formData.hasMusic) && (
+                <>
+                  <span style={{ fontSize: '0.95rem', color: '#b45309', display: 'block', marginBottom: '10px' }}>
+                    {isWedding ? 'חובה להסדיר רישיון השמעת מוזיקה מול אקו"ם עבור אירועי חתונה.' : 'מכיוון שציינת שיש מוזיקה באירוע, חובה להסדיר רישיון מול אקו"ם.'}
+                  </span>
+                  <a 
+                    href="https://apps.acum.org.il/licenses/family-event/register-payment?action=payFamilyEvent" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ color: '#d97706', fontWeight: 'bold', textDecoration: 'underline', display: 'inline-block', marginBottom: '15px' }}
+                  >
+                    לתשלום והפקת הרישיון לאקו"ם לחצו כאן
+                  </a>
+                  
+                  <div className={styles.inputGroup}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#92400e' }}>קוד אישור אקו"ם (יתקבל לאחר התשלום):</label>
+                    <input
+                      type="text"
+                      name="akumApprovalCode"
+                      value={formData.akumApprovalCode}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="הזן מספר אישור שקיבלת לאחר התשלום..."
+                      style={{ borderColor: '#fcd34d', backgroundColor: '#fff', width: '100%', maxWidth: '300px' }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* כפתור השמירה הראשי */}
           <div className={styles.actions} style={{ display: 'flex', gap: '15px', justifyContent: 'flex-start', marginTop: '10px' }}>
             <button
               type="submit"

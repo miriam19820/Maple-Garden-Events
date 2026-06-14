@@ -22,6 +22,7 @@ interface Booking {
   eventType: string;
   timeOfDay: string;
   eventForm?: any;
+  akumApprovalCode?: string;
 }
 
 interface EventFormData {
@@ -893,17 +894,40 @@ const EventFormManager = () => {
               </div>
             </div>
 
-            {/* אקו"ם */}
+           {/* אקו"ם */}
             <div className={styles.section}>
-              <h4>🎵 אקו״ם</h4>
-              <div className={styles.field}>
-                <label>האם שילם</label>
-                {/* תוקן! כבר לא מחובר לצ'ק הפיקדון אלא לשדה משלו akumPaid */}
-                <input
-                  type="checkbox"
-                  checked={formData.akumPaid || false}
-                  onChange={e => handleCheckboxChange('akumPaid', e.target.checked)}
-                />
+              <h4>🎵 אקו"ם</h4>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {/* שדה תצוגה אוטומטי לקוד האישור מההזמנה */}
+                <div className={styles.field}>
+                  <label>קוד אישור אקו"ם </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={selected.akumApprovalCode || 'לא הוזן קוד אישור'}
+                    style={{ 
+                      backgroundColor: '#f8fafc', 
+                      color: selected.akumApprovalCode ? '#15803d' : '#94a3b8', 
+                      fontWeight: 'bold', 
+                      cursor: 'not-allowed',
+                      borderColor: selected.akumApprovalCode ? '#bbf7d0' : '#e2e8f0'
+                    }}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    <input
+                      type="checkbox"
+                      // אם יש קוד אישור שמור בהזמנה, נסמן את התיבה אוטומטית. אחרת, נסתמך על מה שנשמר בטופס
+                      checked={formData.akumPaid || !!selected.akumApprovalCode}
+                      onChange={e => handleCheckboxChange('akumPaid', e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: '#16a34a' }}
+                    />
+                    האם שילם לאקו"ם
+                  </label>
+                </div>
               </div>
             </div>
 

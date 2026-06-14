@@ -177,3 +177,38 @@
 }
 .submitBtn:hover { background: #334155; }
 .submitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Acum Alert Box Styling */
+.akumAlertBox {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 15px;
+  margin-top: 10px;
+  text-align: right;
+}
+
+.akumAlertTitle {
+  display: block;
+  font-weight: bold;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.akumAlertText {
+  font-size: 0.95rem;
+  color: #475569;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.akumAlertLink {
+  color: #2563eb;
+  font-weight: bold;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.akumAlertLink:hover {
+  color: #1d4ed8;
+}

@@ -17,14 +17,12 @@ const cancelReasonsList = [
 ];
 
 const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
-  // הוספנו את המצב 'cancelReason'
   const [step, setStep] = useState<'choose' | 'finalize' | 'cancelReason'>('choose');
   
   const [advancePaid, setAdvancePaid] = useState('');
   const [hasMusic, setHasMusic] = useState(true);
   const [akumCode, setAkumCode] = useState('');
   
-  // ניהול סיבת הביטול
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,7 +30,6 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
     ? new Date(option.eventDate.date).toLocaleDateString('he-IL')
     : '';
 
-  // פונקציית הביטול המעודכנת
   const handleConfirmCancel = async () => {
     if (!cancelReason) {
       alert('חובה לבחור סיבת ביטול עבור הסטטיסטיקה של המערכת.');
@@ -46,7 +43,7 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           dateIds: [option.calendarDateId],
-          cancelReason: cancelReason, // שולחים את הסיבה לשרת
+          cancelReason: cancelReason,
           clientName: option.clientAFullName
         }),
       });
@@ -65,7 +62,7 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookingId: option.id, // התיקון הקריטי ממקודם!
+          bookingId: option.id,
           advancePaid,
           hasMusic,
           akumApprovalCode: akumCode,
@@ -90,7 +87,6 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
 
-        {/* שלב 1: בחירת פעולה */}
         {step === 'choose' && (
           <div className={styles.body}>
             <div className={styles.infoBox}>
@@ -113,7 +109,6 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
           </div>
         )}
 
-        {/* שלב 2: סיבת ביטול (חדש!) */}
         {step === 'cancelReason' && (
           <div className={styles.body}>
             <p className={styles.question} style={{ color: '#dc2626' }}>שימו לב: ביטול האופציה ישחרר את התאריך באופן מיידי.</p>
@@ -147,7 +142,6 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
           </div>
         )}
 
-        {/* שלב 3: סגירת אירוע (קיים) */}
         {step === 'finalize' && (
           <form onSubmit={handleFinalize}>
             <div className={styles.body}>
@@ -156,6 +150,7 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
                 <div className={styles.infoRow}><label>לקוח:</label><span>{option.clientAFullName}</span></div>
                 <div className={styles.infoRow}><label>לתשלום:</label><span style={{ fontWeight: 'bold', color: '#1e293b' }}>₪{option.totalPrice?.toLocaleString()}</span></div>
               </div>
+              
               <div className={styles.inputGroup}>
                 <label className={styles.inputLabel}>מקדמה ששולמה (₪) *</label>
                 <input
@@ -168,6 +163,7 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
                   placeholder="לדוגמה: 5000"
                 />
               </div>
+
               <div className={styles.checkboxRow}>
                 <input
                   type="checkbox"
@@ -178,6 +174,29 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
                 />
                 <label htmlFor="musicCheck" className={styles.inputLabel}>יש מוזיקה באירוע (דורש אישור אקו"ם)</label>
               </div>
+
+              {/* קופסת אקו"ם עם עיצוב נקי המיובא מה-CSS */}
+              {(hasMusic || option.eventType === 'חתונה') && (
+                <div className={styles.akumAlertBox}>
+                  <span className={styles.akumAlertTitle}>
+                     הסדרת רישיון אקו"ם
+                  </span>
+                  <span className={styles.akumAlertText}>
+                    {option.eventType === 'חתונה' 
+                      ? 'חובה להסדיר רישיון השמעת מוזיקה מול אקו"ם עבור אירועי חתונה.' 
+                      : 'מכיוון שציינת שיש מוזיקה באירוע, יש להסדיר רישיון מול אקו"ם.'}
+                  </span>
+                  <a 
+                    href="https://apps.acum.org.il/licenses/family-event/register-payment?action=payFamilyEvent" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={styles.akumAlertLink}
+                  >
+                    לתשלום והפקת הרישיון לאקו"ם לחצו כאן
+                  </a>
+                </div>
+              )}
+
               {hasMusic && (
                 <div className={styles.inputGroup}>
                   <label className={styles.inputLabel}>קוד אישור אקו"ם</label>
@@ -186,11 +205,12 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
                     className={styles.input}
                     value={akumCode}
                     onChange={e => setAkumCode(e.target.value)}
-                    placeholder="הזן מספר אישור"
+                    placeholder="הזן מספר אישור שקיבלת לאחר התשלום"
                   />
                 </div>
               )}
             </div>
+
             <div className={styles.footer}>
               <button type="button" className={styles.backBtn} onClick={() => setStep('choose')}>חזור</button>
               <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
