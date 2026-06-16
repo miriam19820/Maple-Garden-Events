@@ -3,7 +3,9 @@ import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 
 interface EventFormPDFData {
-  eventCode?: string; // הוספנו את קוד ההזמנה
+  eventCode?: string;
+  isOption?: boolean;
+   // הוספנו את קוד ההזמנה
   clientAFullName: string;
   clientAIdNumber: string;
   clientAPhone?: string; // הוספנו טלפון צד א
@@ -77,7 +79,7 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
 <meta charset="UTF-8"/>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; direction: rtl; padding: 30px; color: #222; font-size: 13px; }
+  body { font-family: Arial, sans-serif; direction: rtl; padding: 30px; color: #222; font-size: 13px; position: relative; }
   h1 { text-align: center; font-size: 22px; margin-bottom: 4px; color: #2c3e50; }
   .subtitle { text-align: center; color: #666; font-size: 12px; margin-bottom: 16px; font-weight: bold; }
   .divider { border: none; border-top: 2px solid #2c3e50; margin: 12px 0; }
@@ -97,9 +99,25 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
   .signature-text { font-size: 11px; color: #000; margin-bottom: 15px; font-weight: bold; text-align: center;}
   .signature-img { max-width: 250px; max-height: 100px; display: block; margin: 0 auto; border-bottom: 1px solid #000; padding-bottom: 5px; }
   .signature-name { text-align: center; font-weight: bold; margin-top: 5px; font-size: 14px;}
+
+  /* עיצוב חותמת המים ב-PDF */
+  .watermark {
+    position: fixed;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 130px;
+    color: rgba(200, 200, 200, 0.2);
+    font-weight: bold;
+    z-index: -100;
+    white-space: nowrap;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
+  ${data.isOption ? '<div class="watermark">טיוטה - דוגמא</div>' : ''}
+
   <h1>🌿 גן מייפל אירועים</h1>
   <p class="subtitle">טופס הפקת אירוע וחוזה התקשרות | הופק: ${new Date().toLocaleDateString('he-IL')} | קוד הזמנה: ${data.eventCode || 'לא צוין'}</p>
   <hr class="divider"/>

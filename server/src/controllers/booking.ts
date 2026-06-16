@@ -455,6 +455,9 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
     eventCode = await allocateEventCode('EVT');
   }
 
+  // 🔥 התיקון: שימוש בחתימה החדשה (אם התקבלה כרגע) או בחתימה הקיימת שכבר שמורה במסד הנתונים!
+  const finalSignature = clientSignature || booking.clientSignatureUrl;
+
   // 2. טרנזקציה לעדכון ההזמנה, שמירת החתימה ושמירת סידור השולחנות
   const updated = await prisma.$transaction(async (tx) => {
     const updatedBooking = await tx.booking.update({
@@ -467,8 +470,8 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         paymentStatus: 'PARTIAL',
         isOption: false,
         eventCode,
-        isContractSigned: true, 
-        clientSignatureUrl: clientSignature 
+        isContractSigned: !!finalSignature, // הופך ל-true אם יש חתימה
+        clientSignatureUrl: finalSignature // שומר את החתימה (החדשה או הישנה)
       }
     });
 
@@ -508,10 +511,11 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
   });
 
   // 3. הפקת ה-PDF ושליחה במייל ללקוח
-  if (clientSignature) {
+  if (finalSignature) {
     try {
       const pdfData = {
         eventCode: updated.eventCode,
+        isOption: false, // 🔥 התיקון: מבטיח שסימן המים לא יופיע בחוזה הסופי!
         clientAFullName: updated.clientAFullName,
         clientAIdNumber: updated.clientAIdNumber,
         clientAPhone: updated.clientAPhone || undefined,
@@ -524,7 +528,7 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         guestCount: updated.guestCount,
         eventType: updated.eventType,
         timeOfDay: updated.timeOfDay || undefined,
-        clientSignatureUrl: clientSignature,
+        clientSignatureUrl: finalSignature, // שולח את החתימה ל-PDF
         eventForm: booking.eventForm || {} 
       };
 
