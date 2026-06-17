@@ -32,29 +32,44 @@ function maxSequenceFromBookings(eventCodes: { eventCode: string }[]): number {
   return max;
 }
 
+// פונקציית עזר לניסיון התחברות עם השהיה
+async function withRetry<T>(fn: () => Promise<T>, retries = 5, delay = 2000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    console.log(`Connection failed, retrying in ${delay}ms... (${retries} retries left)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return withRetry(fn, retries - 1, delay);
+  }
+}
+
 export async function initOrderSequence(): Promise<void> {
-  const bookings = await prisma.booking.findMany({
-    select: { eventCode: true },
-  });
-  const maxFromCodes = maxSequenceFromBookings(bookings);
-
-  const settings = await prisma.systemSettings.findUnique({
-    where: { id: SETTINGS_ID },
-  });
-
-  if (!settings) {
-    await prisma.systemSettings.create({
-      data: { id: SETTINGS_ID, nextEventNumber: maxFromCodes },
+  // אנחנו עוטפים את הכל ב-withRetry כדי לתת ל-Neon זמן להתעורר
+  await withRetry(async () => {
+    const bookings = await prisma.booking.findMany({
+      select: { eventCode: true },
     });
-    return;
-  }
+    const maxFromCodes = maxSequenceFromBookings(bookings);
 
-  if (settings.nextEventNumber < maxFromCodes) {
-    await prisma.systemSettings.update({
+    const settings = await prisma.systemSettings.findUnique({
       where: { id: SETTINGS_ID },
-      data: { nextEventNumber: maxFromCodes },
     });
-  }
+
+    if (!settings) {
+      await prisma.systemSettings.create({
+        data: { id: SETTINGS_ID, nextEventNumber: maxFromCodes },
+      });
+      return;
+    }
+
+    if (settings.nextEventNumber < maxFromCodes) {
+      await prisma.systemSettings.update({
+        where: { id: SETTINGS_ID },
+        data: { nextEventNumber: maxFromCodes },
+      });
+    }
+  });
 }
 
 export async function allocateEventCode(prefix: EventCodePrefix): Promise<string> {

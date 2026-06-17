@@ -5,15 +5,14 @@ import { he } from 'date-fns/locale';
 interface EventFormPDFData {
   eventCode?: string;
   isOption?: boolean;
-   // הוספנו את קוד ההזמנה
   clientAFullName: string;
   clientAIdNumber: string;
-  clientAPhone?: string; // הוספנו טלפון צד א
-  clientAEmail?: string; // הוספנו מייל צד א
+  clientAPhone?: string;
+  clientAEmail?: string;
   clientBFullName?: string;
   clientBIdNumber?: string;
-  clientBPhone?: string; // הוספנו טלפון צד ב
-  clientBEmail?: string; // הוספנו מייל צד ב
+  clientBPhone?: string;
+  clientBEmail?: string;
   eventDate: string;
   guestCount: number;
   eventType: string;
@@ -44,6 +43,7 @@ interface EventFormPDFData {
     akumCode?: string | null;
     kashrut?: string | null;
     notes?: string | null;
+    menuSelections?: any; // <-- שדה התפריט
   };
 }
 
@@ -72,6 +72,37 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
 
   let notesList: string[] = [];
   try { notesList = f.notes ? JSON.parse(f.notes) : []; } catch {}
+
+  // --------------------------------------------------------
+  // יצירת טבלת התפריט הנבחר (הגנה מפני קריסות)
+  // --------------------------------------------------------
+  let menuHtml = '';
+  let parsedMenu: Record<string, string[]> = {};
+  
+  try {
+    if (typeof f.menuSelections === 'string' && f.menuSelections.trim() !== '') {
+      parsedMenu = JSON.parse(f.menuSelections);
+    } else if (f.menuSelections && typeof f.menuSelections === 'object') {
+      parsedMenu = f.menuSelections;
+    }
+
+    const menuKeys = Object.keys(parsedMenu);
+    if (menuKeys.length > 0) {
+      menuHtml = `
+      <div class="section">
+        <div class="section-title">🍽️ תפריט האירוע (מנות נבחרות)</div>
+        <table>
+          ${menuKeys.map(category => {
+            const items = parsedMenu[category];
+            const itemsList = Array.isArray(items) && items.length > 0 ? items.join(', ') : 'לא נבחרו מנות';
+            return row(category, itemsList);
+          }).join('')}
+        </table>
+      </div>`;
+    }
+  } catch (err) {
+    console.error("שגיאה בפענוח התפריט ל-PDF:", err);
+  }
 
   const html = `<!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -170,6 +201,8 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
     </table>
   </div>` : ''}
 
+  ${menuHtml}
+
   <div class="section">
     <div class="section-title">✅ אישורים</div>
     <table>
@@ -226,7 +259,11 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
 </html>`;
 
   const { default: puppeteer } = await import('puppeteer');
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+const browser = await puppeteer.launch({ 
+    headless: true, 
+    channel: 'chrome', // <-- הפקודה שמורה לשרת להשתמש בכרום האמיתי והרגיל שמותקן אצלך
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'] 
+  });
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });

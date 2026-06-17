@@ -5,11 +5,9 @@ import { sendPDFToClient, sendWhatsAppMessage } from '../Services/emailService';
 
 export const eventFormController = {
 
-  // חיפוש הזמנות לפי שם או ת"ז
   async searchBookings(req: Request, res: Response) {
     try {
       const q = typeof req.query.q === 'string' ? req.query.q : '';
-
       const bookings = await prisma.booking.findMany({
         where: {
           status: 'BOOKED',
@@ -22,27 +20,23 @@ export const eventFormController = {
         },
         include: { eventDate: true, eventForm: true }
       });
-      res.json(bookings);
+      res.json({ success: true, data: bookings });
     } catch (e) {
       res.status(500).json({ error: 'שגיאה בחיפוש' });
     }
   },
 
-  // שמירה/עדכון טופס + שליחת מייל/WhatsApp
   async upsertForm(req: Request, res: Response) {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      
-      // מחלצים את הנתונים - מוציאים את ה-tables מה-body כדי לטפל בהם בנפרד
       const { id, createdAt, updatedAt, booking: _booking, bookingId: _bid, tables, ...formData } = req.body;
 
-      // שמירה ב-DB כולל טבלאות השולחנות
       const form = await prisma.eventForm.upsert({
         where: { bookingId },
         update: { 
           ...formData,
           tables: tables ? {
-            deleteMany: {}, // מוחקים את המיקומים הישנים
+            deleteMany: {},
             create: tables.map((table: any) => ({
               tableNumber: table.id,
               positionX: table.x,
@@ -63,7 +57,6 @@ export const eventFormController = {
         }
       });
 
-      // שליחת PDF ללקוח
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: { eventDate: true }
@@ -72,6 +65,7 @@ export const eventFormController = {
       if (booking) {
         try {
           const pdfData = {
+            eventCode: booking.eventCode,
             clientAFullName: booking.clientAFullName,
             clientAIdNumber: booking.clientAIdNumber,
             clientBFullName: booking.clientBFullName || undefined,
@@ -80,22 +74,37 @@ export const eventFormController = {
             guestCount: booking.guestCount,
             eventType: booking.eventType,
             timeOfDay: booking.timeOfDay || undefined,
+            clientSignatureUrl: booking.clientSignatureUrl,
             eventForm: form,
           };
 
           const pdfBuffer = await generateEventFormPDF(pdfData);
 
-          const clientEmail = booking.clientAEmail || booking.clientBEmail;
-          if (clientEmail) {
-            await sendPDFToClient(clientEmail, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
+          // בניית רשימת נמענים למייל ולוואטסאפ לפי סוג אירוע
+          const emails: string[] = [];
+          const phones: string[] = [];
+
+          // תמיד מוסיפים את צד א' (הצד המרכזי) אם קיים לו מידע
+          if (booking.clientAEmail) emails.push(booking.clientAEmail);
+          if (booking.clientAPhone) phones.push(booking.clientAPhone);
+
+          // מוסיפים את צד ב' רק אם סוג האירוע הוא חתונה
+          if (booking.eventType === 'חתונה') {
+            if (booking.clientBEmail) emails.push(booking.clientBEmail);
+            if (booking.clientBPhone) phones.push(booking.clientBPhone);
           }
 
-          const clientPhone = booking.clientAPhone || booking.clientBPhone;
-          if (clientPhone) {
-            await sendWhatsAppMessage(clientPhone, booking.clientAFullName, booking.eventDate.date.toString());
+          // שליחת מייל לכל מי שברשימה
+          for (const email of emails) {
+            await sendPDFToClient(email, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
+          }
+
+          // שליחת וואטסאפ לכל מי שברשימה
+          for (const phone of phones) {
+            await sendWhatsAppMessage(phone, booking.clientAFullName, booking.eventDate.date.toString());
           }
         } catch (emailError) {
-          console.warn('Failed to send PDF:', emailError);
+          console.warn('Failed to send communications:', emailError);
         }
       }
 
@@ -106,7 +115,6 @@ export const eventFormController = {
     }
   },
 
-  // שליפת טופס לפי bookingId
   async getForm(req: Request, res: Response) {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
@@ -114,7 +122,7 @@ export const eventFormController = {
         where: { bookingId },
         include: { 
           booking: { include: { eventDate: true } },
-          tables: true // מוסיף את השולחנות לשליפה
+          tables: true 
         }
       });
       res.json(form);
@@ -123,7 +131,6 @@ export const eventFormController = {
     }
   },
 
-  // שליפת כל הטפסים
   async getAllForms(req: Request, res: Response) {
     try {
       const forms = await prisma.eventForm.findMany({
@@ -136,16 +143,14 @@ export const eventFormController = {
     }
   },
 
-  // הפקת PDF
   async generatePDF(req: Request, res: Response) {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: { 
           eventDate: true,
-          eventForm: { include: { tables: true } } // כולל טבלאות ב-PDF
+          eventForm: { include: { tables: true } }
         }
       });
 
@@ -154,6 +159,7 @@ export const eventFormController = {
       }
 
       const pdfData = {
+        eventCode: booking.eventCode,
         clientAFullName: booking.clientAFullName,
         clientAIdNumber: booking.clientAIdNumber,
         clientBFullName: booking.clientBFullName || undefined,
@@ -162,17 +168,75 @@ export const eventFormController = {
         guestCount: booking.guestCount,
         eventType: booking.eventType,
         timeOfDay: booking.timeOfDay || undefined,
+        clientSignatureUrl: booking.clientSignatureUrl,
         eventForm: booking.eventForm,
       };
 
       const pdfBuffer = await generateEventFormPDF(pdfData);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="event-form-${new Date().toISOString().split('T')[0]}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="event-form-${booking.clientAFullName}.pdf"`);
       res.send(pdfBuffer);
     } catch (e) {
       console.error('PDF generation error:', e);
       res.status(500).json({ error: 'שגיאה בהפקת PDF' });
+    }
+  },
+
+  // הפונקציה החדשה לשליחת המייל אוטומטית בלחיצת כפתור
+  async sendEmail(req: Request, res: Response) {
+    try {
+      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { 
+          eventDate: true,
+          eventForm: { include: { tables: true } }
+        }
+      });
+
+      if (!booking || !booking.eventForm) {
+        return res.status(404).json({ error: 'הזמנה או טופס לא נמצאו' });
+      }
+
+      // 1. הכנת הנתונים ליצירת ה-PDF
+      const pdfData = {
+        eventCode: booking.eventCode,
+        clientAFullName: booking.clientAFullName,
+        clientAIdNumber: booking.clientAIdNumber,
+        clientBFullName: booking.clientBFullName || undefined,
+        clientBIdNumber: booking.clientBIdNumber || undefined,
+        eventDate: booking.eventDate.date.toString(),
+        guestCount: booking.guestCount,
+        eventType: booking.eventType,
+        timeOfDay: booking.timeOfDay || undefined,
+        clientSignatureUrl: booking.clientSignatureUrl,
+        eventForm: booking.eventForm,
+      };
+
+      const pdfBuffer = await generateEventFormPDF(pdfData);
+
+      // 2. בדיקה למי לשלוח (לפי חתונה או אירוע אחר)
+      const emails: string[] = [];
+      if (booking.clientAEmail) emails.push(booking.clientAEmail);
+      
+      if (booking.eventType === 'חתונה' && booking.clientBEmail) {
+        emails.push(booking.clientBEmail);
+      }
+
+      if (emails.length === 0) {
+        return res.status(400).json({ error: 'לא מוגדרות כתובות אימייל ללקוחות אלו' });
+      }
+
+      // 3. שליחת המייל עם ה-PDF המצורף
+      for (const email of emails) {
+        await sendPDFToClient(email, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
+      }
+
+      res.json({ success: true, message: 'המייל נשלח בהצלחה' });
+    } catch (e) {
+      console.error('Send email error:', e);
+      res.status(500).json({ error: 'שגיאה בשליחת המייל' });
     }
   }
 };

@@ -4,10 +4,8 @@ import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recha
 import styles from './EventFormManager.module.css';
 import CheckCamera from '../CheckCamera/CheckCamera';
 import CancellationStats from '../CancellationStats/CancellationStats';
-// השארתי את הייבוא, אבל את בחירת הכשרות ננהל כאן כדי שהתמונה בוודאות תעבוד לך
 import KashrutSelector from '../KashrutSelector/KashrutSelector';
 import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
-
 
 interface Booking {
   id: string;
@@ -15,6 +13,9 @@ interface Booking {
   clientAIdNumber: string;
   clientBFullName?: string;
   clientBIdNumber?: string;
+  clientSignatureUrl?: string;
+  clientAEmail?: string; 
+  clientBEmail?: string;
   eventDate: {
     date: string;
   };
@@ -41,22 +42,21 @@ interface EventFormData {
   hasSoundSystem?: boolean;
   hasScreens?: boolean;
   hasFireworks?: boolean;
-  entertainersTotal?: number; // הוספנו סה"כ משמחים
+  entertainersTotal?: number; 
   entertainersBar?: number;
   entertainersSitting?: number;
   entertainersMen?: number;
   entertainersWomen?: number;
   depositCheckUrl?: string;
   depositCheckStatus?: boolean;
-  akumPaid?: boolean; // תוקן - הופרד מצ'ק פיקדון!
+  akumPaid?: boolean; 
   akumCode?: string;
   kashrut?: string;
   notes?: string;
 
-  menuSelections?: Record<string, string[]> | null; // נוסיף | null לכאן
+  menuSelections?: Record<string, string[]> | null;
 }
 
-// רשימת ההכשרים
 const KASHRUT_LIST = [
   "רובין",
   "מחפוד",
@@ -82,22 +82,19 @@ const EventFormManager = () => {
   const [notesList, setNotesList] = useState<string[]>([]);
   const [newNote, setNewNote] = useState('');
 
-  // ניהול תמונת הכשרות
   const [kashrutImage, setKashrutImage] = useState<string | null>(null);
   const [isKashrutModalOpen, setIsKashrutModalOpen] = useState(false);
   
-  // ניהול התפריט (הוספנו סטייט לשליטה על פתיחה וסגירה של המודאל)
   const [selectedMenu, setSelectedMenu] = useState<Record<string, string[]> | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false); 
 
   const handleMenuSave = (menuSelections: Record<string, string[]>) => {
     setSelectedMenu(menuSelections);
-    setIsMenuOpen(false); // סוגר את חלון התפריט אוטומטית אחרי השמירה
+    setIsMenuOpen(false); 
     alert("התפריט נשמר כחלק מפרטי האירוע!");
   };
 
   useEffect(() => {
-    // טעינת הזמנות וטפסים
     fetch('http://localhost:5000/api/bookings')
       .then(r => r.json())
       .then(res => {
@@ -114,7 +111,6 @@ const EventFormManager = () => {
       .then(forms => setAllForms(forms || []))
       .catch(console.error);
 
-    // משיכת תעודת הכשרות הגלובלית מהשרת (כדי שתוצג בטופס)
     fetch('http://localhost:5000/api/kashrut')
       .then(res => res.json())
       .then(data => {
@@ -233,15 +229,12 @@ const EventFormManager = () => {
     }
   };
 
-  // פונקציית השיתוף החדשה לווצאפ ומייל
   const handleShare = () => {
     if (!selected) return;
     const clientName = `${selected.clientAFullName} ${selected.clientBFullName ? `ו${selected.clientBFullName}` : ''}`;
     const textMsg = `שלום, מצורף עדכון לגבי טופס הפקת אירוע - משפחת ${clientName} בתאריך ${dateStr(selected)}.\nמוזמנים: ${formData.finalGuestCount || 'לא צוין'}.`;
     
-    // פתיחת ווצאפ
     window.open(`https://wa.me/?text=${encodeURIComponent(textMsg)}`, '_blank');
-    // פתיחת אימייל
     window.setTimeout(() => {
       window.open(`mailto:?subject=${encodeURIComponent(`טופס אירוע: ${clientName}`)}&body=${encodeURIComponent(textMsg)}`, '_blank');
     }, 500);
@@ -267,13 +260,16 @@ const EventFormManager = () => {
   };
 
   const isFormValid = () => {
+    const currentReception = formData.receptionType || 'separate';
+    const currentSeating = formData.seatingType || 'separate';
+
     return !!(
       formData.eventTime &&
-      formData.receptionType &&
+      currentReception &&
       formData.finalGuestCount &&
-      formData.seatingType &&
-      (formData.seatingType === 'mixed' || (formData.menPercent && formData.womenPercent)) &&
-      formData.depositCheckUrl &&
+      currentSeating &&
+      (currentSeating === 'mixed' || (formData.menPercent !== undefined && formData.womenPercent !== undefined)) &&
+      (formData.depositCheckUrl || depositCheckFile) && 
       formData.kashrut
     );
   };
@@ -893,6 +889,12 @@ const EventFormManager = () => {
                 </label>
               </div>
             </div>
+            {selected.clientSignatureUrl && (
+  <div className={styles.section}>
+    <h4>✍️ חוזה חתום</h4>
+    <img src={selected.clientSignatureUrl} alt="חתימת חוזה" style={{ width: '100%', maxWidth: '300px', border: '1px solid #ddd' }} />
+  </div>
+)}
 
            {/* אקו"ם */}
             <div className={styles.section}>
@@ -1002,9 +1004,7 @@ const EventFormManager = () => {
               </button>
             </div>
 
-            {/* ---> מודאל צף לבחירת תפריט <--- */}
             {/* ---> מודאל צף לבחירת תפריט - בתצוגת מסך מלא <--- */}
-           {/* ---> מודאל צף לבחירת תפריט - בתצוגת מסך מלא <--- */}
             {isMenuOpen && (
               <div 
                 style={{ position: 'fixed', inset: 0, background: '#f8fafc', display: 'flex', justifyContent: 'center', zIndex: 9999 }}
@@ -1064,39 +1064,127 @@ const EventFormManager = () => {
               </div>
             </div>
 
-            {/* כפתורים למטה */}
+          {/* כפתורים למטה */}
             <div className={styles.formFooter} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button onClick={() => setSelected(null)} className={styles.cancelBtn}>ביטול</button>
               
-              <button
-                onClick={handleDownloadPDF}
-                disabled={!isFormValid()}
-                className={styles.downloadBtn}
-                title={!isFormValid() ? 'אנא מלא את כל השדות החובה' : 'הורד PDF'}
-              >
-                📥 הורד PDF
-              </button>
+       <button
+  onClick={async () => {
+    try {
+      const checkUrl = await uploadCheckFile();
+      const dataToSave = {
+        ...formData,
+        depositCheckUrl: checkUrl || formData.depositCheckUrl,
+        notes: JSON.stringify(notesList),
+        menuSelections: selectedMenu
+      };
 
-              {/* הכפתור החדש - שיתוף ללקוח ומנהל! */}
+      // 1. שמירה אוטומטית ישירות למסד הנתונים
+      const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSave) 
+      });
+
+      if (!saveResponse.ok) {
+         alert('שגיאה בשמירת הנתונים טרם הורדת ה-PDF.');
+         return;
+      }
+      
+      // 2. אחרי שהשמירה הצליחה - קוראים לפונקציית ההורדה שלך
+      await handleDownloadPDF(); 
+      
+    } catch (error) {
+      console.error(error);
+      alert('שגיאת תקשורת עם השרת בעת הפעולה.');
+    }
+  }}
+  style={{
+    padding: '10px 20px', background: '#f59e0b', color: 'white', border: 'none', 
+    borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: 1,
+    display: 'flex', alignItems: 'center', gap: '8px'
+  }}
+  title="שמור והורד PDF"
+>
+  הורד PDF 📥
+</button>
+
+              {/* כפתור ווצאפ עם לוגו מקורי */}
               <button
-                onClick={handleShare}
-                disabled={!isFormValid()}
-                style={{
-                  padding: '10px 20px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: isFormValid() ? 'pointer' : 'not-allowed', fontWeight: 'bold', opacity: isFormValid() ? 1 : 0.6
+                onClick={() => {
+                  const clientName = `${selected.clientAFullName} ${selected.clientBFullName ? `ו${selected.clientBFullName}` : ''}`;
+                  const textMsg = `שלום, מצורף עדכון לגבי טופס הפקת אירוע - משפחת ${clientName} בתאריך ${dateStr(selected)}.\nמוזמנים: ${formData.finalGuestCount || 'לא צוין'}.`;
+                  window.open(`https://wa.me/?text=${encodeURIComponent(textMsg)}`, '_blank');
                 }}
-                title={!isFormValid() ? 'יש למלא טופס לפני שיתוף' : 'שלח לווצאפ ולמייל'}
+              
+                style={{
+                  padding: '10px 20px', background: '#25D366', color: 'white', border: 'none', borderRadius: '6px', 
+                  display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+                title={!isFormValid() ? 'יש למלא טופס לפני שיתוף' : 'שלח לווצאפ'}
               >
-                🔗 שתף לקוח/מנהל
+                <svg fill="currentColor" viewBox="0 0 448 512" height="18px" width="18px" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"></path>
+                </svg>
+                שלח ווצאפ
               </button>
+<button
+  onClick={async () => {
+    try {
+      alert('שומר את הטופס ושולח למייל... אנא המתן מעט'); 
+      
+      const checkUrl = await uploadCheckFile();
+      const dataToSave = {
+        ...formData,
+        depositCheckUrl: checkUrl || formData.depositCheckUrl,
+        notes: JSON.stringify(notesList),
+        menuSelections: selectedMenu
+      };
 
-              <button
-                onClick={handleSaveForm}
-                disabled={submitting || !isFormValid()}
-                className={styles.saveBtn}
-                style={{ flexGrow: 1 }}
-              >
-                {submitting ? '⏳ שמירה...' : (isFormValid() ? '💾 שמור טופס' : '⚠️ חסרים פרטים חובה')}
-              </button>
+      // 1. שמירה אוטומטית ישירות למסד הנתונים
+      const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSave) 
+      });
+
+      if (!saveResponse.ok) {
+         alert('שגיאה בשמירת הנתונים, המייל לא נשלח.');
+         return;
+      }
+      
+      // 2. אחרי שהשמירה הצליחה - מבקשים מהשרת לשלוח את המייל
+      const emailResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/send-email`, {
+        method: 'POST',
+      });
+      
+      const data = await emailResponse.json();
+      if (emailResponse.ok && data.success) {
+        alert('הטופס נשמר והמייל נשלח בהצלחה!');
+      } else {
+        alert(`שגיאה בשליחת המייל: ${data.error || 'אנא נסה שוב'}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('שגיאת תקשורת עם השרת בעת הפעולה.');
+    }
+  }}
+  style={{
+    padding: '10px 20px', background: '#0ea5e9', color: 'white', border: 'none', 
+    borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: 1,
+    display: 'flex', alignItems: 'center', gap: '8px'
+  }}
+  title="שמור ושלח למייל"
+>
+  <svg fill="currentColor" viewBox="0 0 512 512" height="18px" width="18px" xmlns="http://www.w3.org/2000/svg">
+    <path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48H48zM0 176V384c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V176L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"></path>
+  </svg>                                
+  שלח למייל
+</button>
             </div>
           </div>
         </div>

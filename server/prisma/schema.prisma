@@ -118,6 +118,8 @@ model EventForm {
   updatedAt           DateTime        @updatedAt
   booking             Booking         @relation(fields: [bookingId], references: [id])
   tables              TablePosition[]
+  menuSelections Json?
+  akumPaid Boolean?
 }
 
 model CancellationLog {
