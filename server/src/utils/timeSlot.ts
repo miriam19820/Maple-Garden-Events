@@ -59,6 +59,40 @@ export function getAvailableSlots(bookings: { timeOfDay?: string | null }[]): Ti
   return TIME_SLOTS.filter((s) => !taken.has(s));
 }
 
+/** משבצות שלא ניתן לקבוע בהן אירוע בתאריך (למשל שבת: בוקר וצהריים). */
+export function getBlockedSlotsForDate(date: Date): TimeSlot[] {
+  if (date.getDay() === 6) return ['morning', 'noon'];
+  return [];
+}
+
+export function parseDateLocal(dateInput: string | Date): Date {
+  if (dateInput instanceof Date) {
+    return new Date(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate(), 12, 0, 0);
+  }
+  return new Date(`${dateInput}T12:00:00`);
+}
+
+export function getBookableSlotsForDate(date: Date, bookings: { timeOfDay?: string | null }[]): TimeSlot[] {
+  const taken = getTakenSlots(bookings);
+  const blocked = new Set(getBlockedSlotsForDate(date));
+  return TIME_SLOTS.filter((s) => !taken.has(s) && !blocked.has(s));
+}
+
+export function isDateFullyBooked(date: Date, bookings: { timeOfDay?: string | null }[]): boolean {
+  return getBookableSlotsForDate(date, bookings).length === 0;
+}
+
+export function validateSlotOnDate(date: Date, slot: TimeSlot): string | null {
+  const blocked = getBlockedSlotsForDate(date);
+  if (blocked.includes(slot)) {
+    if (date.getDay() === 6) {
+      return 'ביום זה ניתן לקבוע אירוע בערב בלבד.';
+    }
+    return `משבצת ${SLOT_LABELS[slot]} אינה זמינה בתאריך זה.`;
+  }
+  return null;
+}
+
 export function formatStoredTimeOfDay(slot: TimeSlot, startTime?: string, endTime?: string): string {
   if (startTime && endTime) return `${slot}|${startTime} - ${endTime}`;
   return slot;

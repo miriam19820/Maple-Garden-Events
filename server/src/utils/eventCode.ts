@@ -6,6 +6,10 @@ const CODE_PATTERN = /^(OPT|EVT)-(\d+)$/;
 
 export type EventCodePrefix = 'OPT' | 'EVT';
 
+export function isFormattedEventCode(eventCode: string): boolean {
+  return CODE_PATTERN.test(eventCode);
+}
+
 export function formatEventCode(prefix: EventCodePrefix, sequence: number): string {
   return `${prefix}-${String(sequence).padStart(PAD_LENGTH, '0')}`;
 }

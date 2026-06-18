@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
 import { socket } from '../../services/socketService';
+import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS } from '../../utils/timeSlot';
 interface DayData {
   id: string | null;
   date: string;
@@ -14,17 +15,9 @@ interface DayData {
   candleTime: string | null;
   lockedBy: string | null;
   bookings: any[];
+  blockedSlots?: string[];
   isCurrentMonth: boolean;
 }
-const EVENT_COLORS: Record<string, string> = {
-  'חתונה': '#B5654A',       // טרקוטה חמה
-  'בר מצווה': '#EC4899',    // ורוד
-  'בת מצווה': '#8B5CF6',    // סגול
-  'ברית': '#3B82F6',        // כחול
-  'בריתה': '#F43F5E',       // אדום-ורוד
-  'חינה': '#F59E0B',        // כתום
-  'אירוע עסקי': '#64748B',  // אפור
-};
 
 interface CalendarProps {
   onDateSelect: (day: DayData) => void;
@@ -134,6 +127,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
         candleTime: srv?.candleTime ?? null,
         lockedBy: srv?.lockedBy ?? null, 
         bookings: srv?.bookings ?? [],
+        blockedSlots: srv?.blockedSlots ?? [],
         isCurrentMonth: loop.getMonth() === month,
         col: DOW_TO_COL[dow], row,
       });
@@ -153,7 +147,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
     setIsActionModalOpen(false);
     const dayObj = grid.find(d => d.date === selectedDateForAction);
     if (dayObj) onDateSelect(dayObj);
- 
   };
 
   return (
@@ -166,6 +159,14 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
           <option value="חתונה">חתונה</option>
           <option value="אירוע אחר">אירוע אחר</option>
         </select>
+        <div className="calendar-legend">
+          {TIME_SLOTS.map((slot) => (
+            <span key={slot} className="calendar-legend-item">
+              <span className="calendar-legend-swatch" style={{ backgroundColor: SLOT_COLORS[slot] }} />
+              {SLOT_LABELS[slot]}
+            </span>
+          ))}
+        </div>
       </div>
 
       {isOptionMode && (
@@ -248,8 +249,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
                   <div className="cell-events-container">
                     {day.bookings.map((b: any, idx: number) => {
-                      // שולפים את הצבע (ואם אין התאמה, כחול כברירת מחדל)
-                      const baseColor = EVENT_COLORS[(b.eventType || '').trim()] || '#3B82F6';
+                      const baseColor = getSlotColor(b.timeOfDay);
                       
                       const isOption = day.status === 'OPTION';
                       

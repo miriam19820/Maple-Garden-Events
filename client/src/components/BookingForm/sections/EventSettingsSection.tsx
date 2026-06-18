@@ -68,7 +68,6 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
         <div className={styles.inputGroup}>
           <label>זמן ביום </label>
           <select name="timeOfDay" required value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
-            {availableSlots.length !== 1 && <option value="">בחרי חלק ביום</option>}
             {availableSlots.map((slot: any) => (
               <option key={slot} value={slot}>{SLOT_LABELS[slot as keyof typeof SLOT_LABELS]}</option>
             ))}
@@ -100,7 +99,6 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
               <option value="american">אמריקן סרביס (ברירת מחדל)</option>
               <option value="center">מרכז שולחן</option>
               <option value="bar">בר</option>
-              <option value="hall_only">שכירות אולם בלי אוכל</option>
             </select>
           </div>
         )}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Calendar } from './components/Calendar/Calendar';
-import { getTakenSlots } from './utils/timeSlot';
+import { getTakenSlots, type TimeSlot } from './utils/timeSlot';
 import { AppLayout } from './components/AppLayout/AppLayout';
 import BookingForm from './components/BookingForm/BookingForm';
 import OptionsManager from './components/OptionsManager/OptionsManager';
@@ -12,6 +12,7 @@ import OptionPage from './components/optionPage/OptionPage';
 import MenuDisplay from './components/MenuDisplay/MenuDisplay';
 import { SettingsManager } from './components/SettingsManager/SettingsManager';
 import FeedbackPage from './components/FeedbackPage/FeedbackPage';
+import FeedbackManager from './components/FeedbackManager/FeedbackManager';
 import { Login } from './components/Login/Login'; // ייבוא מסך ההתחברות שיצרנו
 import Gallery from './components/Gallery/Gallery';
 
@@ -26,6 +27,7 @@ const CalendarWrapper = () => {
               date: day.date,
               hebrewDate: day.hebrewDate,
               takenSlots: Array.from(getTakenSlots(day.bookings || [])),
+              blockedSlots: (day.blockedSlots || []) as TimeSlot[],
             },
           });
         }}
@@ -80,6 +82,7 @@ function App() {
         <Route path="/option" element={<ProtectedRoute><AppLayout><OptionPage /></AppLayout></ProtectedRoute>} />
         <Route path="/menu" element={<ProtectedRoute><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><PageShell><SettingsManager /></PageShell></ProtectedRoute>} />
+        <Route path="/feedback-manager" element={<ProtectedRoute><PageShell><FeedbackManager /></PageShell></ProtectedRoute>} />
         <Route path="/gallery" element={<AppLayout><Gallery /></AppLayout>} />
       </Routes>
     </BrowserRouter>

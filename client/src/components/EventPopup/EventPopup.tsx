@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { canEditBooking } from '../../utils/bookingEdit';
 import {
-  canAddMoreEvents,
-  formatAvailableSlotsLabel,
+  canAddMoreEventsForDate,
+  formatAvailableSlotsLabelForDate,
   formatTimeOfDayDisplay,
+  getSlotColor,
 } from '../../utils/timeSlot';
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
 import { NotesList } from '../NotesList/NotesList';
@@ -25,12 +26,12 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
   const hebrewDate = day.hebrewDate || '';
   const todayStr = new Date().toISOString().split('T')[0];
   const isPast = day.date < todayStr;
-  const availableSlotsLabel = formatAvailableSlotsLabel(bookings);
+  const availableSlotsLabel = formatAvailableSlotsLabelForDate(day.date, bookings);
   const showAddEvent =
     !isPast
     && day.status !== 'BLOCKED'
     && day.status !== 'FORBIDDEN'
-    && canAddMoreEvents(bookings)
+    && canAddMoreEventsForDate(day.date, bookings)
     && !!onAddEvent;
 
   const handleEdit = (bookingId: string) => {
@@ -85,7 +86,11 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
               const clientNotes = parseNotesBundle(booking.clientComments);
 
               return (
-                <div key={booking.id || index} className="event-card">
+                <div
+                  key={booking.id || index}
+                  className="event-card"
+                  style={{ borderRightColor: getSlotColor(booking.timeOfDay) }}
+                >
                   <div className="event-card-top">
                     <div className="event-card-title-row">
                       <h3>

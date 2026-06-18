@@ -1,7 +1,8 @@
 import React from 'react';
 import SignatureCanvas from 'react-signature-canvas';
+import { getSignatureDataUrl } from '../../../utils/signature';
 
-const ContractModal = ({ isOpen, onClose, isOption, sigCanvas, setContractSigned, styles }: any) => {
+const ContractModal = ({ isOpen, onClose, isOption, sigCanvas, setContractSigned, onSignatureSaved, styles }: any) => {
   if (!isOpen) return null;
 
   return (
@@ -124,7 +125,9 @@ const ContractModal = ({ isOpen, onClose, isOption, sigCanvas, setContractSigned
             }}>נקה חתימה 🗑️</button>
             
             <button type="button" onClick={() => {
-                if (sigCanvas.current?.isEmpty()) return alert('נא לחתום לפני האישור');
+                const dataUrl = getSignatureDataUrl(sigCanvas);
+                if (!dataUrl) return alert('נא לחתום לפני האישור');
+                onSignatureSaved?.(dataUrl);
                 setContractSigned(true);
                 onClose();
               }} 

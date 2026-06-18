@@ -2,7 +2,7 @@
 import hebcal from 'hebcal';
 import prisma from "../config/prisma";
 import { io } from "../server";
-import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay } from '../utils/timeSlot';
+import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay, getBlockedSlotsForDate, isDateFullyBooked, validateSlotOnDate, parseDateLocal } from '../utils/timeSlot';
 import { allocateEventCode } from '../utils/eventCode';
 
 export enum EventStatus {
@@ -59,7 +59,9 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
   // ==========================================
   // 1. שבתות וימי שישי (רלוונטי לכולם)
   // ==========================================
-  if (jsDay === 6) return { type: EventStatus.BLOCKED, reason: 'שבת' };
+  if (jsDay === 6) {
+    return { type: EventStatus.PROBLEMATIC, reason: 'שבת' };
+  }
   if (jsDay === 5) {
     if (eventType === 'חתונה') {
       return { type: EventStatus.PROBLEMATIC, reason: 'יום שישי ' };
@@ -194,24 +196,27 @@ export const calendarService = {
       const dateKey = toLocalDateKey(current);
       const hDate = new hebcal.HDate(toNoon(current));
       const staticSt = getDayStaticStatus(current, eventType);
+      const blockedSlots = getBlockedSlotsForDate(current);
       
       const record = datesInRange.find((d: any) => toLocalDateKey(new Date(d.date)) === dateKey);
       const bookings = record?.bookings || [];
 
       const dbStatus = record?.status;
       const hasBookingStatus = dbStatus === EventStatus.OPTION || dbStatus === EventStatus.BOOKED;
+      const fullyBooked = isDateFullyBooked(current, bookings);
 
       result.push({
         id: record?.id || null,
         date: dateKey,
         dayOfWeek: current.getDay(),
         hebrewDate: formatHebrewDate(hDate),
-        status: bookings.length >= 3
+        status: fullyBooked
           ? EventStatus.BLOCKED
           : hasBookingStatus
             ? dbStatus
             : staticSt.type,
         reason: staticSt.reason || null,
+        blockedSlots,
         bookings: bookings 
       });
       current.setDate(current.getDate() + 1);
@@ -221,12 +226,19 @@ export const calendarService = {
 
   // סגירה סופית עם מניעת התנגשויות זמן
   async bookEventFinal(dateId: string, bookingDetails: any) {
+    const eventDateRecord = await prisma.eventDate.findUnique({ where: { id: dateId } });
+    if (!eventDateRecord) {
+      const error = new Error('תאריך האירוע לא נמצא.');
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
     const existing = await prisma.booking.findMany({
       where: { eventDate: { id: dateId } },
     });
 
-    if (existing.length >= 3) {
-      const error = new Error('התאריך מלא — כבר קיימים 3 אירועים (בוקר, צהריים וערב).');
+    if (isDateFullyBooked(parseDateLocal(eventDateRecord.date), existing)) {
+      const error = new Error('התאריך מלא — אין משבצות זמן פנויות.');
       (error as any).statusCode = 400;
       throw error;
     }
@@ -239,6 +251,14 @@ export const calendarService = {
 
     if (!slot) {
       const error = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
+      (error as any).statusCode = 400;
+      throw error;
+    }
+
+    const slotDate = parseDateLocal(eventDateRecord.date);
+    const slotError = validateSlotOnDate(slotDate, slot);
+    if (slotError) {
+      const error = new Error(slotError);
       (error as any).statusCode = 400;
       throw error;
     }

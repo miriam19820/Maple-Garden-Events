@@ -60,7 +60,7 @@ const FeedbackPage: React.FC = () => {
   const [comments, setComments] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   // 1. קריאת GET: בדיקת תקינות הקישור בטעינה הראשונית
   useEffect(() => {

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
-import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot } from '../../utils/timeSlot';
+import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate } from '../../utils/timeSlot';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
+import { getSignatureDataUrl } from '../../utils/signature';
 import SignatureCanvas from 'react-signature-canvas';
 
 import ClientsSection from './sections/ClientsSection';
@@ -69,13 +70,39 @@ const parseStoredTimeOfDay = (stored: string | null | undefined) => {
   return { timeOfDay: main, startTime: '', endTime: '' };
 };
 
+const HALL_ONLY_EVENT_TYPE = 'השכרת אולם בלי אוכל';
+
+function validateHallRentalPrice(value: string): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return 'יש להזין מחיר השכרת אולם';
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) return 'יש להזין מספר תקין';
+  if (num <= 0) return 'הסכום חייב להיות גדול מ-0';
+  return '';
+}
+
 const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: editId } = useParams<{ id: string }>();
   const isEditMode = !!editId;
   const takenSlots: TimeSlot[] = (location.state?.takenSlots as TimeSlot[]) || [];
-  const availableSlots = isEditMode ? TIME_SLOTS : TIME_SLOTS.filter((slot) => !takenSlots.includes(slot));
+  const stateBlockedSlots: TimeSlot[] = (location.state?.blockedSlots as TimeSlot[]) || [];
+  const primaryDateStr = (() => {
+    if (initialDates?.length) {
+      const d = initialDates[0];
+      return typeof d === 'object' ? d.date : d;
+    }
+    if (location.state?.date) return location.state.date as string;
+    return '';
+  })();
+  const blockedSlots: TimeSlot[] = primaryDateStr
+    ? getBlockedSlotsForDate(primaryDateStr)
+    : stateBlockedSlots;
+  const unavailableSlots = [...new Set([...takenSlots, ...blockedSlots])];
+  const availableSlots = isEditMode
+    ? TIME_SLOTS
+    : TIME_SLOTS.filter((slot) => !unavailableSlots.includes(slot));
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -97,7 +124,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [formData, setFormData] = useState({
     createdBy: '', clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
-    calendarDateId: '', eventType: '', timeOfDay: '', startTime: '', endTime: '',
+    calendarDateId: '', eventType: '', timeOfDay: 'evening', startTime: '', endTime: '',
     guestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: '', clientSignatureUrl: '',
    
     akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
@@ -112,6 +139,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   });
   const [depositMethod, setDepositMethod] = useState('');
   const [contractSigned, setContractSigned] = useState(false);
+  const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
 
@@ -176,6 +204,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         setMenuNotesList(notesBundle.menu);
         setInternalNotesList(notesBundle.internal);
         setContractSigned(!!b.isContractSigned);
+        if (b.clientSignatureUrl) setSavedSignature(b.clientSignatureUrl);
         if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
       } catch {
         alert('שגיאה בטעינת ההזמנה');
@@ -188,26 +217,54 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   }, [editId, navigate]);
 
   useEffect(() => {
-    if (isEditMode || takenSlots.length === 0) return;
-    const free = TIME_SLOTS.filter((slot) => !takenSlots.includes(slot));
-    if (free.length === 1) setFormData((prev) => (prev.timeOfDay === free[0] ? prev : { ...prev, timeOfDay: free[0] }));
-    else if (formData.timeOfDay && takenSlots.includes(formData.timeOfDay as TimeSlot)) setFormData((prev) => ({ ...prev, timeOfDay: '' }));
-  }, [isEditMode, takenSlots.join(',')]);
+    if (isEditMode) return;
+    const free = availableSlots;
+    if (formData.timeOfDay && unavailableSlots.includes(formData.timeOfDay as TimeSlot)) {
+      const next = free.includes('evening') ? 'evening' : free.length >= 1 ? free[0] : '';
+      setFormData((prev) => (prev.timeOfDay === next ? prev : { ...prev, timeOfDay: next }));
+    } else if (!formData.timeOfDay && free.includes('evening')) {
+      setFormData((prev) => ({ ...prev, timeOfDay: 'evening' }));
+    } else if (free.length === 1) {
+      setFormData((prev) => (prev.timeOfDay === free[0] ? prev : { ...prev, timeOfDay: free[0] }));
+    }
+  }, [isEditMode, unavailableSlots.join(','), availableSlots.join(',')]);
 
   useEffect(() => {
     if (isEditMode) return;
     if (formData.eventType === 'חתונה') {
-      setFormData((prev) => ({ ...prev, startTime: '18:00', endTime: '00:00', timeOfDay: takenSlots.includes('evening') ? prev.timeOfDay : 'evening' }));
+      const eveningOk = availableSlots.includes('evening');
+      setFormData((prev) => ({
+        ...prev,
+        startTime: '18:00',
+        endTime: '00:00',
+        timeOfDay: eveningOk && !unavailableSlots.includes('evening') ? 'evening' : prev.timeOfDay,
+      }));
     } else if (formData.eventType === 'ברית') {
-      setFormData((prev) => ({ ...prev, startTime: '09:00', endTime: '14:00', timeOfDay: takenSlots.includes('morning') ? prev.timeOfDay : 'morning' }));
+      const eveningOk = availableSlots.includes('evening');
+      setFormData((prev) => ({
+        ...prev,
+        startTime: '09:00',
+        endTime: '14:00',
+        timeOfDay: eveningOk && !unavailableSlots.includes('evening') ? 'evening' : prev.timeOfDay,
+      }));
     }
-  }, [formData.eventType, isEditMode, takenSlots.join(',')]);
+  }, [formData.eventType, isEditMode, unavailableSlots.join(',')]);
+
+  useEffect(() => {
+    if (formData.eventType !== HALL_ONLY_EVENT_TYPE) {
+      setErrors((prev) => (prev.hallRentalPrice ? { ...prev, hallRentalPrice: '' } : prev));
+    }
+  }, [formData.eventType]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     if (type === 'radio' && name === 'vatType') return setFormData(prev => ({ ...prev, vatType: value }));
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    if (name === 'hallRentalPrice') {
+      setErrors(prev => ({ ...prev, hallRentalPrice: validateHallRentalPrice(value) }));
+    } else if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleUpgradeChange = (key: keyof typeof upgrades) => {
@@ -215,7 +272,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     setUpgrades((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-const isHallOnly = servingStyle === 'hall_only' || formData.eventType === 'השכרת אולם';
+  const isHallOnly = formData.eventType === HALL_ONLY_EVENT_TYPE;
   const isFoodRelevant = !isHallOnly;
   const isWedding = formData.eventType === 'חתונה';
 const calculateTotals = () => {
@@ -248,24 +305,93 @@ const calculateTotals = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    let signatureData = null;
-    if (contractSigned && sigCanvas.current && !sigCanvas.current.isEmpty()) {
-        signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+    let signatureData: string | null = savedSignature;
+    if (!signatureData && contractSigned) {
+      signatureData = getSignatureDataUrl(sigCanvas);
+    }
+    if (!signatureData && isEditMode && formData.clientSignatureUrl) {
+      signatureData = formData.clientSignatureUrl;
     }
     if (!isEditMode && !contractSigned) {
-        alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
-        return;
+      alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
+      return;
     }
+    if (contractSigned && !signatureData) {
+      alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
+      return;
+    }
+    if (isHallOnly) {
+      const hallError = validateHallRentalPrice(formData.hallRentalPrice);
+      if (hallError) {
+        setErrors((prev) => ({ ...prev, hallRentalPrice: hallError }));
+        alert(hallError);
+        return;
+      }
+    } else if (!formData.guestCount || Number(formData.guestCount) <= 0) {
+      alert('חובה להזין מספר אורחים (מעל 0).');
+      return;
+    }
+
+    if (!formData.clientAFullName?.trim()) {
+      alert('חובה להזין שם לקוח.');
+      return;
+    }
+    if (!formData.clientAPhone?.trim() || formData.clientAPhone.trim().length < 9) {
+      alert('חובה להזין מספר טלפון תקין (לפחות 9 ספרות).');
+      return;
+    }
+    if (!formData.eventType) {
+      alert('חובה לבחור סוג אירוע.');
+      return;
+    }
+    if (!formData.timeOfDay) {
+      alert('חובה לבחור זמן ביום (בוקר / צהריים / ערב).');
+      return;
+    }
+    if (selectedDatesDisplay.length === 0 && !formData.calendarDateId) {
+      alert('חובה לבחור תאריך לאירוע.');
+      return;
+    }
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (formData.clientAEmail?.trim() && !emailPattern.test(formData.clientAEmail.trim())) {
+      alert('כתובת האימייל של בעל/ת השמחה אינה תקינה.');
+      return;
+    }
+    if (formData.clientBEmail?.trim() && !emailPattern.test(formData.clientBEmail.trim())) {
+      alert('כתובת האימייל של צד ב\' אינה תקינה.');
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...formData,
-        hasMusic: isWedding ? true : formData.hasMusic, // חובה לחתונה
+        eventType: isHallOnly ? HALL_ONLY_EVENT_TYPE : formData.eventType,
+        hasMusic: isWedding ? true : formData.hasMusic,
         clientComments: serializeNotesBundle({ menu: menuNotesList, internal: internalNotesList }),
-        createdAt: new Date().toISOString(), allSelectedDates: selectedDatesDisplay, isOption, optionDurationHours,
-        servingStyle, kosherType, upgrades, depositMethod, contractSigned, calculatedTotals: totals, clientSignature: signatureData 
+        createdAt: new Date().toISOString(),
+        allSelectedDates: selectedDatesDisplay,
+        isOption,
+        optionDurationHours,
+        servingStyle,
+        kosherType,
+        upgrades,
+        depositMethod,
+        contractSigned,
+        calculatedTotals: totals,
+        clientSignature: signatureData,
       };
+
+      if (isHallOnly) {
+        payload.guestCount = 0;
+        payload.finalPricePortion = 0;
+        payload.hallRentalPrice = Number(formData.hallRentalPrice);
+      } else {
+        payload.guestCount = formData.guestCount;
+        payload.finalPricePortion = formData.finalPricePortion;
+        delete payload.hallRentalPrice;
+      }
 
       const url = isEditMode ? `http://localhost:5000/api/bookings/${editId}` : 'http://localhost:5000/api/bookings';
       const method = isEditMode ? 'PUT' : 'POST';
@@ -278,7 +404,10 @@ const calculateTotals = () => {
         alert(isEditMode ? 'ההזמנה עודכנה בהצלחה!' : isOption ? `האופציה נשמרה בהצלחה!${savedCode ? `\nמספר אופציה: ${savedCode}` : ''}` : `האירוע נסגר ונשמר בהצלחה!${savedCode ? `\nמספר הזמנה: ${savedCode}` : ''}`);
         navigate('/');
       } else {
-        alert(`שגיאה בשמירת הנתונים: ${resData.message || 'השרת החזיר שגיאה לא ידועה'}`);
+        const fieldErrors = Array.isArray(resData.errors)
+          ? resData.errors.map((e: { message?: string }) => e.message).filter(Boolean).join('\n')
+          : '';
+        alert(`שגיאה בשמירת הנתונים:\n${fieldErrors || resData.message || 'השרת החזיר שגיאה לא ידועה'}`);
         setIsSubmitting(false);
       }
     } catch (error) {
@@ -309,7 +438,7 @@ const calculateTotals = () => {
             <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder="לדוגמה: אלרגיות מיוחדות..." />
           </div>)}
 
-          <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} depositMethod={depositMethod} setDepositMethod={setDepositMethod} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} styles={styles} />
+          <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} depositMethod={depositMethod} setDepositMethod={setDepositMethod} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} styles={styles} />
 
           <div className={styles.sectionCard}>
             <h3 className={styles.sectionHeader}>הערות פנימיות לניהול</h3>
@@ -328,6 +457,7 @@ const calculateTotals = () => {
                       setIsContractModalOpen(true); // לחיצה פותחת את המודאל
                     } else {
                       setContractSigned(false);
+                      setSavedSignature(null);
                       sigCanvas.current?.clear();
                     }
                   }} 
@@ -420,7 +550,7 @@ const calculateTotals = () => {
         </form>
       </div>
 
-      <ContractModal isOpen={isContractModalOpen} onClose={() => setIsContractModalOpen(false)} isOption={isOption} sigCanvas={sigCanvas} setContractSigned={setContractSigned} styles={styles} />
+      <ContractModal isOpen={isContractModalOpen} onClose={() => setIsContractModalOpen(false)} isOption={isOption} sigCanvas={sigCanvas} setContractSigned={setContractSigned} onSignatureSaved={setSavedSignature} />
 
       {isMenuViewOpen && (
          <div className={styles.menuOverlay}><div className={styles.menuModal}><button type="button" className={styles.menuCloseBtn} onClick={() => setIsMenuViewOpen(false)}>✕ סגור</button><div className={styles.menuModalContent}><MenuDisplay /></div></div></div>

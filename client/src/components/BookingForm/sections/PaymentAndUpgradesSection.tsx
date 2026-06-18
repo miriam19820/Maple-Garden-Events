@@ -1,7 +1,7 @@
 import React from 'react';
 import { KOSHER_PRICING } from '../BookingForm';
 
-const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpgradeChange, isHallOnly, depositMethod, setDepositMethod, totals, isFoodRelevant, kosherType, isEditMode, editId, styles }: any) => {
+const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpgradeChange, isHallOnly, depositMethod, setDepositMethod, totals, isFoodRelevant, kosherType, isEditMode, editId, errors, styles }: any) => {
   
   return (
     <>
@@ -55,11 +55,16 @@ const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpg
               name="hallRentalPrice"
               value={formData.hallRentalPrice || ''}
               onChange={handleChange}
-              className={styles.input}
+              className={`${styles.input} ${errors?.hallRentalPrice ? styles.inputError : ''}`}
               placeholder="הזן סכום לשכירות האולם (ללא אוכל)..."
               required={isHallOnly}
+              min={1}
+              step="any"
               style={{ fontSize: '1.1rem', fontWeight: 'bold' }}
             />
+            {errors?.hallRentalPrice && (
+              <span className={styles.errorMsg}>{errors.hallRentalPrice}</span>
+            )}
           </div>
         )}
 

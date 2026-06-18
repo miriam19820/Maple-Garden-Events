@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import { computeCombinedAverage } from '../utils/feedbackHelpers';
+import { sendManagerFinancialAlertEmail } from '../utils/mailer';
 
 export const feedbackController = {
-  // 1. קריאת GET: בדיקת תקינות הקישור כשהלקוח פותח את הדף
   async verifyToken(req: Request, res: Response) {
     try {
-      const token = req.params.token as string; // <--- התיקון שלנו כאן
+      const token = req.params.token as string;
 
-      // מחפשים את המשוב לפי האסימון
       const feedback = await prisma.feedback.findUnique({
         where: { token },
       });
@@ -16,50 +16,42 @@ export const feedbackController = {
         return res.status(404).json({ success: false, message: 'הקישור אינו חוקי או שפג תוקפו.' });
       }
 
-      // אם הלקוח כבר מילא ולחץ שלח, נחסום אותו
       if (feedback.isCompleted) {
         return res.status(400).json({ success: false, message: 'תודה! המשוב עבור אירוע זה כבר התקבל.' });
       }
 
-      // אם הכל תקין, נחזיר ל-React את שם הלקוח כדי להציג לו "היי דוד..."
-      res.status(200).json({ 
-        success: true, 
+      res.status(200).json({
+        success: true,
         clientName: feedback.clientName,
-        clientSide: feedback.clientSide
+        clientSide: feedback.clientSide,
       });
-
     } catch (error) {
       console.error('Error verifying feedback token:', error);
       res.status(500).json({ success: false, message: 'שגיאת שרת בבדיקת הקישור.' });
     }
   },
 
-  // 2. קריאת POST: קבלת התשובות ושמירה למסד הנתונים
   async submitFeedback(req: Request, res: Response) {
     try {
-      const token = req.params.token as string; // <--- התיקון שלנו גם כאן
+      const token = req.params.token as string;
       const { foodRating, serviceRating, venueRating, comments } = req.body;
 
-      // בדיקה שהקישור קיים וטרם מולא (הגנה כפולה)
       const existingFeedback = await prisma.feedback.findUnique({
-        where: { token }
+        where: { token },
+        include: { booking: true },
       });
 
       if (!existingFeedback || existingFeedback.isCompleted) {
         return res.status(400).json({ success: false, message: 'לא ניתן לשמור את המשוב.' });
       }
 
-      // --- חישוב הממוצע (יהפוך לאחוזים בצד הלקוח) ---
-      const scores = [foodRating, serviceRating, venueRating].filter(val => typeof val === 'number');
-      let averageScore = null;
-      
+      const scores = [foodRating, serviceRating, venueRating].filter((val) => typeof val === 'number');
+      let averageScore: number | null = null;
+
       if (scores.length > 0) {
-        const sum = scores.reduce((a, b) => a + b, 0);
-        // שומרים את הממוצע עם עד 2 ספרות אחרי הנקודה (למשל 4.66)
-        averageScore = Number((sum / scores.length).toFixed(2)); 
+        averageScore = Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2));
       }
 
-      // שומרים את הכל למסד הנתונים ונועלים את הטופס
       const updatedFeedback = await prisma.feedback.update({
         where: { token },
         data: {
@@ -68,20 +60,123 @@ export const feedbackController = {
           venueRating,
           comments,
           averageScore,
-          isCompleted: true // נועל את הקישור לתמיד
-        }
+          isCompleted: true,
+        },
       });
 
-      // בונוס התראת מנהל: אם הממוצע מתחת ל-3 כוכבים, נדפיס למנהל אזהרה
+      // סינכרון: ממוצע משולב לכל צדדי אותה הזמנה
+      const siblingFeedbacks = await prisma.feedback.findMany({
+        where: { bookingId: existingFeedback.bookingId },
+      });
+      const combinedAverage = computeCombinedAverage(
+        siblingFeedbacks.map((fb) => (fb.id === updatedFeedback.id ? averageScore : fb.averageScore))
+      );
+
       if (averageScore && averageScore <= 3) {
-        console.warn(`[⚠️ התראת שירות] התקבל משוב נמוך (${averageScore} כוכבים) מהלקוח: ${updatedFeedback.clientName}`);
+        console.warn(
+          `[⚠️ התראת שירות] משוב נמוך (${averageScore}) מ-${updatedFeedback.clientName} | ממוצע משולב: ${combinedAverage ?? '—'}`
+        );
+        const managerEmail = process.env.MANAGER_EMAIL;
+        if (managerEmail) {
+          await sendManagerFinancialAlertEmail(
+            managerEmail,
+            'משוב נמוך מאירוע',
+            updatedFeedback.clientName || 'לקוח',
+            `צד ${updatedFeedback.clientSide}, ממוצע ${averageScore}. ממוצע משולב לאירוע: ${combinedAverage ?? 'טרם הושלם'}`
+          );
+        }
       }
 
-      res.status(200).json({ success: true, message: 'המשוב נשמר בהצלחה!' });
-
+      res.status(200).json({
+        success: true,
+        message: 'המשוב נשמר בהצלחה!',
+        combinedAverage,
+      });
     } catch (error) {
       console.error('Error submitting feedback:', error);
       res.status(500).json({ success: false, message: 'שגיאת שרת בשמירת המשוב.' });
     }
-  }
+  },
+
+  /** רשימת משובים למנהל — מקובצת לפי הזמנה עם ממוצע משולב */
+  async listAdmin(_req: Request, res: Response) {
+    try {
+      const feedbacks = await prisma.feedback.findMany({
+        include: {
+          booking: { include: { eventDate: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const byBooking = new Map<string, {
+        bookingId: string;
+        eventCode: string;
+        eventType: string;
+        eventDate: string | null;
+        clientAFullName: string;
+        clientBFullName: string | null;
+        sides: Array<{
+          id: string;
+          clientSide: string;
+          clientName: string | null;
+          foodRating: number | null;
+          serviceRating: number | null;
+          venueRating: number | null;
+          averageScore: number | null;
+          comments: string | null;
+          isCompleted: boolean;
+          createdAt: string;
+        }>;
+        combinedAverage: number | null;
+        allCompleted: boolean;
+      }>();
+
+      for (const fb of feedbacks) {
+        if (!byBooking.has(fb.bookingId)) {
+          byBooking.set(fb.bookingId, {
+            bookingId: fb.bookingId,
+            eventCode: fb.booking.eventCode,
+            eventType: fb.booking.eventType,
+            eventDate: fb.booking.eventDate?.date
+              ? new Date(fb.booking.eventDate.date).toISOString().split('T')[0]
+              : null,
+            clientAFullName: fb.booking.clientAFullName,
+            clientBFullName: fb.booking.clientBFullName,
+            sides: [],
+            combinedAverage: null,
+            allCompleted: false,
+          });
+        }
+
+        const group = byBooking.get(fb.bookingId)!;
+        group.sides.push({
+          id: fb.id,
+          clientSide: fb.clientSide,
+          clientName: fb.clientName,
+          foodRating: fb.foodRating,
+          serviceRating: fb.serviceRating,
+          venueRating: fb.venueRating,
+          averageScore: fb.averageScore,
+          comments: fb.comments,
+          isCompleted: fb.isCompleted,
+          createdAt: fb.createdAt.toISOString(),
+        });
+      }
+
+      const data = Array.from(byBooking.values()).map((group) => {
+        group.combinedAverage = computeCombinedAverage(
+          group.sides.filter((s) => s.isCompleted).map((s) => s.averageScore)
+        );
+        group.allCompleted = group.sides.length > 0 && group.sides.every((s) => s.isCompleted);
+        return group;
+      });
+
+      data.sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
+
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      console.error('Error listing feedback:', error);
+      res.status(500).json({ success: false, message: 'שגיאה בטעינת המשובים.' });
+    }
+  },
 };

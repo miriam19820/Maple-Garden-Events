@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "ts-node src/server.ts",
     "start": "node dist/server.js",
+    "migrate:event-codes": "ts-node scripts/migrate-legacy-event-codes.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -119,6 +119,7 @@
   background: var(--maple-surface);
   border-radius: var(--maple-radius);
   border: 1px solid var(--maple-border);
+  border-right-width: 5px;
   overflow: hidden;
   box-shadow: var(--maple-shadow-sm);
   flex-shrink: 0;

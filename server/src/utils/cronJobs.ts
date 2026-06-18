@@ -13,6 +13,7 @@ import {
   sendManagerFinancialAlertEmail,
   sendFeedbackRequestEmail // <-- ייבוא פונקציית המייל החדשה
 } from './mailer';
+import { buildFeedbackSides, primaryPhone } from './feedbackHelpers';
 
 export const startCronJobs = () => {
   console.log('⏳ שירות הטיימרים (Cron Jobs) הופעל בהצלחה.');
@@ -175,27 +176,13 @@ export const startCronJobs = () => {
           continue; 
         }
 
-        const feedbacksToCreate = [];
-
-        // 1. יצירת נתונים לצד א'
-        if (booking.clientAPhone) {
-          feedbacksToCreate.push({
-            bookingId: booking.id,
-            clientSide: 'A',
-            clientName: booking.clientAFullName,
-            token: uuidv4(),
-          });
-        }
-
-        // 2. יצירת נתונים לצד ב' (אם קיים)
-        if (booking.clientBFullName && booking.clientBPhone) {
-          feedbacksToCreate.push({
-            bookingId: booking.id,
-            clientSide: 'B',
-            clientName: booking.clientBFullName,
-            token: uuidv4(),
-          });
-        }
+        const sides = buildFeedbackSides(booking);
+        const feedbacksToCreate = sides.map((side) => ({
+          bookingId: booking.id,
+          clientSide: side.side,
+          clientName: side.name,
+          token: uuidv4(),
+        }));
 
         // אם יש לנו צדדים רלוונטיים, נשמור במסד ונייצר להם קישור
         if (feedbacksToCreate.length > 0) {
@@ -203,30 +190,20 @@ export const startCronJobs = () => {
             data: feedbacksToCreate
           });
 
-          for (const fb of feedbacksToCreate) {
-            // הקישור למערכת הלקוח
+          for (let i = 0; i < feedbacksToCreate.length; i++) {
+            const fb = feedbacksToCreate[i];
+            const sideInfo = sides[i];
             const baseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
             const feedbackLink = `${baseUrl}/feedback/${fb.token}`;
-            
-            // שולפים את הטלפון והמייל הרלוונטיים לפי צד הלקוח
-            let phoneToSend = null;
-            let emailToSend = null;
 
-            if (fb.clientSide === 'A') {
-              phoneToSend = booking.clientAPhone?.split(' | ')[0].trim() || null;
-              emailToSend = booking.clientAEmail || null;
-            } else {
-              phoneToSend = booking.clientBPhone?.split(' | ')[0].trim() || null;
-              emailToSend = booking.clientBEmail || null;
-            }
-            
-            // שליחה ל-WhatsApp אם יש מספר
+            const phoneToSend = primaryPhone(sideInfo.phone);
+            const emailToSend = sideInfo.email?.trim() || null;
+
             if (phoneToSend) {
               await sendFeedbackRequestWhatsApp(phoneToSend, fb.clientName, feedbackLink);
               console.log(`✅ נשלח וואטסאפ משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
             }
 
-            // שליחה למייל אם יש כתובת
             if (emailToSend) {
               await sendFeedbackRequestEmail(emailToSend, fb.clientName, feedbackLink);
               console.log(`✅ נשלח מייל משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);

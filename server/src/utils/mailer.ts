@@ -1,13 +1,35 @@
 import nodemailer from 'nodemailer';
 
-// תשתית עתידית להתחברות ל-Gmail
+// תשתית להתחברות ל-Gmail
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER || 'fake-email@gmail.com', // בעתיד נוסיף את המייל שלך ל-ENV
+    user: process.env.EMAIL_USER || 'fake-email@gmail.com',
     pass: process.env.EMAIL_PASS || 'fake-password',
   },
 });
+
+function canSendRealMail(): boolean {
+  return !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+}
+
+async function deliverMail(
+  mailOptions: nodemailer.SendMailOptions,
+  simulationLabel: string
+): Promise<boolean> {
+  try {
+    if (canSendRealMail()) {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ ${simulationLabel} → ${mailOptions.to}`);
+    } else {
+      console.log(`[MAILER SIMULATION] ${simulationLabel} → ${mailOptions.to}`);
+    }
+    return true;
+  } catch (error) {
+    console.error(`שגיאה בשליחת מייל (${simulationLabel}):`, error);
+    return false;
+  }
+}
 
 // ==========================================
 // 1. הקפצת אופציה (Bump Option)
@@ -237,9 +259,7 @@ export const sendFeedbackRequestEmail = async (clientEmail: string, clientName: 
   };
 
   try {
-    console.log(`[MAILER SIMULATION] מכין שליחת מייל משוב ל: ${clientEmail}...`);
-    // await transporter.sendMail(mailOptions);
-    return true;
+    return deliverMail(mailOptions, `מייל משוב ל-${clientEmail}`);
   } catch (error) {
     console.error('שגיאה בשליחת מייל משוב:', error);
     return false;

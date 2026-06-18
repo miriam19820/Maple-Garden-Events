@@ -8,6 +8,17 @@ export const SLOT_LABELS: Record<TimeSlot, string> = {
   evening: 'ערב',
 };
 
+export const SLOT_COLORS: Record<TimeSlot, string> = {
+  morning: '#F59E0B',
+  noon: '#10B981',
+  evening: '#6366F1',
+};
+
+export function getSlotColor(timeOfDay?: string | null): string {
+  const slot = normalizeTimeSlot(timeOfDay);
+  return slot ? SLOT_COLORS[slot] : '#64748B';
+}
+
 const SLOT_ALIASES: Record<string, TimeSlot> = {
   morning: 'morning',
   noon: 'noon',
@@ -55,6 +66,37 @@ export function getTakenSlots(bookings: { timeOfDay?: string | null }[]): Set<Ti
 export function getAvailableSlots(bookings: { timeOfDay?: string | null }[]): TimeSlot[] {
   const taken = getTakenSlots(bookings);
   return TIME_SLOTS.filter((s) => !taken.has(s));
+}
+
+export function getBlockedSlotsForDate(dateStr: string): TimeSlot[] {
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (d.getDay() === 6) return ['morning', 'noon'];
+  return [];
+}
+
+export function getBookableSlotsForDate(
+  dateStr: string,
+  bookings: { timeOfDay?: string | null }[]
+): TimeSlot[] {
+  const taken = getTakenSlots(bookings);
+  const blocked = new Set(getBlockedSlotsForDate(dateStr));
+  return TIME_SLOTS.filter((s) => !taken.has(s) && !blocked.has(s));
+}
+
+export function canAddMoreEventsForDate(
+  dateStr: string,
+  bookings: { timeOfDay?: string | null }[]
+): boolean {
+  return getBookableSlotsForDate(dateStr, bookings).length > 0;
+}
+
+export function formatAvailableSlotsLabelForDate(
+  dateStr: string,
+  bookings: { timeOfDay?: string | null }[]
+): string {
+  return getBookableSlotsForDate(dateStr, bookings)
+    .map((s) => `${SLOT_LABELS[s]} פנוי`)
+    .join(' · ');
 }
 
 export function canAddMoreEvents(bookings: { timeOfDay?: string | null }[]): boolean {

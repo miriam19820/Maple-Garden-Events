@@ -12,6 +12,9 @@ import {
   formatStoredTimeOfDay,
   getTakenSlots,
   SLOT_LABELS,
+  validateSlotOnDate,
+  parseDateLocal,
+  isDateFullyBooked,
 } from '../utils/timeSlot';
 import {
   allocateEventCode,
@@ -19,6 +22,8 @@ import {
   peekNextEventCodes,
   type EventCodePrefix,
 } from '../utils/eventCode';
+import { isHallOnlyBooking, HALL_ONLY_EVENT_TYPE } from '../validators/booking.validator';
+import { neonTransactionOptions, withDbRetry } from '../utils/dbRetry';
 
 function canEditBookingDate(eventDate: Date): boolean {
   const today = new Date();
@@ -26,6 +31,18 @@ function canEditBookingDate(eventDate: Date): boolean {
   const eventDay = new Date(eventDate);
   eventDay.setHours(0, 0, 0, 0);
   return today < eventDay;
+}
+
+function validateHallRentalPriceInput(data: { eventType?: string; hallRentalPrice?: unknown }): string | null {
+  if (!isHallOnlyBooking(data)) return null;
+  const raw = data.hallRentalPrice;
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return 'יש להזין מחיר השכרת אולם';
+  }
+  const price = Number(raw);
+  if (!Number.isFinite(price)) return 'מחיר השכרת אולם חייב להיות מספר תקין';
+  if (price <= 0) return 'מחיר השכרת אולם חייב להיות גדול מ-0';
+  return null;
 }
 
 export const createBooking = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -44,6 +61,11 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לאירוע.' });
   }
 
+  const hallPriceError = validateHallRentalPriceInput(data);
+  if (hallPriceError) {
+    return res.status(400).json({ success: false, message: hallPriceError });
+  }
+
   const isOption = data.isOption === true || datesToProcess.length > 1;
   const newStatus = isOption ? 'OPTION' : 'BOOKED';
 
@@ -56,7 +78,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
 
   // 🔥 התיקון שלנו: חישוב חכם של המחיר הכולל (כולל השכרת אולם והנתונים שמגיעים מצד הלקוח)
   let calculatedTotalPrice = 0;
-  if (data.eventType === 'השכרת אולם בלי אוכל') {
+  if (isHallOnlyBooking(data)) {
     calculatedTotalPrice = Number(data.hallRentalPrice) || 0;
   } else {
     calculatedTotalPrice = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
@@ -74,7 +96,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   let createdBookings: any[] = [];
   let eventsToEmit: { dateId: string, status: string }[] = [];
 
-  await prisma.$transaction(async (tx) => {
+  await withDbRetry(() =>
+    prisma.$transaction(async (tx) => {
     createdBookings = [];
     eventsToEmit = [];
 
@@ -113,8 +136,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       }
 
       const existingBookings = eventDate.bookings || [];
-      if (existingBookings.length >= 3) {
-        const err: any = new Error('התאריך מלא — כבר קיימים 3 אירועים (בוקר, צהריים וערב).');
+      if (isDateFullyBooked(possibleDate, existingBookings)) {
+        const err: any = new Error('התאריך מלא — אין משבצות זמן פנויות.');
         err.statusCode = 400;
         throw err;
       }
@@ -122,6 +145,13 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
       if (!slot) {
         const err: any = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const slotError = validateSlotOnDate(parseDateLocal(possibleDate), slot);
+      if (slotError) {
+        const err: any = new Error(slotError);
         err.statusCode = 400;
         throw err;
       }
@@ -164,7 +194,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           advancePaid: 0,
           totalPaid: 0,
           securityCheckStatus: 'PENDING',
-          isContractSigned: data.contractSigned || false,
+          isContractSigned: !!(data.contractSigned && data.clientSignature),
           clientSignatureUrl: data.clientSignature || null,
           isOption: newStatus === 'OPTION',
           managerComments: data.managerComments || null,
@@ -177,7 +207,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       
       eventsToEmit.push({ dateId: eventDate.id, status: newStatus });
     }
-  });
+  }, neonTransactionOptions));
 
   eventsToEmit.forEach(ev => io.emit('date-updated', ev));
 
@@ -260,6 +290,14 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     return res.status(403).json({ success: false, message: 'לא ניתן לערוך ביום האירוע או לאחריו.' });
   }
 
+  const hallPriceError = validateHallRentalPriceInput({
+    eventType: data.eventType ?? booking.eventType,
+    hallRentalPrice: data.hallRentalPrice ?? (booking as { hallRentalPrice?: number | null }).hallRentalPrice,
+  });
+  if (hallPriceError) {
+    return res.status(400).json({ success: false, message: hallPriceError });
+  }
+
   const clientAPhoneCombined = data.clientAPhone2
     ? `${data.clientAPhone} | נוסף: ${data.clientAPhone2}`
     : data.clientAPhone;
@@ -275,6 +313,11 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
 
   const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
   if (slot) {
+    const slotError = validateSlotOnDate(parseDateLocal(booking.eventDate.date), slot);
+    if (slotError) {
+      return res.status(400).json({ success: false, message: slotError });
+    }
+
     const siblings = await prisma.booking.findMany({
       where: { calendarDateId: booking.eventDate.id, id: { not: id } },
     });
@@ -295,7 +338,7 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
 
   // 🔥 התיקון: חישוב מחיר כולל גם בזמן עריכה
   let calculatedTotalPrice = booking.totalPrice;
-  if (data.eventType === 'השכרת אולם בלי אוכל') {
+  if (isHallOnlyBooking(data)) {
     calculatedTotalPrice = Number(data.hallRentalPrice) || 0;
   } else {
     calculatedTotalPrice = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
@@ -329,7 +372,9 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
         managerComments: data.managerComments || null,
         clientComments: data.clientComments || null,
         createdBy: data.createdBy || booking.createdBy,
-        isContractSigned: data.contractSigned !== undefined ? data.contractSigned : booking.isContractSigned,
+        isContractSigned: data.clientSignature !== undefined
+          ? !!(data.contractSigned && data.clientSignature)
+          : booking.isContractSigned,
         clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
         updatedBy: 'מערכת',
       },
