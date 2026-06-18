@@ -5,7 +5,7 @@ import { sendBumpWhatsApp } from '../utils/whatsapp';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
- import { sendPDFToClient } from '../Services/emailService';
+import { sendPDFToClient } from '../Services/emailService';
 import { io } from '../server';
 import {
   normalizeTimeSlot,
@@ -27,6 +27,7 @@ function canEditBookingDate(eventDate: Date): boolean {
   eventDay.setHours(0, 0, 0, 0);
   return today < eventDay;
 }
+
 export const createBooking = catchAsync(async (req: AuthRequest, res: Response) => {
   const data = req.body;
   const isManager = req.user?.role === 'manager'; 
@@ -53,7 +54,18 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     expiryDate.setHours(expiryDate.getHours() + hoursToAdd);
   }
 
-  const calculatedTotalPrice = data.guestCount * data.finalPricePortion;
+  // 🔥 התיקון שלנו: חישוב חכם של המחיר הכולל (כולל השכרת אולם והנתונים שמגיעים מצד הלקוח)
+  let calculatedTotalPrice = 0;
+  if (data.eventType === 'השכרת אולם בלי אוכל') {
+    calculatedTotalPrice = Number(data.hallRentalPrice) || 0;
+  } else {
+    calculatedTotalPrice = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
+  }
+  // לקיחת המחיר הסופי המדויק מצד הלקוח (כולל מע"מ, שדרוגים והנחות)
+  if (data.calculatedTotals && data.calculatedTotals.finalTotal !== undefined) {
+    calculatedTotalPrice = data.calculatedTotals.finalTotal;
+  }
+
   const clientAPhoneCombined = data.clientAPhone2 ? `${data.clientAPhone} | נוסף: ${data.clientAPhone2}` : data.clientAPhone;
   const clientAAddressCombined = data.clientACity ? `${data.clientACity}, ${data.clientAAddress}` : data.clientAAddress;
   const clientBPhoneCombined = data.clientBPhone2 ? `${data.clientBPhone} | נוסף: ${data.clientBPhone2}` : data.clientBPhone;
@@ -146,12 +158,12 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           guestCount: Number(data.guestCount) || 0,
           finalPricePortion: Number(data.finalPricePortion) || 0,
           totalPrice: calculatedTotalPrice || 0,
+          hallRentalPrice: data.hallRentalPrice ? Number(data.hallRentalPrice) : null, // 🔥 התיקון: שמירת מחיר אולם
           hasMusic: data.hasMusic !== undefined ? data.hasMusic : true,
           akumApprovalCode: data.akumApprovalCode || null,
           advancePaid: 0,
           totalPaid: 0,
           securityCheckStatus: 'PENDING',
-          // התיקון: שמירת נתוני החתימה מהטופס
           isContractSigned: data.contractSigned || false,
           clientSignatureUrl: data.clientSignature || null,
           isOption: newStatus === 'OPTION',
@@ -168,19 +180,16 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   });
 
   eventsToEmit.forEach(ev => io.emit('date-updated', ev));
-  // --- יצירת PDF ושליחה במייל (רלוונטי גם לאופציה וגם לאירוע סגור) ---
-// --- יצירת PDF ושליחה במייל (רלוונטי גם לאופציה וגם לאירוע סגור) ---
+
   if (data.contractSigned && data.clientSignature && createdBookings.length > 0) {
     try {
       const savedBooking = createdBookings[0];
-      
-      // תיקון: חילוץ התאריך הראשון מתוך המערך שהלקוח שלח
       const firstDateItem = datesToProcess[0];
       const firstDateString = typeof firstDateItem === 'object' && firstDateItem !== null ? firstDateItem.date : firstDateItem;
 
       const pdfData = {
         eventCode: savedBooking.eventCode,
-        isOption: newStatus === 'OPTION', // מעביר ל-PDF שזו רק אופציה כדי שישים סימן מים!
+        isOption: newStatus === 'OPTION',
         clientAFullName: savedBooking.clientAFullName,
         clientAIdNumber: savedBooking.clientAIdNumber,
         clientAPhone: savedBooking.clientAPhone || undefined,
@@ -189,12 +198,12 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         clientBIdNumber: savedBooking.clientBIdNumber || undefined,
         clientBPhone: savedBooking.clientBPhone || undefined,
         clientBEmail: savedBooking.clientBEmail || undefined,
-        eventDate: new Date(firstDateString).toString(), // <-- התיקון כאן
+        eventDate: new Date(firstDateString).toString(),
         guestCount: savedBooking.guestCount,
         eventType: savedBooking.eventType,
         timeOfDay: savedBooking.timeOfDay || undefined,
         clientSignatureUrl: data.clientSignature,
-        eventForm: {} // טופס ריק בשלב זה
+        eventForm: {} 
       };
 
       const contractPdfBuffer = await generateEventFormPDF(pdfData);
@@ -204,7 +213,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         await sendPDFToClient(
           clientEmail, 
           savedBooking.clientAFullName, 
-          new Date(firstDateString).toString(), // <-- והתיקון כאן
+          new Date(firstDateString).toString(), 
           contractPdfBuffer
         );
       }
@@ -217,10 +226,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     success: true,
     message: newStatus === 'OPTION' ? 'האופציות נשמרו והצעת המחיר נשלחה במייל!' : 'האירוע נשמר והחוזה נשלח!',
     data: createdBookings
-    
   });
 });
- 
 
 export const getBookingById = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
@@ -235,6 +242,7 @@ export const getBookingById = catchAsync(async (req: Request, res: Response) => 
 
   res.status(200).json({ success: true, data: booking });
 });
+
 export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const data = req.body;
@@ -285,8 +293,16 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
       ? `${data.startTime} - ${data.endTime}`
       : booking.timeOfDay);
 
-  const calculatedTotalPrice =
-    (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0) || booking.totalPrice;
+  // 🔥 התיקון: חישוב מחיר כולל גם בזמן עריכה
+  let calculatedTotalPrice = booking.totalPrice;
+  if (data.eventType === 'השכרת אולם בלי אוכל') {
+    calculatedTotalPrice = Number(data.hallRentalPrice) || 0;
+  } else {
+    calculatedTotalPrice = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
+  }
+  if (data.calculatedTotals && data.calculatedTotals.finalTotal !== undefined) {
+    calculatedTotalPrice = data.calculatedTotals.finalTotal;
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedBooking = await tx.booking.update({
@@ -307,12 +323,12 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
         guestCount: Number(data.guestCount) || 0,
         finalPricePortion: Number(data.finalPricePortion) || 0,
         totalPrice: calculatedTotalPrice,
+        hallRentalPrice: data.hallRentalPrice !== undefined ? Number(data.hallRentalPrice) : (booking as any).hallRentalPrice, // 🔥 התיקון
         hasMusic: data.hasMusic !== undefined ? data.hasMusic : booking.hasMusic,
         akumApprovalCode: data.akumApprovalCode || null,
         managerComments: data.managerComments || null,
         clientComments: data.clientComments || null,
         createdBy: data.createdBy || booking.createdBy,
-        // התיקון: עדכון נתוני החתימה במידה ונחתם בעריכה
         isContractSigned: data.contractSigned !== undefined ? data.contractSigned : booking.isContractSigned,
         clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
         updatedBy: 'מערכת',
@@ -335,6 +351,7 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   io.emit('date-updated', { dateId: booking.eventDate.id, status: booking.eventDate.status });
   res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
 });
+
 export const getNextEventCode = catchAsync(async (req: Request, res: Response) => {
   const prefix: EventCodePrefix = req.query.prefix === 'EVT' ? 'EVT' : 'OPT';
   const count = Math.min(Math.max(Number(req.query.count) || 1, 1), 10);
@@ -405,7 +422,6 @@ export const addEventAddition = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'חובה להסכים לתנאי התשלום' });
     }
 
-    // טרנזקציה להבטחת התאמה בין יצירת התוספת לעדכון המחיר הכולל
     const newAddition = await prisma.$transaction(async (tx) => {
       const addition = await tx.eventAddition.create({
         data: {
@@ -437,10 +453,9 @@ export const addEventAddition = async (req: Request, res: Response) => {
     console.error('Error adding event addition:', error);
     res.status(500).json({ error: 'שגיאת שרת פנימית בעת שמירת התוספת' });
   }
-  
 };
+
 export const finalizeBooking = catchAsync(async (req: Request, res: Response) => {
-  // 1. קבלת הנתונים מהמודאל
   const { bookingId, advancePaid, akumApprovalCode, hasMusic, clientSignature, tables } = req.body;
 
   const booking = await prisma.booking.findUnique({
@@ -455,10 +470,8 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
     eventCode = await allocateEventCode('EVT');
   }
 
-  // 🔥 התיקון: שימוש בחתימה החדשה (אם התקבלה כרגע) או בחתימה הקיימת שכבר שמורה במסד הנתונים!
   const finalSignature = clientSignature || booking.clientSignatureUrl;
 
-  // 2. טרנזקציה לעדכון ההזמנה, שמירת החתימה ושמירת סידור השולחנות
   const updated = await prisma.$transaction(async (tx) => {
     const updatedBooking = await tx.booking.update({
       where: { id: bookingId },
@@ -470,8 +483,8 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         paymentStatus: 'PARTIAL',
         isOption: false,
         eventCode,
-        isContractSigned: !!finalSignature, // הופך ל-true אם יש חתימה
-        clientSignatureUrl: finalSignature // שומר את החתימה (החדשה או הישנה)
+        isContractSigned: !!finalSignature,
+        clientSignatureUrl: finalSignature 
       }
     });
 
@@ -480,7 +493,6 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
       data: { status: 'BOOKED', optionExpiresAt: null }
     });
 
-    // שמירת ה-Floor Plan לטופס ההפקה
     if (tables && Array.isArray(tables)) {
       await tx.eventForm.upsert({
         where: { bookingId },
@@ -510,12 +522,11 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
     return updatedBooking;
   });
 
-  // 3. הפקת ה-PDF ושליחה במייל ללקוח
   if (finalSignature) {
     try {
       const pdfData = {
         eventCode: updated.eventCode,
-        isOption: false, // 🔥 התיקון: מבטיח שסימן המים לא יופיע בחוזה הסופי!
+        isOption: false,
         clientAFullName: updated.clientAFullName,
         clientAIdNumber: updated.clientAIdNumber,
         clientAPhone: updated.clientAPhone || undefined,
@@ -528,7 +539,7 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         guestCount: updated.guestCount,
         eventType: updated.eventType,
         timeOfDay: updated.timeOfDay || undefined,
-        clientSignatureUrl: finalSignature, // שולח את החתימה ל-PDF
+        clientSignatureUrl: finalSignature,
         eventForm: booking.eventForm || {} 
       };
 
@@ -551,6 +562,7 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
   io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
   res.status(200).json({ success: true, message: 'האירוע נסגר והחוזה נחתם בהצלחה!', data: updated });
 });
+
 export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
   const bookings = await prisma.booking.findMany({
     orderBy: { createdAt: 'desc' },
@@ -564,7 +576,6 @@ export const releaseOptions = catchAsync(async (req: Request, res: Response) => 
   
   if (!dateIds || dateIds.length === 0) return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לשחרור.' });
 
-  // טרנזקציה להבטחת סנכרון במחיקה
   await prisma.$transaction(async (tx) => {
     await tx.eventDate.updateMany({
       where: { id: { in: dateIds } },

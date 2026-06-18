@@ -66,7 +66,7 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
         </div>
 
         <div className={styles.inputGroup}>
-          <label>זמן ביום *</label>
+          <label>זמן ביום </label>
           <select name="timeOfDay" required value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
             {availableSlots.length !== 1 && <option value="">בחרי חלק ביום</option>}
             {availableSlots.map((slot: any) => (
@@ -90,17 +90,20 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
             <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} className={styles.input} />
           </div>
         </div>
-        <p className={styles.timeNote}>* לאחר סיום שעות האירוע המוגדרות תיתכן תוספת תשלום על כל שעה נוספת.</p>
+        <p className={styles.timeNote}> לאחר סיום שעות האירוע המוגדרות תיתכן תוספת תשלום על כל שעה נוספת.</p>
 
-        <div className={styles.inputGroup}>
-          <label>צורת הגשה (תפריט)</label>
-          <select value={servingStyle} onChange={(e) => setServingStyle(e.target.value)} className={styles.input}>
-            <option value="american">אמריקן סרביס (ברירת מחדל)</option>
-            <option value="center">מרכז שולחן</option>
-            <option value="bar">בר</option>
-            <option value="hall_only">שכירות אולם בלי אוכל</option>
-          </select>
-        </div>
+        {/* השינוי כאן: מסתירים את צורת ההגשה אם נבחר "השכרת אולם בלי אוכל" */}
+        {formData.eventType !== 'השכרת אולם בלי אוכל' && (
+          <div className={styles.inputGroup}>
+            <label>צורת הגשה (תפריט)</label>
+            <select value={servingStyle} onChange={(e) => setServingStyle(e.target.value)} className={styles.input}>
+              <option value="american">אמריקן סרביס (ברירת מחדל)</option>
+              <option value="center">מרכז שולחן</option>
+              <option value="bar">בר</option>
+              <option value="hall_only">שכירות אולם בלי אוכל</option>
+            </select>
+          </div>
+        )}
 
         {isFoodRelevant && (
           <>

@@ -99,7 +99,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
     calendarDateId: '', eventType: '', timeOfDay: '', startTime: '', endTime: '',
     guestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: '', clientSignatureUrl: '',
-    akumApprovalCode: '', hasMusic: false,
+   
+    akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
   });
 
   const [menuNotesList, setMenuNotesList] = useState<string[]>([]);
@@ -162,13 +163,14 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         if (eventDateStr) setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: '' }]);
         const parsedTime = parseStoredTimeOfDay(b.timeOfDay);
         
-        setFormData({
+     setFormData({
           createdBy: b.createdBy || '',
           clientAFullName: b.clientAFullName || '', clientAIdNumber: b.clientAIdNumber || '', clientAPhone: phoneA.phone, clientAPhone2: phoneA.phone2, clientAEmail: b.clientAEmail || '', clientACity: addrA.city, clientAAddress: addrA.address,
           clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
           calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime, endTime: parsedTime.endTime,
           guestCount: String(b.guestCount ?? ''), optionalGuestCount: '', finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
           akumApprovalCode: b.akumApprovalCode || '', hasMusic: !!b.hasMusic,
+          hallRentalPrice: b.hallRentalPrice ? String(b.hallRentalPrice) : '', // <--- התוספת החדשה
         });
         const notesBundle = parseNotesBundle(b.clientComments || '');
         setMenuNotesList(notesBundle.menu);
@@ -213,29 +215,35 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     setUpgrades((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const isHallOnly = servingStyle === 'hall_only';
+const isHallOnly = servingStyle === 'hall_only' || formData.eventType === 'השכרת אולם';
   const isFoodRelevant = !isHallOnly;
   const isWedding = formData.eventType === 'חתונה';
+const calculateTotals = () => {
+  let base = 0;
+  
+  // הוספנו את התנאי הזה: אם זה רק אולם, מחיר הבסיס הוא המחיר שהמנהל הזין
+  if (isHallOnly) {
+    base += Number(formData.hallRentalPrice) || 0;
+  }
 
-  const calculateTotals = () => {
-    let base = 0;
-    Object.keys(upgrades).forEach((key) => {
-      if (key === 'baseDesign' && isHallOnly) return; 
-      if (upgrades[key as keyof typeof upgrades]) base += UPGRADES_PRICING[key];
-    });
-    if (isFoodRelevant) {
-      const portions = Number(formData.guestCount) || 0;
-      const basePrice = Number(formData.finalPricePortion) || 0;
-      base += portions * (basePrice + KOSHER_PRICING[kosherType].extra);
-    }
-    let discountVal = 0;
-    if (formData.discountPercent) discountVal += base * (Number(formData.discountPercent) / 100);
-    if (formData.discountAmount) discountVal += Number(formData.discountAmount);
-    let subtotal = Math.max(0, base - discountVal);
-    let vatAmount = formData.vatType === 'not_included' ? subtotal * 0.18 : 0; 
-    return { base, discountVal, subtotal, vatAmount, finalTotal: subtotal + vatAmount };
-  };
+  Object.keys(upgrades).forEach((key) => {
+    if (key === 'baseDesign' && isHallOnly) return; 
+    if (upgrades[key as keyof typeof upgrades]) base += UPGRADES_PRICING[key];
+  });
 
+  if (isFoodRelevant) {
+    const portions = Number(formData.guestCount) || 0;
+    const basePrice = Number(formData.finalPricePortion) || 0;
+    base += portions * (basePrice + KOSHER_PRICING[kosherType].extra);
+  }
+
+  let discountVal = 0;
+  if (formData.discountPercent) discountVal += base * (Number(formData.discountPercent) / 100);
+  if (formData.discountAmount) discountVal += Number(formData.discountAmount);
+  let subtotal = Math.max(0, base - discountVal);
+  let vatAmount = formData.vatType === 'not_included' ? subtotal * 0.18 : 0; 
+  return { base, discountVal, subtotal, vatAmount, finalTotal: subtotal + vatAmount };
+};
   const totals = calculateTotals();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -295,11 +303,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} selectedDatesDisplay={selectedDatesDisplay} />
           <ClientsSection formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isWedding={isWedding} styles={styles} />
           <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} styles={styles} />
-
+             {isFoodRelevant && (
           <div className={styles.sectionCard}>
             <h3 className={styles.sectionHeader}>הערות לתפריט ובקשות מיוחדות</h3>
             <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder="לדוגמה: אלרגיות מיוחדות..." />
-          </div>
+          </div>)}
 
           <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} depositMethod={depositMethod} setDepositMethod={setDepositMethod} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} styles={styles} />
 

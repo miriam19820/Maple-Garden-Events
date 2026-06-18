@@ -46,6 +46,23 @@ const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpg
       <div className={styles.sectionCard}>
         <h3 className={styles.sectionHeader}>סיכום, פיקדון ותשלום</h3>
 
+        {/* --- התוספת החדשה: מחיר השכרת אולם (מוצג רק בלי אוכל) --- */}
+        {isHallOnly && (
+          <div className={styles.inputGroup} style={{ backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px solid #bbf7d0', marginBottom: '20px' }}>
+            <label style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#166534' }}>מחיר השכרת אולם (₪) *</label>
+            <input
+              type="number"
+              name="hallRentalPrice"
+              value={formData.hallRentalPrice || ''}
+              onChange={handleChange}
+              className={styles.input}
+              placeholder="הזן סכום לשכירות האולם (ללא אוכל)..."
+              required={isHallOnly}
+              style={{ fontSize: '1.1rem', fontWeight: 'bold' }}
+            />
+          </div>
+        )}
+
         <div className={styles.paymentGrid}>
           <div className={styles.inputGroup}>
             <label>הנחה כוללת (%)</label>

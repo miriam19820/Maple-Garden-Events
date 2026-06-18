@@ -6,7 +6,6 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
 model Booking {
   id                  String          @id @default(uuid())
   clientAFullName     String
@@ -27,6 +26,7 @@ model Booking {
   managerComments     String?
   clientComments      String?
   totalPrice          Float
+  hallRentalPrice     Float?          // <--- הנה השדה החדש שהוספנו!
   paidAmount          Float           @default(0)
   paymentStatus       String          @default("pending")
   eventCode           String          @unique
@@ -49,9 +49,8 @@ model Booking {
   additions           EventAddition[]
   eventForm           EventForm?
   feedbacks           Feedback[]
-  clientSignatureUrl String?
+  clientSignatureUrl  String?
 }
-
 model MenuCategory {
   id     String @id @default(uuid())
   name   String
