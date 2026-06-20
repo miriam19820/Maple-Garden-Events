@@ -21,7 +21,7 @@ export const createBookingSchema = z.object({
     finalPricePortion: optionalNumber,
     hallRentalPrice: optionalNumber,
     servingStyle: z.string().optional(),
-
+    
     clientAEmail: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal('')),
     clientBFullName: z.string().optional(),
 
