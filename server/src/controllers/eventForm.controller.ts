@@ -3,6 +3,26 @@ import prisma from '../config/prisma';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
 import { sendPDFToClient, sendWhatsAppMessage } from '../Services/emailService';
 
+function mapTableCreate(table: {
+  id: number;
+  x: number;
+  y: number;
+  section?: string | null;
+  isHonor?: boolean;
+  width?: number | null;
+  height?: number | null;
+}) {
+  return {
+    tableNumber: table.id,
+    positionX: table.x,
+    positionY: table.y,
+    section: table.section ?? null,
+    isHonor: table.isHonor ?? false,
+    width: table.width ?? null,
+    height: table.height ?? null,
+  };
+}
+
 export const eventFormController = {
 
   async searchBookings(req: Request, res: Response) {
@@ -37,22 +57,14 @@ export const eventFormController = {
           ...formData,
           tables: tables ? {
             deleteMany: {},
-            create: tables.map((table: any) => ({
-              tableNumber: table.id,
-              positionX: table.x,
-              positionY: table.y,
-            }))
+            create: tables.map(mapTableCreate)
           } : undefined
         },
         create: { 
           bookingId, 
           ...formData,
           tables: tables ? {
-            create: tables.map((table: any) => ({
-              tableNumber: table.id,
-              positionX: table.x,
-              positionY: table.y,
-            }))
+            create: tables.map(mapTableCreate)
           } : undefined
         }
       });
@@ -128,6 +140,39 @@ export const eventFormController = {
       res.json(form);
     } catch (e) {
       res.status(500).json({ error: 'שגיאה בשליפת הטופס' });
+    }
+  },
+
+  async saveTables(req: Request, res: Response) {
+    try {
+      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+      const { tables } = req.body;
+
+      if (!Array.isArray(tables)) {
+        return res.status(400).json({ error: 'נדרש מערך tables' });
+      }
+
+      const form = await prisma.eventForm.upsert({
+        where: { bookingId },
+        update: {
+          tables: {
+            deleteMany: {},
+            create: tables.map(mapTableCreate),
+          },
+        },
+        create: {
+          bookingId,
+          tables: {
+            create: tables.map(mapTableCreate),
+          },
+        },
+        include: { tables: true },
+      });
+
+      res.json({ success: true, data: form });
+    } catch (e) {
+      console.error('Save tables error:', e);
+      res.status(500).json({ error: 'שגיאה בשמירת סידור שולחנות' });
     }
   },
 

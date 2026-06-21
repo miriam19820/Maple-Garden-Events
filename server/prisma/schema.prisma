@@ -134,6 +134,10 @@ model TablePosition {
   tableNumber Int
   positionX   Float
   positionY   Float
+  section     String?
+  isHonor     Boolean   @default(false)
+  width       Float?
+  height      Float?
   eventForm   EventForm @relation(fields: [eventFormId], references: [id], onDelete: Cascade)
 
   @@unique([eventFormId, tableNumber])
