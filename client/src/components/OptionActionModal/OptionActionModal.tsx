@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import styles from './OptionActionModal.module.css';
+import { promptPrintAfterClose } from '../../utils/contractPrint';
 
 interface Props {
   option: any;
@@ -72,6 +73,9 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
       if (result.success) {
         const code = result.data?.eventCode;
         alert(code ? `האירוע נסגר בהצלחה!\nמספר הזמנה: ${code}` : 'האירוע נסגר בהצלחה.');
+        if (option.id) {
+          await promptPrintAfterClose(option.id);
+        }
         onSuccess();
       }
       else alert(result.message || 'שגיאה בסגירת האירוע');

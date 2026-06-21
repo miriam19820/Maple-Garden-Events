@@ -3,6 +3,7 @@ import { KOSHER_PRICING } from '../BookingForm';
 import CheckCamera from '../../CheckCamera/CheckCamera';
 import CheckDetailsForm from '../../CheckDetailsForm/CheckDetailsForm';
 import type { DepositCheckDetails } from '../../../utils/checkOcr';
+import { openContractPdf, printContract } from '../../../utils/contractPrint';
 
 interface PaymentAndUpgradesSectionProps {
   formData: any;
@@ -198,15 +199,31 @@ const PaymentAndUpgradesSection = ({
           <textarea name="paymentTerms" value={formData.paymentTerms} onChange={handleChange} className={styles.input} rows={2} placeholder="פירוט תנאי התשלום שסוכמו..."></textarea>
         </div>
 
-        {isEditMode && formData.clientSignatureUrl && (
-          <button
-            type="button"
-            onClick={() => window.open(`http://localhost:5000/api/bookings/${editId}/contract-pdf`, '_blank')}
-            className={styles.viewContractBtn}
-            style={{ backgroundColor: '#059669', color: 'white', padding: '10px', borderRadius: '5px', border: 'none', cursor: 'pointer', marginTop: '15px' }}
-          >
-            📄 צפייה בחוזה החתום
-          </button>
+        {isEditMode && formData.clientSignatureUrl && editId && (
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '15px' }}>
+            <button
+              type="button"
+              onClick={() => openContractPdf(editId)}
+              className={styles.viewContractBtn}
+              style={{ backgroundColor: '#059669', color: 'white', padding: '10px 14px', borderRadius: '5px', border: 'none', cursor: 'pointer' }}
+            >
+              צפייה בחוזה החתום
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await printContract(editId);
+                } catch {
+                  alert('לא הצלחנו להדפיס את החוזה. ודאי שמדפסת מחוברת ונסי שוב.');
+                }
+              }}
+              className={styles.viewContractBtn}
+              style={{ backgroundColor: '#1d4ed8', color: 'white', padding: '10px 14px', borderRadius: '5px', border: 'none', cursor: 'pointer' }}
+            >
+              הדפסת חוזה
+            </button>
+          </div>
         )}
 
         <div className={styles.totalsBox}>

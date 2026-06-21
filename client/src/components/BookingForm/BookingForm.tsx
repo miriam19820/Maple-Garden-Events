@@ -4,6 +4,7 @@ import styles from './BookingForm.module.css';
 import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
+import { promptPrintAfterClose } from '../../utils/contractPrint';
 import { getSignatureDataUrl } from '../../utils/signature';
 import { scanCheckImage, fileToDataUrl, type DepositCheckDetails } from '../../utils/checkOcr';
 import SignatureCanvas from 'react-signature-canvas';
@@ -13,6 +14,7 @@ import EventSettingsSection from './sections/EventSettingsSection';
 import PaymentAndUpgradesSection from './sections/PaymentAndUpgradesSection';
 import ContractModal from './sections/ContractModal';
 import MetaBar from './sections/MetaBar';
+import OptionDatesBar, { normalizeOptionDate } from './sections/OptionDatesBar';
 import { NotesList } from '../NotesList/NotesList';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
 
@@ -134,8 +136,10 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   else if (location.state?.selectedDate) datesToProcess = [location.state.selectedDate];
   else if (location.state?.date) datesToProcess = [{ date: location.state.date, hebrewDate: location.state.hebrewDate || '' }];
 
-  const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<any[]>(datesToProcess);
-  const isOptionMode = forcedIsOption || location.state?.isOption || datesToProcess.length > 1;
+  const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<any[]>(
+    datesToProcess.map(normalizeOptionDate)
+  );
+  const isOptionMode = forcedIsOption || location.state?.isOption;
   const [isOption, setIsOption] = useState(isOptionMode);
   const [optionDurationHours, setOptionDurationHours] = useState(48);
   const [orderNumber, setOrderNumber] = useState('');
@@ -492,8 +496,13 @@ const calculateTotals = () => {
       const resData = await response.json();
 
       if (response.ok) {
-        const savedCode = resData.data?.[0]?.eventCode || resData.data?.eventCode;
+        const savedBooking = Array.isArray(resData.data) ? resData.data[0] : resData.data;
+        const savedCode = savedBooking?.eventCode;
+        const savedId = savedBooking?.id || editId;
         alert(isEditMode ? 'ההזמנה עודכנה בהצלחה!' : isOption ? `האופציה נשמרה בהצלחה!${savedCode ? `\nמספר אופציה: ${savedCode}` : ''}` : `האירוע נסגר ונשמר בהצלחה!${savedCode ? `\nמספר הזמנה: ${savedCode}` : ''}`);
+        if (!isOption && contractSigned && savedId) {
+          await promptPrintAfterClose(savedId);
+        }
         navigate('/');
       } else {
         const fieldErrors = Array.isArray(resData.errors)
@@ -521,7 +530,14 @@ const calculateTotals = () => {
         </div>
 
         <form className={styles.formBody} onSubmit={handleSubmit} style={{ direction: 'rtl' }}>
-          <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} selectedDatesDisplay={selectedDatesDisplay} />
+          <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} />
+          {isOption && (
+            <OptionDatesBar
+              selectedDates={selectedDatesDisplay}
+              onChange={setSelectedDatesDisplay}
+              eventType={formData.eventType || 'חתונה'}
+            />
+          )}
           <ClientsSection formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isWedding={isWedding} styles={styles} />
           <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} styles={styles} />
              {isFoodRelevant && (

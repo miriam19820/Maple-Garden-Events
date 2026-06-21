@@ -71,9 +71,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
   const [selectedDay, setSelectedDay] = useState<any>(null);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [selectedDateForAction, setSelectedDateForAction] = useState<string | null>(null);
-  const [isOptionMode, setIsOptionMode] = useState(false);
-  const [optionDates, setOptionDates] = useState<string[]>([]);
-  const [eventTypeFilter, setEventTypeFilter] = useState('חתונה'); 
+  const [eventTypeFilter, setEventTypeFilter] = useState('חתונה');
 
   const year  = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -169,26 +167,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
         </div>
       </div>
 
-      {isOptionMode && (
-        <div className="option-mode-banner">
-          <p>מצב בחירת אופציה: נבחרו {optionDates.length} מתוך 3 תאריכים.</p>
-          <div className="option-banner-actions">
-           <button 
-              className="confirm-options-btn" 
-              onClick={() => {
-                navigate(`/option`, { state: { selectedDates: optionDates } });
-                setIsOptionMode(false);
-                setOptionDates([]);
-              }} 
-              disabled={optionDates.length === 0}
-            >
-              המשך להרשמה מלאה
-            </button>
-            <button className="cancel-btn" onClick={() => { setIsOptionMode(false); setOptionDates([]); }}>בטל</button>
-          </div>
-        </div>
-      )}
-
       <div className="calendar-nav" style={{ direction: 'rtl' }}>
         <button className="nav-btn year-btn" onClick={nextYear}>»</button>
         <button className="nav-btn" onClick={nextMonth}>›</button>
@@ -208,9 +186,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
           <div className="calendar-grid">
             {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
             {grid.map(day => {
-              const isSelectedOption = optionDates.includes(day.date);
-              
-              // לוגיקה לזיהוי היום והעבר
               const isToday = day.date === todayStr;
               const isPast = day.date < todayStr;
               
@@ -218,7 +193,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                 'calendar-cell', 
                 `status-${day.status.toLowerCase()}`, 
                 !day.isCurrentMonth ? 'out-of-month' : '', 
-                isSelectedOption ? 'selected-for-option' : '',
                 isToday ? 'is-today' : '',
                 isPast && day.isCurrentMonth ? 'is-past' : ''
               ].filter(Boolean).join(' ');
@@ -230,12 +204,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
                   
                   if (day.bookings.length > 0) { setSelectedDay(day); return; }
-                  
-                  if (isOptionMode) {
-                    if (optionDates.includes(day.date)) setOptionDates(optionDates.filter(d => d !== day.date));
-                    else if (optionDates.length < 3) setOptionDates([...optionDates, day.date]);
-                    else alert("ניתן לבחור עד 3 תאריכים.");
-                  } else { setSelectedDateForAction(day.date); setIsActionModalOpen(true); }
+                  setSelectedDateForAction(day.date); setIsActionModalOpen(true);
                 }}>
                   <div className="cell-header-row">
                       <span className="gregorian-num">
@@ -311,7 +280,24 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
             </div>
             <div className="side-panel-body">
               <button className="book-btn" onClick={handleBookEvent}>סגירת אירוע</button>
-              <button className="option-btn" onClick={() => { setIsActionModalOpen(false); setIsOptionMode(true); setOptionDates([selectedDateForAction!]); }}>שמירת אופציה</button>
+              <button
+                className="option-btn"
+                onClick={() => {
+                  if (!selectedDateForAction) return;
+                  const dayData = datesData.find((d: any) => d.date === selectedDateForAction);
+                  setIsActionModalOpen(false);
+                  navigate('/option', {
+                    state: {
+                      selectedDates: [{
+                        date: selectedDateForAction,
+                        hebrewDate: dayData?.hebrewDate || '',
+                      }],
+                    },
+                  });
+                }}
+              >
+                שמירת אופציה
+              </button>
             </div>
           </div>
         </div>

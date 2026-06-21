@@ -9,6 +9,7 @@ import {
   getSlotColor,
 } from '../../utils/timeSlot';
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
+import { printContract, openContractPdf } from '../../utils/contractPrint';
 import { NotesList } from '../NotesList/NotesList';
 import './EventPopup.css';
 
@@ -111,6 +112,30 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                       >
                         עריכת פרטים
                       </button>
+                      {booking.isContractSigned && booking.id && (
+                        <>
+                          <button
+                            type="button"
+                            className="edit-btn"
+                            onClick={() => openContractPdf(booking.id)}
+                          >
+                            צפייה בחוזה
+                          </button>
+                          <button
+                            type="button"
+                            className="edit-btn"
+                            onClick={async () => {
+                              try {
+                                await printContract(booking.id);
+                              } catch {
+                                alert('לא הצלחנו להדפיס את החוזה.');
+                              }
+                            }}
+                          >
+                            הדפסת חוזה
+                          </button>
+                        </>
+                      )}
                       {!editable && (
                         <span className="edit-blocked-msg">לא ניתן לערוך ביום האירוע או לאחריו</span>
                       )}

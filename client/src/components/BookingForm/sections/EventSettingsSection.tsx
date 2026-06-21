@@ -50,15 +50,19 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
     <div className={styles.sectionCard}>
       <h3 className={styles.sectionHeader}>הגדרות אירוע, זמנים ותפריט</h3>
       <div className={styles.eventDetailsGrid}>
-        <div className={styles.inputGroup}>
-          <label>{isOption ? 'תאריכים אופציונליים (לועזי)' : 'תאריך אירוע סופי (לועזי)'}</label>
-          <input type="text" name="calendarDateId" value={dateStr} readOnly className={`${styles.input} ${styles.inputReadonly}`} />
-        </div>
+        {!isOption && (
+          <>
+            <div className={styles.inputGroup}>
+              <label>תאריך אירוע סופי (לועזי)</label>
+              <input type="text" name="calendarDateId" value={dateStr} readOnly className={`${styles.input} ${styles.inputReadonly}`} />
+            </div>
 
-        <div className={styles.inputGroup}>
-          <label>{isOption ? 'תאריכים אופציונליים (עברי)' : 'תאריך אירוע סופי (עברי)'}</label>
-          <input type="text" value={hebrewDateDisplay} readOnly className={`${styles.input} ${styles.dateReadonly}`} />
-        </div>
+            <div className={styles.inputGroup}>
+              <label>תאריך אירוע סופי (עברי)</label>
+              <input type="text" value={hebrewDateDisplay} readOnly className={`${styles.input} ${styles.dateReadonly}`} />
+            </div>
+          </>
+        )}
 
         <div className={styles.inputGroup}>
           <label>זמן ביום </label>
