@@ -8,14 +8,16 @@ import { generateEventFormPDF } from '../utils/pdfGenerator';
 import { sendPDFToClient } from '../Services/emailService';
 import { io } from '../server';
 import {
-  normalizeTimeSlot,
   formatStoredTimeOfDay,
-  getTakenSlots,
   SLOT_LABELS,
-  validateSlotOnDate,
   parseDateLocal,
   isDateFullyBooked,
+  type TimeSlot,
 } from '../utils/timeSlot';
+import {
+  validateSlotAvailability,
+  resolveBookingSlot,
+} from '../utils/bookingDateValidation';
 import {
   allocateEventCode,
   convertOptionCodeToEventCode,
@@ -118,6 +120,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           include: { bookings: true },
         });
       } else {
+        await tx.$executeRaw`SELECT id FROM "EventDate" WHERE id = ${eventDate.id} FOR UPDATE`;
         const updatePayload: Record<string, unknown> = {};
         if (newStatus === 'BOOKED') {
           updatePayload.status = 'BOOKED';
@@ -132,7 +135,22 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
             data: updatePayload,
             include: { bookings: true },
           });
+        } else {
+          eventDate = await tx.eventDate.findUniqueOrThrow({
+            where: { id: eventDate.id },
+            include: { bookings: true },
+          });
         }
+      }
+
+      if (newStatus === 'BOOKED' && eventDate) {
+        await tx.booking.deleteMany({
+          where: { calendarDateId: eventDate.id, isOption: true },
+        });
+        eventDate = await tx.eventDate.findUniqueOrThrow({
+          where: { id: eventDate.id },
+          include: { bookings: true },
+        });
       }
 
       const existingBookings = eventDate.bookings || [];
@@ -142,23 +160,27 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         throw err;
       }
 
-      const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
+      const slot = resolveBookingSlot(
+        data.timeOfDay,
+        data.startTime,
+        data.endTime,
+        newStatus === 'OPTION'
+      );
       if (!slot) {
         const err: any = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
         err.statusCode = 400;
         throw err;
       }
 
-      const slotError = validateSlotOnDate(parseDateLocal(possibleDate), slot);
-      if (slotError) {
-        const err: any = new Error(slotError);
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const taken = getTakenSlots(existingBookings);
-      if (taken.has(slot)) {
-        const err: any = new Error(`כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה.`);
+      const slotAvailabilityError = validateSlotAvailability(
+        parseDateLocal(possibleDate),
+        slot,
+        existingBookings,
+        data.eventType || 'חתונה',
+        { blockShabbatEntirely: newStatus === 'OPTION' }
+      );
+      if (slotAvailabilityError) {
+        const err: any = new Error(slotAvailabilityError);
         err.statusCode = 400;
         throw err;
       }
@@ -166,7 +188,9 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       const timeString = formatStoredTimeOfDay(slot, data.startTime, data.endTime);
       const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT');
 
-      const newBooking = await tx.booking.create({
+      let newBooking;
+      try {
+        newBooking = await tx.booking.create({
         data: {
           clientAFullName: data.clientAFullName,
           clientAIdNumber: data.clientAIdNumber,
@@ -183,8 +207,9 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
             connect: { id: eventDate.id } 
           },
           
-          eventType: data.eventType,
+          eventType: data.eventType || 'לא צוין',
           timeOfDay: timeString,
+          timeSlot: slot,
           guestCount: Number(data.guestCount) || 0,
           finalPricePortion: Number(data.finalPricePortion) || 0,
           totalPrice: calculatedTotalPrice || 0,
@@ -199,12 +224,20 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           isOption: newStatus === 'OPTION',
           managerComments: data.managerComments || null,
           clientComments: data.clientComments || null,
-          createdBy: isManager ? "מנהל מערכת" : "נציג מכירות",
+          createdBy: data.createdBy || 'לא צוין',
           eventCode,
           depositCheckUrl: data.depositCheckUrl || null,
           depositCheckDetails: data.depositCheckDetails || null,
         }
       });
+      } catch (createErr: any) {
+        if (createErr?.code === 'P2002') {
+          const err: any = new Error(`כבר קיים אירוע ב${SLOT_LABELS[slot as TimeSlot]} בתאריך זה.`);
+          err.statusCode = 409;
+          throw err;
+        }
+        throw createErr;
+      }
       createdBookings.push(newBooking);
       
       eventsToEmit.push({ dateId: eventDate.id, status: newStatus });
@@ -313,22 +346,20 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     ? `${data.clientBCity}, ${data.clientBAddress}`
     : data.clientBAddress;
 
-  const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
+  const slot = resolveBookingSlot(data.timeOfDay, data.startTime, data.endTime, booking.isOption);
   if (slot) {
-    const slotError = validateSlotOnDate(parseDateLocal(booking.eventDate.date), slot);
-    if (slotError) {
-      return res.status(400).json({ success: false, message: slotError });
-    }
-
     const siblings = await prisma.booking.findMany({
       where: { calendarDateId: booking.eventDate.id, id: { not: id } },
     });
-    const taken = getTakenSlots(siblings);
-    if (taken.has(slot)) {
-      return res.status(400).json({
-        success: false,
-        message: `כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה.`,
-      });
+    const slotAvailabilityError = validateSlotAvailability(
+      parseDateLocal(booking.eventDate.date),
+      slot,
+      siblings,
+      data.eventType ?? booking.eventType,
+      { blockShabbatEntirely: booking.isOption }
+    );
+    if (slotAvailabilityError) {
+      return res.status(400).json({ success: false, message: slotAvailabilityError });
     }
   }
 
@@ -365,6 +396,7 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
         clientBAddress: clientBAddressCombined || null,
         eventType: data.eventType,
         timeOfDay: timeString,
+        ...(slot ? { timeSlot: slot } : {}),
         guestCount: Number(data.guestCount) || 0,
         finalPricePortion: Number(data.finalPricePortion) || 0,
         totalPrice: calculatedTotalPrice,

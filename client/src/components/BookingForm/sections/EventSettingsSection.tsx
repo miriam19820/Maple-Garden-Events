@@ -65,8 +65,9 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
         )}
 
         <div className={styles.inputGroup}>
-          <label>זמן ביום </label>
-          <select name="timeOfDay" required value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
+          <label>זמן ביום{isOption ? ' (אופציונלי)' : ''}</label>
+          <select name="timeOfDay" required={!isOption} value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
+            {isOption && <option value="">לא נבחר</option>}
             {sortSlotsForDisplay(availableSlots).map((slot: any) => (
               <option key={slot} value={slot}>
                 {SLOT_LABELS[slot as keyof typeof SLOT_LABELS]} ({SLOT_HOURS[slot as keyof typeof SLOT_HOURS].start} - {SLOT_HOURS[slot as keyof typeof SLOT_HOURS].end})
@@ -108,8 +109,8 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
           <>
             <div className={styles.splitRow}>
               <div className={styles.inputGroup}>
-                <label>כמות מנות (בפועל)</label>
-                <input type="number" name="guestCount" required value={formData.guestCount} onChange={handleChange} className={styles.input} />
+                <label>כמות מנות (בפועל){isOption ? ' (אופציונלי)' : ''}</label>
+                <input type="number" name="guestCount" required={!isOption} value={formData.guestCount} onChange={handleChange} className={styles.input} />
               </div>
               <div className={styles.inputGroup}>
                 <label>מנות אופציה (רזרבה)</label>
@@ -119,8 +120,8 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
             </div>
             
             <div className={styles.inputGroup}>
-              <label>מחיר מנה בסיסי (₪) *</label>
-              <input type="number" name="finalPricePortion" value={formData.finalPricePortion} required onChange={handleChange} className={styles.input} />
+              <label>מחיר מנה בסיסי (₪){isOption ? ' (אופציונלי)' : ' *'}</label>
+              <input type="number" name="finalPricePortion" value={formData.finalPricePortion} required={!isOption} onChange={handleChange} className={styles.input} />
             </div>
 
             <div className={styles.inputGroup}>

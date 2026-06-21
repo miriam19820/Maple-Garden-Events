@@ -197,6 +197,21 @@
   box-shadow: 0 0 0 3px rgba(140, 191, 142, 0.2);
 }
 
+.selectPlaceholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.selectHasValue {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.metaBar select.input option:not([value=""]) {
+  font-weight: 700;
+  color: #1e293b;
+}
+
 .inputReadonly {
   background: var(--maple-bg) !important;
   cursor: not-allowed;

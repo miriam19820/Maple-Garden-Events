@@ -12,4 +12,8 @@ router.get('/extras', settingsController.getExtras);
 router.post('/extras', settingsController.addExtra);
 router.put('/extras/:id', settingsController.updateExtra);
 
+router.get('/staff', settingsController.getStaff);
+router.post('/staff', settingsController.addStaff);
+router.delete('/staff/:id', settingsController.deleteStaff);
+
 export default router;

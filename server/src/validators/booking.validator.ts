@@ -14,8 +14,10 @@ const optionalNumber = z.preprocess(
 
 export const createBookingSchema = z.object({
   body: z.object({
-    clientAFullName: z.string({ message: "שם לקוח הוא חובה" }).min(2, "שם הלקוח חייב להכיל לפחות 2 תווים"),
-    clientAPhone: z.string({ message: "טלפון הוא חובה" }).min(9, "מספר טלפון לא תקין"),
+    isOption: z.boolean().optional(),
+    createdBy: z.string().optional(),
+    clientAFullName: z.string().optional(),
+    clientAPhone: z.string().optional(),
 
     guestCount: optionalNumber,
     finalPricePortion: optionalNumber,
@@ -25,8 +27,8 @@ export const createBookingSchema = z.object({
     clientAEmail: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal('')),
     clientBFullName: z.string().optional(),
 
-    timeOfDay: z.string({ message: "חובה לבחור שעת אירוע" }).min(1, "חובה לבחור שעת אירוע"),
-    eventType: z.string({ message: "חובה לבחור סוג אירוע" }).min(1, "חובה לבחור סוג אירוע"),
+    timeOfDay: z.string().optional(),
+    eventType: z.string().optional(),
 
     allSelectedDates: z.array(z.any()).optional(),
     calendarDateId: z.string().optional(),
@@ -36,6 +38,63 @@ export const createBookingSchema = z.object({
       path: ["allSelectedDates"],
     })
     .superRefine((data, ctx) => {
+      if (data.isOption) {
+        const name = (data.clientAFullName || '').trim();
+        if (name.length < 2) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "יש להזין שם פרטי ושם משפחה",
+            path: ["clientAFullName"],
+          });
+        }
+        const phone = (data.clientAPhone || '').trim();
+        if (phone.length < 9) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "מספר טלפון לא תקין",
+            path: ["clientAPhone"],
+          });
+        }
+        if (!(data.createdBy || '').trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "יש לבחור נציג מהרשימה",
+            path: ["createdBy"],
+          });
+        }
+        return;
+      }
+
+      if (!(data.clientAFullName || '').trim() || (data.clientAFullName || '').trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "שם לקוח הוא חובה",
+          path: ["clientAFullName"],
+        });
+      }
+      const phone = (data.clientAPhone || '').trim();
+      if (phone.length < 9) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "מספר טלפון לא תקין",
+          path: ["clientAPhone"],
+        });
+      }
+      if (!(data.timeOfDay || '').trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "חובה לבחור שעת אירוע",
+          path: ["timeOfDay"],
+        });
+      }
+      if (!(data.eventType || '').trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "חובה לבחור סוג אירוע",
+          path: ["eventType"],
+        });
+      }
+
       if (isHallOnlyBooking(data)) {
         const price = Number(data.hallRentalPrice);
         if (!Number.isFinite(price) || price <= 0) {

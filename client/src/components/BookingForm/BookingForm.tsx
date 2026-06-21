@@ -100,6 +100,13 @@ function validateHallRentalPrice(value: string): string {
   return '';
 }
 
+function splitFullName(fullName: string): { first: string; last: string } {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: '', last: '' };
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return { first: parts[0], last: parts.slice(1).join(' ') };
+}
+
 const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -145,9 +152,12 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [orderNumber, setOrderNumber] = useState('');
 
   const [formData, setFormData] = useState({
-    createdBy: '', clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
+    createdBy: '',
+    clientAFirstName: '',
+    clientALastName: '',
+    clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
-    calendarDateId: '', eventType: '', timeOfDay: initialTimeSlot, startTime: initialSlotHours.start, endTime: initialSlotHours.end,
+    calendarDateId: '', eventType: '', timeOfDay: isOptionMode ? '' : initialTimeSlot, startTime: isOptionMode ? '' : initialSlotHours.start, endTime: isOptionMode ? '' : initialSlotHours.end,
     guestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: '', clientSignatureUrl: '',
    
     akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
@@ -211,7 +221,9 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         const addrA = parseAddress(b.clientAAddress);
         const addrB = parseAddress(b.clientBAddress);
         const eventDateStr = b.eventDate?.date ? new Date(b.eventDate.date).toISOString().split('T')[0] : '';
-        setIsOption(b.eventDate?.status === 'OPTION');
+        const loadedIsOption = b.eventDate?.status === 'OPTION';
+        const nameParts = splitFullName(b.clientAFullName || '');
+        setIsOption(loadedIsOption);
         setOrderNumber(b.eventCode || b.id.slice(0, 8));
         if (eventDateStr) setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: '' }]);
         const parsedTime = parseStoredTimeOfDay(b.timeOfDay);
@@ -220,6 +232,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         
      setFormData({
           createdBy: b.createdBy || '',
+          clientAFirstName: nameParts.first,
+          clientALastName: nameParts.last,
           clientAFullName: b.clientAFullName || '', clientAIdNumber: b.clientAIdNumber || '', clientAPhone: phoneA.phone, clientAPhone2: phoneA.phone2, clientAEmail: b.clientAEmail || '', clientACity: addrA.city, clientAAddress: addrA.address,
           clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
           calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime || defaultHours?.start || '', endTime: parsedTime.endTime || defaultHours?.end || '',
@@ -249,7 +263,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   }, [editId, navigate]);
 
   useEffect(() => {
-    if (isEditMode) return;
+    if (isEditMode || isOption) return;
     const free = availableSlots;
     const current = formData.timeOfDay as TimeSlot;
 
@@ -267,10 +281,10 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       const hours = getSlotHours(next);
       setFormData((prev) => ({ ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }));
     }
-  }, [isEditMode, unavailableSlots.join(','), availableSlots.join(','), formData.timeOfDay]);
+  }, [isEditMode, isOption, unavailableSlots.join(','), availableSlots.join(','), formData.timeOfDay]);
 
   useEffect(() => {
-    if (isEditMode) return;
+    if (isEditMode || isOption) return;
     if (formData.eventType === 'חתונה') {
       const eveningOk = availableSlots.includes('evening') && !unavailableSlots.includes('evening');
       if (eveningOk && formData.timeOfDay !== 'evening') {
@@ -286,7 +300,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       if (prev.startTime === start && prev.endTime === end) return prev;
       return { ...prev, startTime: start, endTime: end };
     });
-  }, [formData.timeOfDay, formData.eventType, isEditMode, unavailableSlots.join(','), availableSlots.join(',')]);
+  }, [formData.timeOfDay, formData.eventType, isEditMode, isOption, unavailableSlots.join(','), availableSlots.join(',')]);
 
   useEffect(() => {
     if (formData.eventType !== HALL_ONLY_EVENT_TYPE) {
@@ -408,42 +422,63 @@ const calculateTotals = () => {
     if (!signatureData && isEditMode && formData.clientSignatureUrl) {
       signatureData = formData.clientSignatureUrl;
     }
-    if (!isEditMode && !contractSigned) {
-      alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
-      return;
-    }
-    if (contractSigned && !signatureData) {
-      alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
-      return;
-    }
-    if (isHallOnly) {
-      const hallError = validateHallRentalPrice(formData.hallRentalPrice);
-      if (hallError) {
-        setErrors((prev) => ({ ...prev, hallRentalPrice: hallError }));
-        alert(hallError);
+
+    if (isOption) {
+      if (!formData.clientAFirstName?.trim()) {
+        alert('חובה להזין שם פרטי.');
         return;
       }
-    } else if (!formData.guestCount || Number(formData.guestCount) <= 0) {
-      alert('חובה להזין מספר אורחים (מעל 0).');
-      return;
+      if (!formData.clientALastName?.trim()) {
+        alert('חובה להזין שם משפחה.');
+        return;
+      }
+      if (!formData.clientAPhone?.trim() || formData.clientAPhone.trim().length < 9) {
+        alert('חובה להזין מספר טלפון תקין (לפחות 9 ספרות).');
+        return;
+      }
+      if (!formData.createdBy?.trim()) {
+        alert('חובה לבחור נציג מהרשימה.');
+        return;
+      }
+    } else {
+      if (!isEditMode && !contractSigned) {
+        alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
+        return;
+      }
+      if (contractSigned && !signatureData) {
+        alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
+        return;
+      }
+      if (isHallOnly) {
+        const hallError = validateHallRentalPrice(formData.hallRentalPrice);
+        if (hallError) {
+          setErrors((prev) => ({ ...prev, hallRentalPrice: hallError }));
+          alert(hallError);
+          return;
+        }
+      } else if (!formData.guestCount || Number(formData.guestCount) <= 0) {
+        alert('חובה להזין מספר אורחים (מעל 0).');
+        return;
+      }
+
+      if (!formData.clientAFullName?.trim()) {
+        alert('חובה להזין שם לקוח.');
+        return;
+      }
+      if (!formData.clientAPhone?.trim() || formData.clientAPhone.trim().length < 9) {
+        alert('חובה להזין מספר טלפון תקין (לפחות 9 ספרות).');
+        return;
+      }
+      if (!formData.eventType) {
+        alert('חובה לבחור סוג אירוע.');
+        return;
+      }
+      if (!formData.timeOfDay) {
+        alert('חובה לבחור זמן ביום (בוקר / צהריים / ערב).');
+        return;
+      }
     }
 
-    if (!formData.clientAFullName?.trim()) {
-      alert('חובה להזין שם לקוח.');
-      return;
-    }
-    if (!formData.clientAPhone?.trim() || formData.clientAPhone.trim().length < 9) {
-      alert('חובה להזין מספר טלפון תקין (לפחות 9 ספרות).');
-      return;
-    }
-    if (!formData.eventType) {
-      alert('חובה לבחור סוג אירוע.');
-      return;
-    }
-    if (!formData.timeOfDay) {
-      alert('חובה לבחור זמן ביום (בוקר / צהריים / ערב).');
-      return;
-    }
     if (selectedDatesDisplay.length === 0 && !formData.calendarDateId) {
       alert('חובה לבחור תאריך לאירוע.');
       return;
@@ -461,9 +496,15 @@ const calculateTotals = () => {
     setIsSubmitting(true);
     
     try {
+      const clientAFullName = isOption
+        ? `${formData.clientAFirstName.trim()} ${formData.clientALastName.trim()}`.trim()
+        : formData.clientAFullName;
+
       const payload: Record<string, unknown> = {
         ...formData,
-        eventType: isHallOnly ? HALL_ONLY_EVENT_TYPE : formData.eventType,
+        clientAFullName,
+        eventType: isOption ? (formData.eventType || 'לא צוין') : (isHallOnly ? HALL_ONLY_EVENT_TYPE : formData.eventType),
+        timeOfDay: isOption ? (formData.timeOfDay || 'evening') : formData.timeOfDay,
         hasMusic: isWedding ? true : formData.hasMusic,
         clientComments: serializeNotesBundle({ menu: menuNotesList, internal: internalNotesList }),
         createdAt: new Date().toISOString(),
@@ -536,9 +577,10 @@ const calculateTotals = () => {
               selectedDates={selectedDatesDisplay}
               onChange={setSelectedDatesDisplay}
               eventType={formData.eventType || 'חתונה'}
+              timeSlot={formData.timeOfDay || 'evening'}
             />
           )}
-          <ClientsSection formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isWedding={isWedding} styles={styles} />
+          <ClientsSection formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isWedding={isWedding} isOption={isOption} styles={styles} />
           <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} styles={styles} />
              {isFoodRelevant && (
           <div className={styles.sectionCard}>
@@ -574,7 +616,7 @@ const calculateTotals = () => {
           </div>
           
           {/* הקופסה הירוקה לאישור החוזה - פותחת את המודאל בלחיצה */}
-          {!isEditMode && (
+          {!isEditMode && !isOption && (
             <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', fontSize: '1.05rem', color: '#1f293b', fontWeight: '500' }}>
                 <input 
@@ -657,17 +699,17 @@ const calculateTotals = () => {
             <button
               type="submit"
               className={styles.submitBtn}
-              disabled={isSubmitting || (!isEditMode && !contractSigned)}
+              disabled={isSubmitting || (!isEditMode && !isOption && !contractSigned)}
               style={{
                 backgroundColor: '#A2C2A6', 
                 color: 'white',
                 padding: '12px 36px',
                 borderRadius: '8px',
                 border: 'none',
-                cursor: (!isEditMode && !contractSigned) ? 'not-allowed' : 'pointer',
+                cursor: (!isEditMode && !isOption && !contractSigned) ? 'not-allowed' : 'pointer',
                 fontSize: '1.1rem',
                 fontWeight: 'bold',
-                opacity: (!isEditMode && !contractSigned) ? 0.6 : 1,
+                opacity: (!isEditMode && !isOption && !contractSigned) ? 0.6 : 1,
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
             >

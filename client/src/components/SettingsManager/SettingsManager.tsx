@@ -11,6 +11,8 @@ export const SettingsManager = () => {
   const [kashruts, setKashruts] = useState<any[]>([]);
   
   const [newExtra, setNewExtra] = useState({ name: '', category: 'עיצוב', price: '' });
+  const [staffMembers, setStaffMembers] = useState<{ id: string; name: string }[]>([]);
+  const [newStaffName, setNewStaffName] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,21 +21,24 @@ export const SettingsManager = () => {
 
  const fetchData = async () => {
     try {
-      const [settingsRes, extrasRes, kashrutRes] = await Promise.all([
+      const [settingsRes, extrasRes, kashrutRes, staffRes] = await Promise.all([
         apiFetch('http://localhost:5000/api/settings/global'),
         apiFetch('http://localhost:5000/api/settings/extras'),
-        apiFetch('http://localhost:5000/api/kashrut')
+        apiFetch('http://localhost:5000/api/kashrut'),
+        apiFetch('http://localhost:5000/api/settings/staff'),
       ]);
       
       const settingsData = await settingsRes.json();
       const extrasData = await extrasRes.json();
       const kashrutData = await kashrutRes.json();
+      const staffData = await staffRes.json();
       
       setGlobalSettings(settingsData);
       
       // התיקון שלנו: מוודאים שקיבלנו באמת מערך לפני ששומרים בסטייט
       setExtras(Array.isArray(extrasData) ? extrasData : []);
       setKashruts(Array.isArray(kashrutData) ? kashrutData : []);
+      setStaffMembers(Array.isArray(staffData) ? staffData : []);
       
       setLoading(false);
     } catch (error) {
@@ -110,6 +115,39 @@ export const SettingsManager = () => {
       fetchData();
     } catch (error) {
       alert('שגיאה בעדכון סטטוס');
+    }
+  };
+
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newStaffName.trim();
+    if (!name) return alert('נא להזין שם עובד');
+
+    try {
+      const res = await apiFetch('http://localhost:5000/api/settings/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.message || 'שגיאה בהוספת עובד');
+        return;
+      }
+      setNewStaffName('');
+      fetchData();
+    } catch {
+      alert('שגיאה בהוספת עובד');
+    }
+  };
+
+  const handleDeleteStaff = async (id: string, name: string) => {
+    if (!window.confirm(`להסיר את ${name} מרשימת הנציגים?`)) return;
+    try {
+      await apiFetch(`http://localhost:5000/api/settings/staff/${id}`, { method: 'DELETE' });
+      fetchData();
+    } catch {
+      alert('שגיאה במחיקת עובד');
     }
   };
 
@@ -240,6 +278,58 @@ export const SettingsManager = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* ניהול נציגי מכירות */}
+        <div className="settings-card">
+          <h2>ניהול נציגי מכירות</h2>
+          <p style={{ color: '#666', fontSize: '14px', marginBottom: '12px' }}>
+            הרשימה מוצגת בטופס הזמנה ואופציה — ניתן להוסיף או להסיר עובדים.
+          </p>
+          <form className="add-extra-form" onSubmit={handleAddStaff}>
+            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+              <label>שם עובד / נציג</label>
+              <input
+                placeholder="לדוגמה: שמעון"
+                value={newStaffName}
+                onChange={e => setNewStaffName(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="add-btn" style={{ alignSelf: 'flex-end' }}>+</button>
+          </form>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '16px 0 0' }}>
+            {staffMembers.map(member => (
+              <li
+                key={member.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 12px',
+                  borderBottom: '1px solid #eee',
+                }}
+              >
+                <span>{member.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteStaff(member.id, member.name)}
+                  style={{
+                    background: '#fee2e2',
+                    color: '#b91c1c',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '6px 12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  הסר
+                </button>
+              </li>
+            ))}
+            {staffMembers.length === 0 && (
+              <li style={{ color: '#888', padding: '12px' }}>אין נציגים — הוסיפי עובד ראשון.</li>
+            )}
+          </ul>
         </div>
 
         {/* חלון ניהול תעודת כשרות */}

@@ -23,28 +23,9 @@ export const startCronJobs = () => {
   const MANAGER_EMAIL = 'maple.events.il@gmail.com'; 
 
   // ==========================================
-  // טיימר 1: ניקוי אופציות (רץ כל שעה עגולה)
+  // אופציות שפג תוקפן — נשארות על הלוח עד סגירת אירוע אמיתי (BOOKED)
+  // שחרור ידני: POST /api/bookings/release
   // ==========================================
-  cron.schedule('0 * * * *', async () => {
-    const now = new Date();
-    try {
-      const expiredDates = await prisma.eventDate.findMany({
-        where: { status: 'OPTION', optionExpiresAt: { lt: now } }
-      });
-
-      if (expiredDates.length > 0) {
-        const dateIds = expiredDates.map(d => d.id);
-        await prisma.eventDate.updateMany({
-          where: { id: { in: dateIds } },
-          data: { status: 'AVAILABLE', lockedBy: null, optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null }
-        });
-        await prisma.booking.deleteMany({ where: { calendarDateId: { in: dateIds } } });
-        console.log(`✅ נוקו ${expiredDates.length} אופציות שפג תוקפן.`);
-      }
-    } catch (error) {
-      console.error('שגיאה בניקוי אופציות אוטומטי:', error);
-    }
-  });
 
   // ==========================================
   // טיימר 2: התראות "נודניק" חכמות (כל בוקר ב-09:00)

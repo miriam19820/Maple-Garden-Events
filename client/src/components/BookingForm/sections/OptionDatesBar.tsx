@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../../services/api';
 import styles from '../BookingForm.module.css';
+import { type TimeSlot, DEFAULT_TIME_SLOT, normalizeTimeSlot } from '../../../utils/timeSlot';
+import { validateOptionDateSelection } from '../../../utils/optionDateValidation';
 
 export type OptionDateItem = { date: string; hebrewDate?: string };
 
@@ -42,38 +44,30 @@ function getEventTypeFilter(eventType: string): string {
 async function resolveOptionDate(
   date: string,
   eventType: string,
-  excludeDates: string[]
+  excludeDates: string[],
+  timeSlot: TimeSlot
 ): Promise<{ ok: true; item: OptionDateItem } | { ok: false; error: string }> {
-  const todayStr = formatDateLocal(new Date());
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { ok: false, error: 'יש לבחור תאריך תקין.' };
-  }
-  if (date < todayStr) {
-    return { ok: false, error: 'לא ניתן לבחור תאריך בעבר.' };
-  }
-  if (excludeDates.includes(date)) {
-    return { ok: false, error: 'התאריך כבר נבחר באופציה.' };
-  }
+  const localError = validateOptionDateSelection(date, undefined, timeSlot, excludeDates);
+  if (localError) return { ok: false, error: localError };
 
   try {
     const filter = getEventTypeFilter(eventType);
     const res = await apiFetch(
       `http://localhost:5000/api/calendar/dates?start=${date}&end=${date}&eventType=${filter}`
     );
+    if (!res.ok) {
+      return { ok: false, error: 'לא ניתן לוודא את התאריך — נסי שוב.' };
+    }
     const data = await res.json();
     const day = data?.[0];
-    if (day?.bookings?.length) {
-      return { ok: false, error: 'התאריך תפוס — יש כבר אירוע.' };
-    }
-    if (day?.status === 'BLOCKED' || day?.status === 'FORBIDDEN') {
-      return { ok: false, error: 'התאריך חסום בלוח.' };
-    }
+    const serverError = validateOptionDateSelection(date, day, timeSlot, excludeDates);
+    if (serverError) return { ok: false, error: serverError };
     return {
       ok: true,
       item: { date, hebrewDate: day?.hebrewDate || getHebrewDateLabel(date) },
     };
   } catch {
-    return { ok: true, item: { date, hebrewDate: getHebrewDateLabel(date) } };
+    return { ok: false, error: 'שגיאת חיבור — לא ניתן לאמת את התאריך.' };
   }
 }
 
@@ -88,6 +82,7 @@ interface OptionDatePickerModalProps {
   onSelect: (item: OptionDateItem) => void;
   excludeDates: string[];
   eventType: string;
+  timeSlot: TimeSlot;
 }
 
 export const OptionDatePickerModal = ({
@@ -96,6 +91,7 @@ export const OptionDatePickerModal = ({
   onSelect,
   excludeDates,
   eventType,
+  timeSlot,
 }: OptionDatePickerModalProps) => {
   const [current, setCurrent] = useState(() => new Date());
   const [days, setDays] = useState<any[]>([]);
@@ -137,34 +133,20 @@ export const OptionDatePickerModal = ({
   for (let day = 1; day <= daysInMonth; day++) {
     const date = formatDateLocal(new Date(year, month, day));
     const srv = serverMap.get(date);
-    const status = srv?.status ?? 'AVAILABLE';
-    const hasBookings = (srv?.bookings?.length ?? 0) > 0;
-    const disabled =
-      date < todayStr ||
-      excludeDates.includes(date) ||
-      status === 'BLOCKED' ||
-      status === 'FORBIDDEN' ||
-      hasBookings;
+    const validationError = validateOptionDateSelection(date, srv, timeSlot, excludeDates);
+    const disabled = !!validationError;
     cells.push({
       date,
       hebrewDate: srv?.hebrewDate ?? '',
       disabled,
-      reason: disabled
-        ? excludeDates.includes(date)
-          ? 'כבר נבחר'
-          : hasBookings
-            ? 'תפוס'
-            : status === 'BLOCKED' || status === 'FORBIDDEN'
-              ? 'חסום'
-              : 'עבר'
-        : undefined,
+      reason: validationError || undefined,
     });
   }
 
   const handleManualAdd = async () => {
     setManualError('');
     setManualAdding(true);
-    const result = await resolveOptionDate(manualDate, eventType, excludeDates);
+    const result = await resolveOptionDate(manualDate, eventType, excludeDates, timeSlot);
     setManualAdding(false);
     if (!result.ok) {
       setManualError(result.error);
@@ -254,9 +236,11 @@ interface OptionDatesBarProps {
   selectedDates: OptionDateItem[];
   onChange: (dates: OptionDateItem[]) => void;
   eventType: string;
+  timeSlot?: TimeSlot | string;
 }
 
-const OptionDatesBar = ({ selectedDates, onChange, eventType }: OptionDatesBarProps) => {
+const OptionDatesBar = ({ selectedDates, onChange, eventType, timeSlot: timeSlotProp }: OptionDatesBarProps) => {
+  const resolvedSlot: TimeSlot = normalizeTimeSlot(timeSlotProp as string) || DEFAULT_TIME_SLOT;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [manualDate, setManualDate] = useState('');
   const [manualError, setManualError] = useState('');
@@ -286,7 +270,8 @@ const OptionDatesBar = ({ selectedDates, onChange, eventType }: OptionDatesBarPr
     const result = await resolveOptionDate(
       manualDate,
       eventType,
-      normalized.map(d => d.date)
+      normalized.map(d => d.date),
+      resolvedSlot
     );
     setManualAdding(false);
     if (!result.ok) {
@@ -361,6 +346,7 @@ const OptionDatesBar = ({ selectedDates, onChange, eventType }: OptionDatesBarPr
         onSelect={addDate}
         excludeDates={normalized.map(d => d.date)}
         eventType={eventType}
+        timeSlot={resolvedSlot}
       />
     </>
   );

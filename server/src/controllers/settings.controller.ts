@@ -58,5 +58,54 @@ export const settingsController = {
       data
     });
     res.json(extra);
-  })
+  }),
+
+  getStaff: catchAsync(async (_req: Request, res: Response) => {
+    let staff = await prisma.staffMember.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (staff.length === 0) {
+      const defaults = ['מוישי', 'ציפי', 'שימי'];
+      await prisma.staffMember.createMany({
+        data: defaults.map(name => ({ name })),
+        skipDuplicates: true,
+      });
+      staff = await prisma.staffMember.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+      });
+    }
+
+    res.json(staff);
+  }),
+
+  addStaff: catchAsync(async (req: Request, res: Response) => {
+    const name = String(req.body.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'יש להזין שם עובד.' });
+    }
+
+    const existing = await prisma.staffMember.findUnique({ where: { name } });
+    if (existing) {
+      if (!existing.isActive) {
+        const restored = await prisma.staffMember.update({
+          where: { id: existing.id },
+          data: { isActive: true },
+        });
+        return res.json(restored);
+      }
+      return res.status(409).json({ success: false, message: 'עובד בשם זה כבר קיים.' });
+    }
+
+    const member = await prisma.staffMember.create({ data: { name } });
+    res.status(201).json(member);
+  }),
+
+  deleteStaff: catchAsync(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    await prisma.staffMember.delete({ where: { id } });
+    res.json({ success: true });
+  }),
 };

@@ -3,6 +3,7 @@ import hebcal from 'hebcal';
 import prisma from "../config/prisma";
 import { io } from "../server";
 import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay, getBlockedSlotsForDate, isDateFullyBooked, validateSlotOnDate, parseDateLocal } from '../utils/timeSlot';
+import { validateSlotAvailability, resolveBookingSlot } from '../utils/bookingDateValidation';
 import { allocateEventCode } from '../utils/eventCode';
 
 export enum EventStatus {
@@ -226,64 +227,76 @@ export const calendarService = {
 
   // סגירה סופית עם מניעת התנגשויות זמן
   async bookEventFinal(dateId: string, bookingDetails: any) {
-    const eventDateRecord = await prisma.eventDate.findUnique({ where: { id: dateId } });
-    if (!eventDateRecord) {
-      const error = new Error('תאריך האירוע לא נמצא.');
-      (error as any).statusCode = 404;
-      throw error;
-    }
+    return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM "EventDate" WHERE id = ${dateId} FOR UPDATE`;
 
-    const existing = await prisma.booking.findMany({
-      where: { eventDate: { id: dateId } },
+      const eventDateRecord = await tx.eventDate.findUnique({ where: { id: dateId } });
+      if (!eventDateRecord) {
+        const error = new Error('תאריך האירוע לא נמצא.');
+        (error as any).statusCode = 404;
+        throw error;
+      }
+
+      const existing = await tx.booking.findMany({
+        where: { eventDate: { id: dateId } },
+      });
+
+      if (isDateFullyBooked(parseDateLocal(eventDateRecord.date), existing)) {
+        const error = new Error('התאריך מלא — אין משבצות זמן פנויות.');
+        (error as any).statusCode = 400;
+        throw error;
+      }
+
+      const slot = resolveBookingSlot(
+        bookingDetails.timeOfDay,
+        bookingDetails.startTime,
+        bookingDetails.endTime,
+        false
+      );
+
+      if (!slot) {
+        const error = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
+        (error as any).statusCode = 400;
+        throw error;
+      }
+
+      const slotAvailabilityError = validateSlotAvailability(
+        parseDateLocal(eventDateRecord.date),
+        slot,
+        existing,
+        bookingDetails.eventType || 'חתונה'
+      );
+      if (slotAvailabilityError) {
+        const error = new Error(slotAvailabilityError);
+        (error as any).statusCode = 400;
+        throw error;
+      }
+
+      const storedTime = formatStoredTimeOfDay(slot, bookingDetails.startTime, bookingDetails.endTime);
+      const eventCode = await allocateEventCode('EVT');
+
+      try {
+        const booking = await tx.booking.create({
+          data: {
+            ...bookingDetails,
+            timeOfDay: storedTime,
+            timeSlot: slot,
+            eventDate: { connect: { id: dateId } },
+            eventCode,
+          },
+        });
+
+        io.emit('date-updated', { dateId, status: 'BOOKED' });
+        return booking;
+      } catch (createErr: any) {
+        if (createErr?.code === 'P2002') {
+          const error = new Error(`כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה!`);
+          (error as any).statusCode = 409;
+          throw error;
+        }
+        throw createErr;
+      }
     });
-
-    if (isDateFullyBooked(parseDateLocal(eventDateRecord.date), existing)) {
-      const error = new Error('התאריך מלא — אין משבצות זמן פנויות.');
-      (error as any).statusCode = 400;
-      throw error;
-    }
-
-    const slot = normalizeTimeSlot(
-      bookingDetails.timeOfDay,
-      bookingDetails.startTime,
-      bookingDetails.endTime
-    );
-
-    if (!slot) {
-      const error = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
-      (error as any).statusCode = 400;
-      throw error;
-    }
-
-    const slotDate = parseDateLocal(eventDateRecord.date);
-    const slotError = validateSlotOnDate(slotDate, slot);
-    if (slotError) {
-      const error = new Error(slotError);
-      (error as any).statusCode = 400;
-      throw error;
-    }
-
-    const taken = getTakenSlots(existing);
-    if (taken.has(slot)) {
-      const error = new Error(`כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה!`);
-      (error as any).statusCode = 400;
-      throw error;
-    }
-
-    const storedTime = formatStoredTimeOfDay(slot, bookingDetails.startTime, bookingDetails.endTime);
-    const eventCode = await allocateEventCode('EVT');
-
-    const booking = await prisma.booking.create({
-      data: {
-        ...bookingDetails,
-        timeOfDay: storedTime,
-        eventDate: { connect: { id: dateId } },
-        eventCode,
-      },
-    });
-    
-    io.emit('date-updated', { dateId, status: 'BOOKED' });
-    return booking;
   },
 
   async lockDateForChecking(dateStr: string, employeeName: string) { /* ... */ },
