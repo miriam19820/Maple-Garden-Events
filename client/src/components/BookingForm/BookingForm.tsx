@@ -174,9 +174,26 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [depositMethod, setDepositMethod] = useState('');
   const [checkScanning, setCheckScanning] = useState(false);
   const [contractSigned, setContractSigned] = useState(false);
+  const [contractText, setContractText] = useState('');
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (isEditMode) return;
+    const loadTemplate = async () => {
+      try {
+        const res = await apiFetch('http://localhost:5000/api/bookings/contract-template');
+        const json = await res.json();
+        if (res.ok && json.success) {
+          setContractText(json.data?.contractText || '');
+        }
+      } catch {
+        // fallback silently
+      }
+    };
+    loadTemplate();
+  }, [isEditMode]);
 
   useEffect(() => {
     if (selectedDatesDisplay.length > 0) {
@@ -251,6 +268,19 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         setInternalNotesList(notesBundle.internal);
         setContractSigned(!!b.isContractSigned);
         if (b.clientSignatureUrl) setSavedSignature(b.clientSignatureUrl);
+        if (b.contractText) {
+          setContractText(b.contractText);
+        } else {
+          try {
+            const templateRes = await apiFetch('http://localhost:5000/api/bookings/contract-template');
+            const templateJson = await templateRes.json();
+            if (templateRes.ok && templateJson.success) {
+              setContractText(templateJson.data?.contractText || '');
+            }
+          } catch {
+            // fallback silently
+          }
+        }
         if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
       } catch {
         alert('שגיאה בטעינת ההזמנה');
@@ -518,6 +548,7 @@ const calculateTotals = () => {
         contractSigned,
         calculatedTotals: totals,
         clientSignature: signatureData,
+        contractText,
       };
 
       if (isHallOnly) {
@@ -615,6 +646,30 @@ const calculateTotals = () => {
             <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder="הוסף הערה פנימית..." />
           </div>
           
+          {/* עריכת מלל חוזה לאירוע קיים */}
+          {isEditMode && !isOption && (
+            <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
+              <p style={{ margin: '0 0 10px', color: '#1e40af', fontWeight: '500' }}>
+                מלל החוזה שמור ספציפית לאירוע זה. ניתן לערוך אותו לפני שמירת ההזמנה.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsContractModalOpen(true)}
+                style={{
+                  background: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                ✏️ עריכת / צפייה במלל החוזה
+              </button>
+            </div>
+          )}
+
           {/* הקופסה הירוקה לאישור החוזה - פותחת את המודאל בלחיצה */}
           {!isEditMode && !isOption && (
             <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
@@ -720,7 +775,16 @@ const calculateTotals = () => {
         </form>
       </div>
 
-      <ContractModal isOpen={isContractModalOpen} onClose={() => setIsContractModalOpen(false)} isOption={isOption} sigCanvas={sigCanvas} setContractSigned={setContractSigned} onSignatureSaved={setSavedSignature} />
+      <ContractModal
+        isOpen={isContractModalOpen}
+        onClose={() => setIsContractModalOpen(false)}
+        isOption={isOption}
+        sigCanvas={sigCanvas}
+        setContractSigned={setContractSigned}
+        onSignatureSaved={setSavedSignature}
+        contractText={contractText}
+        onContractTextChange={setContractText}
+      />
 
       {isMenuViewOpen && (
          <div className={styles.menuOverlay}><div className={styles.menuModal}><button type="button" className={styles.menuCloseBtn} onClick={() => setIsMenuViewOpen(false)}>✕ סגור</button><div className={styles.menuModalContent}><MenuDisplay /></div></div></div>

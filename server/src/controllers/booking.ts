@@ -5,6 +5,7 @@ import { sendBumpWhatsApp } from '../utils/whatsapp';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
+import { getContractText } from '../utils/getContractText';
 import { sendPDFToClient } from '../Services/emailService';
 import { io } from '../server';
 import {
@@ -94,6 +95,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   const clientAAddressCombined = data.clientACity ? `${data.clientACity}, ${data.clientAAddress}` : data.clientAAddress;
   const clientBPhoneCombined = data.clientBPhone2 ? `${data.clientBPhone} | נוסף: ${data.clientBPhone2}` : data.clientBPhone;
   const clientBAddressCombined = data.clientBCity ? `${data.clientBCity}, ${data.clientBAddress}` : data.clientBAddress;
+
+  const resolvedContractText = data.contractText?.trim() || await getContractText();
 
   let createdBookings: any[] = [];
   let eventsToEmit: { dateId: string, status: string }[] = [];
@@ -228,6 +231,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           eventCode,
           depositCheckUrl: data.depositCheckUrl || null,
           depositCheckDetails: data.depositCheckDetails || null,
+          contractText: resolvedContractText,
         }
       });
       } catch (createErr: any) {
@@ -268,6 +272,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         eventType: savedBooking.eventType,
         timeOfDay: savedBooking.timeOfDay || undefined,
         clientSignatureUrl: data.clientSignature,
+        contractText: savedBooking.contractText,
         eventForm: {} 
       };
 
@@ -412,6 +417,7 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
         clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
         depositCheckUrl: data.depositCheckUrl !== undefined ? data.depositCheckUrl || null : (booking as { depositCheckUrl?: string | null }).depositCheckUrl,
         depositCheckDetails: data.depositCheckDetails !== undefined ? data.depositCheckDetails || null : (booking as { depositCheckDetails?: unknown }).depositCheckDetails,
+        contractText: data.contractText !== undefined ? (data.contractText?.trim() || null) : (booking as { contractText?: string | null }).contractText,
         updatedBy: 'מערכת',
       },
       include: { eventDate: true },
@@ -621,6 +627,7 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         eventType: updated.eventType,
         timeOfDay: updated.timeOfDay || undefined,
         clientSignatureUrl: finalSignature,
+        contractText: updated.contractText,
         eventForm: booking.eventForm || {} 
       };
 
@@ -642,6 +649,11 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
 
   io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
   res.status(200).json({ success: true, message: 'האירוע נסגר והחוזה נחתם בהצלחה!', data: updated });
+});
+
+export const getContractTemplate = catchAsync(async (_req: Request, res: Response) => {
+  const contractText = await getContractText();
+  res.status(200).json({ success: true, data: { contractText } });
 });
 
 export const getAllBookings = catchAsync(async (req: Request, res: Response) => {

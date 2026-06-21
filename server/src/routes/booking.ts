@@ -17,6 +17,7 @@ import {
   getCancellationStats,
   addEventAddition,
   getNextEventCode,
+  getContractTemplate,
 } from '../controllers/booking';
 import { sendGreeting } from '../controllers/greeting';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
@@ -55,6 +56,7 @@ router.get('/:id/contract-pdf', catchAsync(async (req: Request, res: Response) =
     guestCount: Number(booking.guestCount || 0),
     eventType: toStr(booking.eventType),
     clientSignatureUrl: booking.clientSignatureUrl,
+    contractText: booking.contractText,
     eventForm: booking.eventForm || {}
   });
 
@@ -66,6 +68,7 @@ router.get('/:id/contract-pdf', catchAsync(async (req: Request, res: Response) =
 // --- ראוטים סטטיסטיקה וקודים ---
 router.get('/stats/cancellations', getCancellationStats); 
 router.get('/next-code', getNextEventCode);
+router.get('/contract-template', getContractTemplate);
 
 // --- ראוטים של הזמנות ---
 router.post('/', requireAuth, validate(createBookingSchema), createBooking);

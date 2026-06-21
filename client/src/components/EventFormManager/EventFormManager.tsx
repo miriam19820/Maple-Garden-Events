@@ -11,6 +11,7 @@ import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
 import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
+import { calculatePortionBilling, MIN_PORTIONS_MIXED, MIN_PORTIONS_PER_UNIT } from '../../utils/portionBilling';
 
 interface Booking {
   id: string;
@@ -61,6 +62,9 @@ interface EventFormData {
   notes?: string;
 
   menuSelections?: Record<string, string[]> | null;
+  guestPortionCount?: number;
+  pricePerPortion?: number;
+  totalPrice?: number;
 }
 
 const KASHRUT_LIST = [
@@ -98,10 +102,25 @@ const EventFormManager = () => {
   const [savedTables, setSavedTables] = useState<TableData[] | undefined>(undefined);
   const [tableLayoutSaving, setTableLayoutSaving] = useState(false);
   const [hasHonorTable, setHasHonorTable] = useState<boolean | null>(null);
+  const [hasEntertainers, setHasEntertainers] = useState<boolean | null>(null);
+  const [barPortionPrice, setBarPortionPrice] = useState(60);
+
+  const portionBilling = calculatePortionBilling({
+    finalGuestCount: formData.finalGuestCount || 0,
+    seatingType: formData.seatingType || 'separate',
+    menPercent: formData.menPercent,
+    pricePerPortion: barPortionPrice,
+  });
 
   const prepareFormDataForSave = (data: EventFormData): EventFormData => ({
     ...data,
     honorTableCount: hasHonorTable ? data.honorTableCount : null,
+    ...(hasEntertainers === false ? {
+      entertainersBar: undefined,
+      entertainersSitting: undefined,
+      entertainersMen: undefined,
+      entertainersWomen: undefined,
+    } : {}),
   });
 
   const handleMenuSave = (menuSelections: Record<string, string[]>) => {
@@ -135,6 +154,13 @@ const EventFormManager = () => {
         }
       })
       .catch(err => console.error("שגיאה בטעינת תעודת כשרות:", err));
+
+    fetch('http://localhost:5000/api/settings/global')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.barPortionPrice) setBarPortionPrice(Number(data.barPortionPrice));
+      })
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -142,6 +168,7 @@ const EventFormManager = () => {
       setFormData({});
       setNotesList([]);
       setHasHonorTable(null);
+      setHasEntertainers(null);
       return;
     }
     fetch(`http://localhost:5000/api/event-forms/${selected.id}`)
@@ -151,12 +178,16 @@ const EventFormManager = () => {
           const { id, createdAt, updatedAt, booking, bookingId, tables, ...cleanForm } = form;
           setFormData(cleanForm);
           setHasHonorTable(!!(form.honorTableCount && form.honorTableCount > 0));
+          setHasEntertainers(
+            form.entertainersBar != null || form.entertainersSitting != null ? true : null
+          );
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
           setSelectedMenu(form.menuSelections || null);
           setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
         } else {
           setFormData({});
           setHasHonorTable(null);
+          setHasEntertainers(null);
           setNotesList([]);
           setSavedTables(undefined);
         }
@@ -164,6 +195,7 @@ const EventFormManager = () => {
       .catch(() => {
         setFormData({});
         setHasHonorTable(null);
+        setHasEntertainers(null);
         setNotesList([]);
         setSavedTables(undefined);
       });
@@ -356,7 +388,10 @@ const EventFormManager = () => {
         ...formData,
         depositCheckUrl: checkUrl || formData.depositCheckUrl,
         notes: JSON.stringify(notesList),
-        menuSelections: selectedMenu
+        menuSelections: selectedMenu,
+        guestPortionCount: portionBilling?.totalBillablePortions,
+        pricePerPortion: portionBilling?.pricePerPortion ?? barPortionPrice,
+        totalPrice: portionBilling?.totalAmount,
       });
 
       const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
@@ -651,6 +686,38 @@ const EventFormManager = () => {
                 </div>
               )}
 
+              {portionBilling && (
+                <div style={{
+                  marginTop: '16px',
+                  padding: '16px 20px',
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '8px',
+                }}>
+                  <h5 style={{ margin: '0 0 12px', color: '#166534', fontSize: '15px' }}>💰 חישוב מנות לחיוב (מינימום)</h5>
+                  {portionBilling.seatingType === 'separate' ? (
+                    <>
+                      <p style={{ margin: '4px 0', fontSize: '14px' }}>
+                        גברים: {portionBilling.menCount} בפועל → <strong>{portionBilling.menBillablePortions}</strong> מנות לחיוב (מינימום {MIN_PORTIONS_PER_UNIT})
+                      </p>
+                      <p style={{ margin: '4px 0', fontSize: '14px' }}>
+                        נשים: {portionBilling.womenCount} בפועל → <strong>{portionBilling.womenBillablePortions}</strong> מנות לחיוב (מינימום {MIN_PORTIONS_PER_UNIT})
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ margin: '4px 0', fontSize: '14px' }}>
+                      מוזמנים: {formData.finalGuestCount} → <strong>{portionBilling.totalBillablePortions}</strong> מנות לחיוב (מינימום {MIN_PORTIONS_MIXED})
+                    </p>
+                  )}
+                  <p style={{ margin: '12px 0 0', fontSize: '15px', color: '#14532d', fontWeight: 'bold' }}>
+                    סה"כ {portionBilling.totalBillablePortions} מנות × {portionBilling.pricePerPortion} ₪ = {portionBilling.totalAmount.toLocaleString('he-IL')} ₪
+                  </p>
+                  <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#64748b' }}>
+                    עלות מנה מוגדרת בהגדרות מתחם · מינימום מנות מופיע בחוזה ללא פירוט כמות ספציפית
+                  </p>
+                </div>
+              )}
+
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 {savedTables && savedTables.length > 0 ? (
                   <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 'bold' }}>
@@ -814,6 +881,37 @@ const EventFormManager = () => {
     {/* משמחים */}
             <div className={styles.section}>
               <h4>משמחים 🎭</h4>
+              <div className={styles.field}>
+                <label>האם יש משמחים?</label>
+                <select
+                  value={hasEntertainers === null ? '' : hasEntertainers ? 'yes' : 'no'}
+                  onChange={e => {
+                    if (e.target.value === '') {
+                      setHasEntertainers(null);
+                      handleInputChange('entertainersBar', undefined);
+                      handleInputChange('entertainersSitting', undefined);
+                      handleInputChange('entertainersMen', undefined);
+                      handleInputChange('entertainersWomen', undefined);
+                      return;
+                    }
+                    const yes = e.target.value === 'yes';
+                    setHasEntertainers(yes);
+                    if (!yes) {
+                      handleInputChange('entertainersBar', undefined);
+                      handleInputChange('entertainersSitting', undefined);
+                      handleInputChange('entertainersMen', undefined);
+                      handleInputChange('entertainersWomen', undefined);
+                    }
+                  }}
+                >
+                  <option value="">בחר...</option>
+                  <option value="yes">כן</option>
+                  <option value="no">לא</option>
+                </select>
+              </div>
+
+              {hasEntertainers === true && (
+              <>
               <div className={styles.row}>
                 <div className={styles.field}>
                   <label>סוג משמחים</label>
@@ -952,6 +1050,8 @@ const EventFormManager = () => {
                   </>
                 );
               })()}
+              </>
+              )}
             </div>
 
             {/* צ'ק פיקדון */}
@@ -1219,6 +1319,16 @@ const EventFormManager = () => {
                 <button onClick={addNote} className={styles.addNoteBtn}>+ הוסף</button>
               </div>
             </div>
+
+            <p style={{
+              margin: '20px 0 0',
+              fontSize: '12px',
+              fontWeight: '700',
+              color: '#475569',
+              textAlign: 'right',
+            }}>
+              * המחיר אינו כולל טיפ כמקובל במקום
+            </p>
 
           {/* כפתורים למטה */}
             <div className={styles.formFooter} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>

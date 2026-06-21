@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { catchAsync } from '../middlewares/errorHandler'; // <-- ייבוא של עוטף השגיאות
+import { catchAsync } from '../middlewares/errorHandler';
+import { DEFAULT_CONTRACT_TEXT } from '../utils/defaultContractText';
 
 export const settingsController = {
   // =========================================
@@ -13,10 +14,13 @@ export const settingsController = {
     
     // אם זו הפעם הראשונה שמפעילים את המערכת ואין עדיין הגדרות - ניצור אותן עם ברירות המחדל
     if (!settings) {
-      settings = await prisma.systemSettings.create({ data: {} });
+      settings = await prisma.systemSettings.create({ data: { contractText: DEFAULT_CONTRACT_TEXT } });
     }
-    
-    res.json(settings);
+
+    res.json({
+      ...settings,
+      contractText: settings.contractText?.trim() || DEFAULT_CONTRACT_TEXT,
+    });
   }),
 
   updateSettings: catchAsync(async (req: Request, res: Response) => {

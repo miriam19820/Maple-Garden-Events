@@ -193,6 +193,15 @@ export const SettingsManager = () => {
             />
           </div>
           <div className="form-group">
+            <label>עלות מנת בר (₪)</label>
+            <input
+              type="number"
+              value={globalSettings.barPortionPrice ?? ''}
+              onChange={e => setGlobalSettings({ ...globalSettings, barPortionPrice: Number(e.target.value) })}
+            />
+            <span style={{ fontSize: '12px', color: '#666' }}>משמש לחישוב מינימום מנות בטופס הפקת אירוע ובחוזה</span>
+          </div>
+          <div className="form-group">
             <label>מחיר בסיס לעיצוב אולם (₪)</label>
             <input 
               type="number" 

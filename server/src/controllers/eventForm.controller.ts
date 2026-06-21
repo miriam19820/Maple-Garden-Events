@@ -87,6 +87,7 @@ export const eventFormController = {
             eventType: booking.eventType,
             timeOfDay: booking.timeOfDay || undefined,
             clientSignatureUrl: booking.clientSignatureUrl,
+            contractText: booking.contractText,
             eventForm: form,
           };
 
@@ -214,6 +215,7 @@ export const eventFormController = {
         eventType: booking.eventType,
         timeOfDay: booking.timeOfDay || undefined,
         clientSignatureUrl: booking.clientSignatureUrl,
+        contractText: booking.contractText,
         eventForm: booking.eventForm,
       };
 
@@ -256,6 +258,7 @@ export const eventFormController = {
         eventType: booking.eventType,
         timeOfDay: booking.timeOfDay || undefined,
         clientSignatureUrl: booking.clientSignatureUrl,
+        contractText: booking.contractText,
         eventForm: booking.eventForm,
       };
 

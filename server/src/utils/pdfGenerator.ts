@@ -1,6 +1,8 @@
 // puppeteer v24+ is ESM-only, use dynamic import in CommonJS project
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
+import { formatContractTextForHtml } from './defaultContractText';
+import { getContractText } from './getContractText';
 
 type DepositCheckDetails = {
   payee?: string;
@@ -30,6 +32,7 @@ interface EventFormPDFData {
   eventType: string;
   timeOfDay?: string;
   clientSignatureUrl?: string | null;
+  contractText?: string | null;
   eventForm: {
     eventTime?: string | null;
     receptionType?: string | null;
@@ -75,6 +78,8 @@ const row = (label: string, value: string) =>
 export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buffer> => {
   const f = data.eventForm;
   const formattedDate = format(new Date(data.eventDate), 'd בMMMM yyyy', { locale: he });
+  const contractText = data.contractText?.trim() || await getContractText();
+  const contractHtml = formatContractTextForHtml(contractText);
 
   const checkDetails = f.depositCheckDetails as DepositCheckDetails | null | undefined;
 
@@ -244,26 +249,7 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
   </div>` : ''}
 
   <div class="contract-box">
-    <strong style="font-size: 12px; text-decoration: underline;">תנאים כלליים להזמנה:</strong><br/><br/>
-    מוסכם בזאת כי כמות המוזמנים שהוזמנה בפתיחת ההזמנה תחייב את המזמין, ובמידה וירצה להקטין את כמות המוזמנים המחיר יעלה לפי כמות ההקטנה לשיקול הנהלת מייפל אירועים.<br/>
-    במעמד ההזמנה ינתן סך של 10% מערך ההזמנה, ובנוסף ינתן צ'ק ביטחון על סך המנות בקיזוז המקדמה ובתוספת מנות הרזרבה והתוספות שסוכמו. הצ'ק ינתן כתנאי לפתיחת האולם. תשלום עבור האירוע יתבצע לא יאוחר מ-24 שעות לאחר האירוע. תשלום אקו"ם ופדרציה על ידי המזמין כקבוע בחוק. לא ניתן לדחות אירוע מכל סיבה שהיא למעט כוח עליון כגון - רעידת אדמה ומלחמה.<br/>
-    במקום מותקן גנרטור חירום כגיבוי להפסקות חשמל. החלפת חשמל למצב גנרטור כרוכה בזמן של מספר דקות עד להפעלתו המלאה. כמו כן, המקום אינו אחראי לשריפה ו/או גניבה בכל מתחם גן האירועים.<br/>
-    אירוע אשר ימשך לאחר השעה 24:00 יחויב בתוספת תשלום של 1800 ש"ח עבור כל שעה נוספת או חלק ממנה. מוסכם בזאת כי הנהלת המקום תוכל להרחיק מהמקום כל אדם או נותני שירותים אשר לא ישמעו למנהל במקום או לנהלים.<br/>
-    <strong>ביטול הזמנה:</strong><br/>
-    כל ביטול הזמנה מכל סיבה שהיא תחייב את המזמין בתשלום כדלקמן:<br/>
-    • סכום המקדמה בכל מצב לא יוחזר.<br/>
-    • כל ביטול ההזמנה עד 120 יום לפני האירוע ישלם המזמין 30% מערך ההזמנה.<br/>
-    • עד 90 יום לפני האירוע ישלם המזמין 50% מערך ההזמנה.<br/>
-    • עד 60 יום לפני אירוע שהם המזמין 65% מערך ההזמנה.<br/>
-    • עד 30 יום לפני אירוע ישלם המזמין 80% מערך ההזמנה.<br/>
-    במידה ויסגר אירוע דומה בתאריך שבוטל מייפל אירועים תתחשב בגובה הקנס לפי שיקול דעתה הודעה על ביטול תעשה בכתב בלבד במשרדי מייפל אירועים בחתימת המזמין.<br/>
-    חל איסור מוחלט על המזמין ו/או מי מטעמו לחסום את יציאת החירום של גן האירועים מייפל!!!<br/>
-    המחיר לא כולל תאורה, הגברה, ומסכים. במידה ויש תקליטן באירוע חובה לקחת הגברה דרך האולם עלות ההגברה 1400 ש"ח. ההגברה מותקנת במקום לא מתאימה טכנית לחיבור ללהקה, לזמר, הרכב מוזיקלי כזה או אחר.<br/>
-    במידה והמזמין מעוניין בהקרנת מצגת או הקרנת האירוע על מסכים באחריותו שלצלם יש ציוד וכבלים מתאימים למערכת.<br/>
-    תשלום עבור עיצוב במחיר של 4500 ש"ח שכולל: חופה, שולחנות, מחוייב בכל אירוע אפשרות שדרוג בתוספת תשלום. לא ניתן להפעיל זיקוקים, וקונפטי או תותחי קונפטי, וחל איסור מוחלט להכניס פרטים אלו למתחם מייפל.<br/>
-    הגן מתחייב לספק במידת הצורך כמות נוספת של 10% מהמנות מכמות ההזמנה, אשר התחייב המזמין בפועל. פתיחת הרזרבה תעשה לאחר חתימת המזמין או מי מטעמו וישמשו נספח לחוזה המקורי.<br/>
-    עריכת השולחנות תעשה לפי סקיצה של 12 מוזמנים סביב כל השולחן.<br/>
-    הנהלת מייפל אירועים מאחלת בהצלחה ומזל טוב לבעלי השמחה ותעשה כמיטב יכולתה עם טובי נותני השירותים והצוות המיומן להצלחת האירוע.
+    ${contractHtml}
   </div>
 
   ${data.clientSignatureUrl ? `
