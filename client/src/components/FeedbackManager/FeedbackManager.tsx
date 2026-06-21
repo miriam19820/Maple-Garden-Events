@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { apiFetch } from '../../services/api';
+import React, { useState } from 'react';
+import { useFeedbackAdminQuery } from '../../hooks/queries';
+import { PaginationBar } from '../PaginationBar/PaginationBar';
 import styles from './FeedbackManager.module.css';
 
 type FeedbackSide = {
@@ -37,21 +38,14 @@ function stars(score: number | null) {
 }
 
 const FeedbackManager = () => {
-  const [groups, setGroups] = useState<FeedbackGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<'all' | 'pending' | 'done'>('all');
 
-  useEffect(() => {
-    apiFetch('http://localhost:5000/api/feedback/admin/list')
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success) setGroups(res.data);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading } = useFeedbackAdminQuery(page, 20);
+  const groups = data?.data ?? [];
+  const pagination = data?.pagination;
 
-  const filtered = groups.filter((g) => {
+  const filtered = (groups as FeedbackGroup[]).filter((g) => {
     if (filter === 'pending') return g.sides.some((s) => !s.isCompleted);
     if (filter === 'done') return g.allCompleted;
     return true;
@@ -95,8 +89,9 @@ const FeedbackManager = () => {
       ) : filtered.length === 0 ? (
         <p className={styles.empty}>אין משובים להצגה. משובים יופיעו לאחר אירועים שהסתיימו.</p>
       ) : (
-        <div className={styles.list}>
-          {filtered.map((g) => (
+        <>
+          <div className={styles.list}>
+            {filtered.map((g: FeedbackGroup) => (
             <article key={g.bookingId} className={styles.card}>
               <header className={styles.cardHeader}>
                 <div>
@@ -152,8 +147,17 @@ const FeedbackManager = () => {
                 ))}
               </div>
             </article>
-          ))}
-        </div>
+            ))}
+          </div>
+          {pagination && (
+            <PaginationBar
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              onPageChange={setPage}
+            />
+          )}
+        </>
       )}
     </div>
   );

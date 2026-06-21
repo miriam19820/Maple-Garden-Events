@@ -130,7 +130,7 @@ const EventFormManager = () => {
   };
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/bookings')
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/bookings?status=BOOKED&limit=200`)
       .then(r => r.json())
       .then(res => {
         if (res.success) {

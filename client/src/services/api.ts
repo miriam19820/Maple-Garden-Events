@@ -1,32 +1,46 @@
-// src/utils/api.ts
+import { API_BASE } from '../config/api';
+import { Sentry } from '../config/sentry';
 
-// זוהי עטיפה חכמה לפונקציית ה-fetch הרגילה
 export const apiFetch = async (url: string, options: RequestInit = {}) => {
-  // שולפים את הטוקן מהזיכרון של הדפדפן
-  const token = localStorage.getItem('managerToken');
-
-  // מכינים את ההדרים (Headers)
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
 
-  // אם יש טוקן, מוסיפים אותו אוטומטית להדר של ה-Authorization
-  if (token) {
-    (headers as any)['Authorization'] = `Bearer ${token}`;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      credentials: 'include',
+      headers,
+    });
+
+    if (response.status === 401) {
+      window.location.href = '/';
+    }
+
+    if (response.status >= 500) {
+      Sentry.captureMessage(`API error ${response.status}: ${url}`, 'error');
+    }
+
+    return response;
+  } catch (error) {
+    Sentry.captureException(error, { extra: { url, method: options.method || 'GET' } });
+    throw error;
   }
-
-  // מבצעים את הקריאה לשרת עם ההדרים המעודכנים
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  // אם השרת מחזיר 401 (גישה נדחתה), זה אומר שהטוקן פג תוקף או נמחק
-  if (response.status === 401) {
-    localStorage.removeItem('managerToken');
-    window.location.href = '/'; // זורק את המשתמש חזרה למסך הלוגין
-  }
-
-  return response;
 };
+
+export async function logoutManager(): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+}
+
+export async function checkAuthSession(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

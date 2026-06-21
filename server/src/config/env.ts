@@ -1,19 +1,19 @@
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
-// טעינת משתני הסביבה מקובץ .env
 dotenv.config();
 
 const requiredEnvVars = [
   'DATABASE_URL',
-  // 'EMAIL_USER', // דוגמא למשתנים שתרצה לוודא שקיימים בהמשך
-  // 'EMAIL_PASS',
+  'JWT_SECRET',
+  'GOOGLE_CLIENT_ID',
 ];
 
 export const validateEnv = () => {
   const missing = requiredEnvVars.filter((envVar) => !process.env[envVar]);
   if (missing.length > 0) {
-    console.error(`❌ שגיאה קריטית: חסרים משתני סביבה הכרחיים: ${missing.join(', ')}`);
-    process.exit(1); // עצירת השרת אם חסר משהו קריטי
+    logger.error(`Critical: missing required environment variables: ${missing.join(', ')}`);
+    process.exit(1);
   }
-  console.log('✅ כל משתני הסביבה נטענו בהצלחה.');
+  logger.info('Environment variables loaded successfully');
 };

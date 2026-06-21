@@ -1,62 +1,69 @@
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet'; // <--- הוספנו אבטחה
-import rateLimit from 'express-rate-limit'; // <--- הוספנו הגבלת בקשות
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 
-// ייבוא קונפיגורציה ושגיאות
 import { validateEnv } from './config/env';
 import { errorHandler } from './middlewares/errorHandler';
+import { requestLogger } from './middlewares/requestLogger';
 
-// ייבוא הראוטים
 import bookingRoutes from './routes/booking';
 import menuRoutes from './routes/menu';
 import calendarRoutes from './routes/calendar.routes';
 import eventFormRoutes from './routes/eventForm.routes';
-import optionRoutes from './routes/option.routes'; 
-import settingsRoutes from './routes/settings.routes'; 
+import optionRoutes from './routes/option.routes';
+import settingsRoutes from './routes/settings.routes';
 import feedbackRoutes from './routes/feedback.routes';
 import kashrutRoutes from './routes/kashrut.routes';
-import authRoutes from './routes/auth.routes'; // <--- תוקן: הוספנו את ייבוא ראוט ההתחברות
+import authRoutes from './routes/auth.routes';
 
-// בדיקת משתני סביבה לפני שהשרת מתחיל לעבוד באמת
 validateEnv();
 
 const app = express();
+const clientOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
 
-// 1. אבטחה (Security)
-app.use(helmet()); // מגן על כותרות ה-HTTP
+app.use(helmet());
 
-// הגבלת קצב בקשות (מונע מתקפות DDoS וברוט פורס)
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 דקות
-  max: 1000, // הגבלה של 1000 בקשות ל-IP ב-15 דקות
-  message: 'יותר מדי בקשות מכתובת ה-IP הזו, אנא נסה שוב מאוחר יותר.'
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'יותר מדי בקשות מכתובת ה-IP הזו, אנא נסה שוב מאוחר יותר.' },
 });
-app.use('/api', limiter); // מפעילים את ההגבלה רק על ה-API שלנו
+app.use('/api', apiLimiter);
 
-// 2. הגדרות כלליות
-// בסביבת ייצור, מומלץ לשנות את ה-CORS לכתובת הדומיין האמיתית של הלקוח
-const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+const authLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'יותר מדי ניסיונות התחברות. נסה שוב בעוד כמה דקות.' },
+});
+app.use('/api/auth/login', authLoginLimiter);
 
+app.use(cors({
+  origin: clientOrigin,
+  credentials: true,
+  optionsSuccessStatus: 200,
+}));
+
+app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(requestLogger);
 
-// 3. חיבור הראוטים
-app.use('/api/auth',        authRoutes); // <--- תוקן: חיבור הראוט שמקשיב ל- /api/auth/login
-app.use('/api/kashrut',     kashrutRoutes);
-app.use('/api/menu',        menuRoutes);
-app.use('/api/calendar',    calendarRoutes);
-app.use('/api/bookings',    bookingRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/kashrut', kashrutRoutes);
+app.use('/api/menu', menuRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/event-forms', eventFormRoutes);
-app.use('/api/options',     optionRoutes);           
-app.use('/api/settings',    settingsRoutes);  
-app.use('/api/feedback',    feedbackRoutes);
+app.use('/api/options', optionRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
-// 4. ניהול שגיאות מרכזי (תמיד בסוף, אחרי כל הראוטים!)
 app.use(errorHandler);
 
 export default app;

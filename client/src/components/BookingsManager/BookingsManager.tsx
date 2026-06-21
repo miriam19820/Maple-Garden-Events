@@ -1,38 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './BookingsManager.module.css';
 import LiveAdditionForm from '../LiveAdditionForm/LiveAdditionForm';
-import { apiFetch } from '../../services/api';
+import { useBookingsQuery } from '../../hooks/queries';
+import { PaginationBar } from '../PaginationBar/PaginationBar';
 
 const BookingsManager = () => {
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selected, setSelected] = useState<any>(null);
-  
-  const [showAdditionForm, setShowAdditionForm] = useState(false); 
+  const [showAdditionForm, setShowAdditionForm] = useState(false);
 
   useEffect(() => {
-   apiFetch('http://localhost:5000/api/bookings')
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) setBookings(res.data.filter((b: any) => b.eventDate?.status === 'BOOKED'));
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const filtered = bookings.filter(b =>
-    b.clientAFullName?.includes(search) ||
-    b.clientAIdNumber?.includes(search) ||
-    b.clientBFullName?.includes(search) ||
-    b.clientBIdNumber?.includes(search)
-  );
+  const { data, isLoading } = useBookingsQuery({
+    status: 'BOOKED',
+    page,
+    limit: 24,
+    search: debouncedSearch || undefined,
+  });
+
+  const bookings = data?.data ?? [];
+  const pagination = data?.pagination;
 
   const dateStr = (b: any) => b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '';
 
   const closeSelected = () => {
     setSelected(null);
-    setShowAdditionForm(false); 
+    setShowAdditionForm(false);
   };
 
   return (
@@ -45,36 +46,44 @@ const BookingsManager = () => {
         className={styles.searchInput}
         placeholder="חיפוש לפי שם או תעודת זהות..."
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={(e) => setSearch(e.target.value)}
       />
 
-      {loading ? (
+      {isLoading ? (
         <p className={styles.empty}>טוען...</p>
-      ) : filtered.length === 0 ? (
+      ) : bookings.length === 0 ? (
         <p className={styles.empty}>{search ? 'לא נמצאו תוצאות.' : 'אין הזמנות סגורות.'}</p>
       ) : (
-        <div className={styles.grid}>
-          {filtered.map(b => (
-            <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
-              <div className={styles.cardDate}>{dateStr(b)}</div>
-              <div className={styles.cardName}>{b.clientAFullName}</div>
-              {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
-              <div className={styles.cardDetail}>סוג: {b.eventType} | {b.timeOfDay}</div>
-              
-              {/* תיקון: הצגה חכמה של מוזמנים או השכרה בכרטיסיה */}
-              <div className={styles.cardDetail}>
-                {b.eventType === 'השכרת אולם בלי אוכל' ? 'השכרת אולם (ללא מנות)' : `מוזמנים: ${b.guestCount}`}
+        <>
+          <div className={styles.grid}>
+            {bookings.map((b: any) => (
+              <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
+                <div className={styles.cardDate}>{dateStr(b)}</div>
+                <div className={styles.cardName}>{b.clientAFullName}</div>
+                {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
+                <div className={styles.cardDetail}>סוג: {b.eventType} | {b.timeOfDay}</div>
+                <div className={styles.cardDetail}>
+                  {b.eventType === 'השכרת אולם בלי אוכל' ? 'השכרת אולם (ללא מנות)' : `מוזמנים: ${b.guestCount}`}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          {pagination && (
+            <PaginationBar
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              onPageChange={setPage}
+            />
+          )}
+        </>
       )}
 
       {selected && (
         <>
           {!showAdditionForm && (
             <div className={styles.popupOverlay} onClick={closeSelected}>
-              <div className={styles.popupBox} onClick={e => e.stopPropagation()}>
+              <div className={styles.popupBox} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.popupHeader}>
                   <span>פרטי הזמנה - {dateStr(selected)}</span>
                   <button className={styles.popupClose} onClick={closeSelected}>✕</button>
@@ -82,8 +91,7 @@ const BookingsManager = () => {
                 <div className={styles.popupBody}>
                   <div className={styles.popupRow}><label>סוג אירוע:</label><span>{selected.eventType}</span></div>
                   <div className={styles.popupRow}><label>מועד:</label><span>{selected.timeOfDay}</span></div>
-                  
-                  {/* תיקון: תצוגה מותנית בפופאפ לפי סוג האירוע */}
+
                   {selected.eventType === 'השכרת אולם בלי אוכל' ? (
                     <div className={styles.popupRow}><label>מחיר השכרה בסיסי:</label><span>₪{selected.hallRentalPrice?.toLocaleString() || 0}</span></div>
                   ) : (
@@ -93,41 +101,40 @@ const BookingsManager = () => {
                     </>
                   )}
 
-                  <div className={styles.popupRow}><label>סה"כ חשבון:</label><span style={{ fontWeight: 'bold', color: '#dc2626' }}>₪{selected.totalPrice?.toLocaleString()}</span></div>
+                  <div className={styles.popupRow}><label>סה&quot;כ חשבון:</label><span style={{ fontWeight: 'bold', color: '#dc2626' }}>₪{selected.totalPrice?.toLocaleString()}</span></div>
                   <div className={styles.popupRow}><label>שולם:</label><span>₪{selected.paidAmount?.toLocaleString()}</span></div>
-                  
-                  {/* --- תצוגת התוספות ממהלך האירוע --- */}
+
                   {selected.additions && selected.additions.map((add: any) => (
                     <div key={add.id} style={{ marginBottom: '15px', fontSize: '0.9rem', borderBottom: '1px solid #dcfce7', paddingBottom: '10px' }}>
                       <div style={{ color: '#4b5563', fontSize: '0.8rem', marginBottom: '4px' }}>
                         🕒 {new Date(add.createdAt).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}
                       </div>
-                      <strong>פירוט:</strong> <span style={{ whiteSpace: 'pre-wrap' }}>{add.description}</span><br/>
+                      <strong>פירוט:</strong> <span style={{ whiteSpace: 'pre-wrap' }}>{add.description}</span><br />
                       <strong>עלות:</strong> ₪{add.cost} (אחראי: {add.staffName})
-                      
                       <div style={{ marginTop: '8px' }}>
                         <span style={{ fontSize: '0.8rem', color: '#666' }}>חתימת לקוח:</span>
                         <br />
-                        <img 
-                          src={add.signature} 
-                          alt="חתימת לקוח" 
-                          style={{ width: '150px', height: '60px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff' }} 
+                        <img
+                          src={add.signature}
+                          alt="חתימת לקוח"
+                          style={{ width: '150px', height: '60px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#fff' }}
                         />
                       </div>
                     </div>
                   ))}
 
-                  <div className={styles.popupRow} style={{ marginTop: '15px' }}><label>צד א' - שם:</label><span>{selected.clientAFullName}</span></div>
+                  <div className={styles.popupRow} style={{ marginTop: '15px' }}><label>צד א&apos; - שם:</label><span>{selected.clientAFullName}</span></div>
                   <div className={styles.popupRow}><label>ת.ז:</label><span>{selected.clientAIdNumber}</span></div>
                   <div className={styles.popupRow}><label>טלפון:</label><span>{selected.clientAPhone}</span></div>
                   <div className={styles.popupRow}><label>עיר:</label><span>{selected.clientACity}</span></div>
-                  
+
                   <div style={{ marginTop: '20px', textAlign: 'center', borderTop: '1px solid #eee', paddingTop: '15px' }}>
-                    <button 
+                    <button
+                      type="button"
                       onClick={() => setShowAdditionForm(true)}
-                      style={{ 
-                        backgroundColor: '#16a34a', color: 'white', padding: '10px 20px', borderRadius: '8px', 
-                        border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', width: '100%'
+                      style={{
+                        backgroundColor: '#16a34a', color: 'white', padding: '10px 20px', borderRadius: '8px',
+                        border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', width: '100%',
                       }}
                     >
                       + הוסף תוספת בזמן אירוע (בתשלום)
@@ -140,20 +147,21 @@ const BookingsManager = () => {
 
           {showAdditionForm && (
             <div className={styles.popupOverlay} onClick={() => setShowAdditionForm(false)}>
-              <div onClick={e => e.stopPropagation()} style={{ position: 'relative' }}>
-                <button 
+              <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
+                <button
+                  type="button"
                   onClick={() => setShowAdditionForm(false)}
                   style={{ position: 'absolute', top: '10px', left: '10px', background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', zIndex: 10 }}
                 >
                   ✕
                 </button>
-                <LiveAdditionForm 
-                  bookingId={selected.id} 
+                <LiveAdditionForm
+                  bookingId={selected.id}
                   onSuccess={() => {
                     setShowAdditionForm(false);
                     alert('התוספת נרשמה בהצלחה והמחיר הכולל עודכן!');
-                    window.location.reload(); 
-                  }} 
+                    window.location.reload();
+                  }}
                 />
               </div>
             </div>

@@ -1,16 +1,11 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-function authHeaders(): HeadersInit {
-  const token = localStorage.getItem('managerToken');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+import { API_BASE } from '../config/api';
 
 export function getContractPdfUrl(bookingId: string | number): string {
   return `${API_BASE}/api/bookings/${bookingId}/contract-pdf`;
 }
 
 export async function fetchContractPdf(bookingId: string | number): Promise<Blob> {
-  const response = await fetch(getContractPdfUrl(bookingId), { headers: authHeaders() });
+  const response = await fetch(getContractPdfUrl(bookingId), { credentials: 'include' });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error((err as { message?: string }).message || 'לא ניתן לטעון את החוזה');

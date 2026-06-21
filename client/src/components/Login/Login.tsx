@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
+import { API_BASE } from '../../config/api';
 import './Login.css';
 
 interface LoginProps {
@@ -11,13 +12,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) {
-        setError('לא התקבל טוקן מגוגל');
-        return;
+      setError('לא התקבל טוקן מגוגל');
+      return;
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: credentialResponse.credential }),
       });
@@ -25,12 +27,11 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        localStorage.setItem('managerToken', data.token);
         onLoginSuccess();
       } else {
         setError(data.message || 'אין הרשאת גישה למערכת');
       }
-    } catch (err) {
+    } catch {
       setError('שגיאת תקשורת מול השרת - ודא שהוא פועל');
     }
   };
@@ -39,16 +40,15 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     <div className="login-container">
       <div className="login-form">
         <h2>כניסת מנהל - גן אירועים</h2>
-        
-        {error && <div className="error-message" style={{color: 'red', marginBottom: '10px'}}>{error}</div>}
-        
-        {/* עטפנו את הכפתור בדיב עם גובה מינימלי למניעת קריסת תצוגה */}
-        <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            marginTop: '30px', 
-            marginBottom: '20px',
-            minHeight: '50px' 
+
+        {error && <div className="error-message" style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          marginTop: '30px',
+          marginBottom: '20px',
+          minHeight: '50px',
         }}>
           <GoogleLogin
             onSuccess={handleGoogleSuccess}

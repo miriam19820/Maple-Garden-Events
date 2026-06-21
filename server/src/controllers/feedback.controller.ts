@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { computeCombinedAverage } from '../utils/feedbackHelpers';
 import { sendManagerFinancialAlertEmail } from '../utils/mailer';
+import { paginationMeta, parsePagination } from '../utils/pagination';
+import { logger } from '../utils/logger';
 
 export const feedbackController = {
   async verifyToken(req: Request, res: Response) {
@@ -99,9 +101,30 @@ export const feedbackController = {
   },
 
   /** רשימת משובים למנהל — מקובצת לפי הזמנה עם ממוצע משולב */
-  async listAdmin(_req: Request, res: Response) {
+  async listAdmin(req: Request, res: Response) {
     try {
+      const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+
+      const grouped = await prisma.feedback.groupBy({
+        by: ['bookingId'],
+        _max: { createdAt: true },
+        orderBy: { _max: { createdAt: 'desc' } },
+      });
+
+      const total = grouped.length;
+      const pageGroups = grouped.slice(skip, skip + limit);
+      const bookingIds = pageGroups.map((g) => g.bookingId);
+
+      if (bookingIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: paginationMeta(page, limit, total),
+        });
+      }
+
       const feedbacks = await prisma.feedback.findMany({
+        where: { bookingId: { in: bookingIds } },
         include: {
           booking: { include: { eventDate: true } },
         },
@@ -173,9 +196,13 @@ export const feedbackController = {
 
       data.sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
 
-      res.status(200).json({ success: true, data });
+      res.status(200).json({
+        success: true,
+        data,
+        pagination: paginationMeta(page, limit, total),
+      });
     } catch (error) {
-      console.error('Error listing feedback:', error);
+      logger.error('Error listing feedback', { error });
       res.status(500).json({ success: false, message: 'שגיאה בטעינת המשובים.' });
     }
   },

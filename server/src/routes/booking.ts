@@ -27,7 +27,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // --- ראוט להורדת חוזה חתום (צפייה ב-PDF) ---
 // --- ראוט להורדת חוזה חתום ---
-router.get('/:id/contract-pdf', catchAsync(async (req: Request, res: Response) => {
+router.get('/:id/contract-pdf', requireAuth, catchAsync(async (req: Request, res: Response) => {
   // תיקון הטיפוס כאן: מוודאים שזה תמיד string בודד
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 

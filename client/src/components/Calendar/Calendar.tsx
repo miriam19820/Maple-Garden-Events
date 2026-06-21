@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { apiFetch } from '../../services/api';
+import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCalendarDatesQuery } from '../../hooks/queries';
 import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
@@ -66,12 +67,11 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
  const navigate = useNavigate();
 
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [datesData, setDatesData]     = useState<any[]>([]);
-  const [loading, setLoading]         = useState(false);
   const [selectedDay, setSelectedDay] = useState<any>(null);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [selectedDateForAction, setSelectedDateForAction] = useState<string | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState('חתונה');
+  const queryClient = useQueryClient();
 
   const year  = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -82,29 +82,16 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
   const startStr = formatDateLocal(startDate);
   const endStr   = formatDateLocal(endDate);
-  
-  // שומרים את התאריך של היום כדי להשוות מול הלוח
+
   const todayStr = formatDateLocal(new Date());
-     // הפונקציה ששאלת עליה - הדבקנו אותה כאן בתוך הקומפוננטה
- 
 
-  const fetchCalendarData = () => {
-    setLoading(true);
-    apiFetch(`http://localhost:5000/api/calendar/dates?start=${startStr}&end=${endStr}&eventType=${eventTypeFilter}`)
-  .then(r => r.json())
-  .then(data => setDatesData(data))
-      .catch(e => console.error('שגיאה:', e))
-      .finally(() => setLoading(false));
-  };
+  const { data: datesData = [], isLoading: loading } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
 
   useEffect(() => {
-    fetchCalendarData();
-  }, [startStr, endStr, eventTypeFilter]);
-
-  useEffect(() => {
-    socket.on('date-updated', fetchCalendarData);
-    return () => { socket.off('date-updated', fetchCalendarData); };
-  }, [startStr, endStr, eventTypeFilter]);
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    socket.on('date-updated', invalidate);
+    return () => { socket.off('date-updated', invalidate); };
+  }, [queryClient]);
 
   const buildGrid = () => {
     const serverMap = new Map(datesData.map((d: any) => [d.date, d]));

@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import prisma from '../config/prisma';
-import { v4 as uuidv4 } from 'uuid'; // הוספנו ליצירת האסימונים הייחודיים
+import { v4 as uuidv4 } from 'uuid';
+import { logger } from './logger';
 import { 
   sendSelectionReminderWhatsApp, 
   sendSecurityCheckReminderWhatsApp, 
@@ -14,9 +15,19 @@ import {
   sendFeedbackRequestEmail // <-- ייבוא פונקציית המייל החדשה
 } from './mailer';
 import { buildFeedbackSides, primaryPhone } from './feedbackHelpers';
+import { runDatabaseBackup } from './databaseBackup';
 
 export const startCronJobs = () => {
-  console.log('⏳ שירות הטיימרים (Cron Jobs) הופעל בהצלחה.');
+  logger.info('Cron jobs service started');
+
+  if (process.env.BACKUP_ENABLED === 'true') {
+    const schedule = process.env.BACKUP_CRON || '0 3 * * *';
+    cron.schedule(schedule, async () => {
+      logger.info('Starting scheduled database backup');
+      await runDatabaseBackup();
+    });
+    logger.info(`Database backup scheduled: ${schedule}`);
+  }
   
   // הגדרות למנהל
   const MANAGER_PHONE = '0501234567'; 
@@ -31,7 +42,7 @@ export const startCronJobs = () => {
   // טיימר 2: התראות "נודניק" חכמות (כל בוקר ב-09:00)
   // ==========================================
   cron.schedule('0 9 * * *', async () => {
-    console.log('--- מתחיל סריקת בוקר להתראות "נודניק" לאירועים סגורים ---');
+    logger.info('--- מתחיל סריקת בוקר להתראות "נודניק" לאירועים סגורים ---');
     const now = new Date();
     const todayDayOfWeek = now.getDay(); // 0 = יום ראשון, 1 = שני...
 
@@ -106,10 +117,10 @@ export const startCronJobs = () => {
         }
       }
 
-      console.log('✅ סריקת בוקר (נודניק כפול וחכם) הסתיימה בהצלחה.');
+      logger.info('✅ סריקת בוקר (נודניק כפול וחכם) הסתיימה בהצלחה.');
 
     } catch (error) {
-      console.error('שגיאה בהרצת התראות נודניק:', error);
+      logger.error('שגיאה בהרצת התראות נודניק:', error);
     }
   });
 
@@ -117,7 +128,7 @@ export const startCronJobs = () => {
   // טיימר 3: בקשת משוב לאחר אירוע (רץ כל בוקר ב-10:00)
   // ==========================================
   cron.schedule('0 10 * * *', async () => {
-    console.log('--- מתחיל תהליך איתור אירועים מאתמול לשליחת משוב ---');
+    logger.info('--- מתחיל תהליך איתור אירועים מאתמול לשליחת משוב ---');
     
     // הגדרת טווח הזמנים של "אתמול"
     const now = new Date();
@@ -147,7 +158,7 @@ export const startCronJobs = () => {
       });
 
       if (finishedBookings.length === 0) {
-        console.log('לא נמצאו אירועים מאתמול.');
+        logger.info('לא נמצאו אירועים מאתמול.');
         return;
       }
 
@@ -182,21 +193,21 @@ export const startCronJobs = () => {
 
             if (phoneToSend) {
               await sendFeedbackRequestWhatsApp(phoneToSend, fb.clientName, feedbackLink);
-              console.log(`✅ נשלח וואטסאפ משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
+              logger.info(`✅ נשלח וואטסאפ משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
             }
 
             if (emailToSend) {
               await sendFeedbackRequestEmail(emailToSend, fb.clientName, feedbackLink);
-              console.log(`✅ נשלח מייל משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
+              logger.info(`✅ נשלח מייל משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
             }
           }
         }
       }
 
-      console.log('✅ תהליך שליחת משובים הסתיים בהצלחה.');
+      logger.info('✅ תהליך שליחת משובים הסתיים בהצלחה.');
 
     } catch (error) {
-      console.error('שגיאה בתהליך שליחת המשובים:', error);
+      logger.error('שגיאה בתהליך שליחת המשובים:', error);
     }
   });
 
@@ -204,7 +215,7 @@ export const startCronJobs = () => {
   // טיימר 4: התראת תוקף תעודות כשרות (רץ כל בוקר ב-08:00)
   // ==========================================
   cron.schedule('0 8 * * *', async () => {
-    console.log('--- בודק תוקף תעודות כשרות ---');
+    logger.info('--- בודק תוקף תעודות כשרות ---');
     const now = new Date();
     const warningDate = new Date();
     warningDate.setDate(now.getDate() + 14); // התראה שבועיים מראש
@@ -228,10 +239,10 @@ export const startCronJobs = () => {
         await sendManagerFinancialAlert(MANAGER_PHONE, "תוקף תעודת כשרות", cert.displayName, details);
         await sendManagerFinancialAlertEmail(MANAGER_EMAIL, "תוקף תעודת כשרות", cert.displayName, details);
         
-        console.log(`✅ נשלחה התראת כשרות למנהל עבור: ${cert.displayName}`);
+        logger.info(`✅ נשלחה התראת כשרות למנהל עבור: ${cert.displayName}`);
       }
     } catch (error) {
-      console.error('שגיאה בסריקת תעודות כשרות:', error);
+      logger.error('שגיאה בסריקת תעודות כשרות:', error);
     }
   });
 

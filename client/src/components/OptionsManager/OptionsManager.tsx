@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import styles from './OptionsManager.module.css';
 import OptionActionModal from '../OptionActionModal/OptionActionModal';
 import { socket } from '../../services/socketService';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBookingsQuery } from '../../hooks/queries';
 import { apiFetch } from '../../services/api';
+import { API_URL } from '../../config/api';
 
 const HEBREW_NUMERALS: Record<number, string> = {
   1:'א',2:'ב',3:'ג',4:'ד',5:'ה',6:'ו',7:'ז',8:'ח',9:'ט',10:'י',
@@ -22,72 +25,55 @@ const getHebrewDateString = (dateObj: Date | null) => {
       if (hebLetter) return fullString.replace(dayPart, hebLetter);
     }
     return fullString;
-  } catch (e) {
+  } catch {
     return '';
   }
 };
 
 const OptionsManager = () => {
-  const [options, setOptions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedOption, setSelectedOption] = useState<any>(null);
+  const [search, setSearch] = React.useState('');
+  const [selectedOption, setSelectedOption] = React.useState<any>(null);
+  const queryClient = useQueryClient();
 
-  const fetchOptions = async () => {
-    try {
-      setLoading(true);
-      const response = await apiFetch('http://localhost:5000/api/bookings');
-      const result = await response.json();
-      if (result.success) {
-        setOptions(result.data.filter((b: any) => b.eventDate?.status === 'OPTION'));
-      }
-    } catch (error) {
-      console.error('Error fetching options:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading: loading, refetch } = useBookingsQuery({ status: 'OPTION', limit: 100, page: 1 });
 
-  useEffect(() => { fetchOptions(); }, []);
+  const options = (data?.data ?? []).filter((b: any) => {
+    if (!search) return true;
+    return (
+      b.clientAFullName?.includes(search) ||
+      b.clientAIdNumber?.includes(search) ||
+      b.clientBFullName?.includes(search) ||
+      b.clientBIdNumber?.includes(search)
+    );
+  });
 
   useEffect(() => {
-    socket.on('date-updated', fetchOptions);
-    return () => { socket.off('date-updated', fetchOptions); };
-  }, []);
-
-  const handleRelease = async (dateId: string) => {
-    if (!window.confirm('האם את בטוחה שאת רוצה לשחרר את התאריך הזה?')) return;
-    try {
-      const res = await apiFetch('http://localhost:5000/api/bookings/release', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateIds: [dateId] }),
-      });
-      const result = await res.json();
-      if (result.success) { alert('התאריך שוחרר בהצלחה!'); fetchOptions(); }
-      else alert(result.message);
-    } catch { alert('שגיאה בשחרור התאריך.'); }
-  };
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    socket.on('date-updated', invalidate);
+    return () => { socket.off('date-updated', invalidate); };
+  }, [queryClient]);
 
   const handleBump = async (dateId: string) => {
     if (!window.confirm('האם לשלוח ללקוח התראת דחיפות ולקצר את הדד-ליין ל-3 שעות?')) return;
     try {
-      const res = await apiFetch('http://localhost:5000/api/bookings/bump', {
+      const res = await apiFetch(`${API_URL}/bookings/bump`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dateId }),
       });
       const result = await res.json();
-      if (result.success) { alert('הלקוח הוקפץ! הדד-ליין עודכן ל-3 שעות מעכשיו.'); fetchOptions(); }
-      else alert(result.message);
-    } catch { alert('שגיאה בהקפצת הלקוח.'); }
+      if (result.success) {
+        alert('הלקוח הוקפץ! הדד-ליין עודכן ל-3 שעות מעכשיו.');
+        refetch();
+      } else {
+        alert(result.message);
+      }
+    } catch {
+      alert('שגיאה בהקפצת הלקוח.');
+    }
   };
 
   if (loading) return <div className={styles.loading}>טוען נתונים...</div>;
-
-  const filtered = options.filter(o =>
-    o.clientAFullName?.includes(search) || o.clientAIdNumber?.includes(search)
-  );
 
   return (
     <div className={styles.container}>
@@ -97,31 +83,34 @@ const OptionsManager = () => {
         style={{ width: '100%', maxWidth: '400px', padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '1rem', marginBottom: '20px', direction: 'rtl', outline: 'none' }}
         placeholder="חיפוש לפי שם או תעודת זהות..."
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={(e) => setSearch(e.target.value)}
       />
 
-      {filtered.length === 0 ? (
+      {options.length === 0 ? (
         <p className={styles.emptyMessage}>{search ? 'לא נמצאו תוצאות.' : 'אין כרגע תאריכים שממתינים באופציה.'}</p>
       ) : (
         <div className={styles.grid}>
-          {filtered.map((option) => {
+          {options.map((option: any) => {
             const dateObj = option.eventDate?.date ? new Date(option.eventDate.date) : null;
             const eventDateStr = dateObj ? dateObj.toLocaleDateString('he-IL') : '';
             const hebrewDateStr = getHebrewDateString(dateObj);
-            const expiresAtStr = option.eventDate?.optionExpiresAt ? new Date(option.eventDate.optionExpiresAt).toLocaleString('he-IL') : 'לא מוגדר';
+            const expiresAtStr = option.eventDate?.optionExpiresAt
+              ? new Date(option.eventDate.optionExpiresAt).toLocaleString('he-IL')
+              : 'לא מוגדר';
 
             return (
               <div key={option.id} className={styles.card} onClick={() => setSelectedOption(option)}>
                 <div className={styles.cardContent}>
                   <div>
                     <h3 className={styles.eventDateText}>
-                      תאריך אירוע: <strong>{eventDateStr}</strong> <span style={{ color: '#d97706', fontSize: '0.95rem' }}>({hebrewDateStr})</span>
+                      תאריך אירוע: <strong>{eventDateStr}</strong>{' '}
+                      <span style={{ color: '#d97706', fontSize: '0.95rem' }}>({hebrewDateStr})</span>
                     </h3>
                     <p className={styles.clientText}>לקוח: {option.clientAFullName} | טלפון: {option.clientAPhone}</p>
                     <p className={styles.expiryText}>פג תוקף ב: {expiresAtStr}</p>
                   </div>
-                  <div className={styles.actions} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => handleBump(option.calendarDateId)} className={`${styles.btn} ${styles.bumpBtn}`}>
+                  <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
+                    <button type="button" onClick={() => handleBump(option.calendarDateId)} className={`${styles.btn} ${styles.bumpBtn}`}>
                       הקפץ לקוח ⏱️
                     </button>
                   </div>
@@ -136,7 +125,7 @@ const OptionsManager = () => {
         <OptionActionModal
           option={selectedOption}
           onClose={() => setSelectedOption(null)}
-          onSuccess={() => { setSelectedOption(null); fetchOptions(); }}
+          onSuccess={() => { setSelectedOption(null); refetch(); }}
         />
       )}
     </div>

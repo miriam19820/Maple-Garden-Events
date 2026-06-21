@@ -27,6 +27,7 @@ import {
 } from '../utils/eventCode';
 import { isHallOnlyBooking, HALL_ONLY_EVENT_TYPE } from '../validators/booking.validator';
 import { neonTransactionOptions, withDbRetry } from '../utils/dbRetry';
+import { paginationMeta, parsePagination } from '../utils/pagination';
 
 function canEditBookingDate(eventDate: Date): boolean {
   const today = new Date();
@@ -657,11 +658,40 @@ export const getContractTemplate = catchAsync(async (_req: Request, res: Respons
 });
 
 export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  const bookings = await prisma.booking.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { eventDate: true, eventForm: true, additions: true } 
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+  const where: Record<string, unknown> = {};
+  if (status) {
+    where.eventDate = { status };
+  }
+  if (search) {
+    where.OR = [
+      { clientAFullName: { contains: search, mode: 'insensitive' } },
+      { clientAIdNumber: { contains: search } },
+      { clientBFullName: { contains: search, mode: 'insensitive' } },
+      { clientBIdNumber: { contains: search } },
+    ];
+  }
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      include: { eventDate: true, eventForm: true, additions: true },
+    }),
+    prisma.booking.count({ where }),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    count: bookings.length,
+    data: bookings,
+    pagination: paginationMeta(page, limit, total),
   });
-  res.status(200).json({ success: true, count: bookings.length, data: bookings });
 });
 
 export const releaseOptions = catchAsync(async (req: Request, res: Response) => {
