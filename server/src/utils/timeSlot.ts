@@ -8,6 +8,17 @@ export const SLOT_LABELS: Record<TimeSlot, string> = {
   evening: 'ערב',
 };
 
+/** שעות ברירת מחדל לכל משבצת: בוקר 08:00–12:00, צהריים 12:00–18:00, ערב 18:00–00:00 */
+export const SLOT_HOURS: Record<TimeSlot, { start: string; end: string }> = {
+  morning: { start: '08:00', end: '12:00' },
+  noon: { start: '12:00', end: '18:00' },
+  evening: { start: '18:00', end: '00:00' },
+};
+
+export function getSlotHours(slot: TimeSlot): { start: string; end: string } {
+  return SLOT_HOURS[slot];
+}
+
 const SLOT_ALIASES: Record<string, TimeSlot> = {
   morning: 'morning',
   noon: 'noon',
@@ -36,8 +47,8 @@ export function normalizeTimeSlot(
   if (hourSource) {
     const hour = parseInt(hourSource.split(':')[0], 10);
     if (!isNaN(hour)) {
-      if (hour < 12) return 'morning';
-      if (hour < 17) return 'noon';
+      if (hour >= 8 && hour < 12) return 'morning';
+      if (hour >= 12 && hour < 18) return 'noon';
       return 'evening';
     }
   }
@@ -94,6 +105,8 @@ export function validateSlotOnDate(date: Date, slot: TimeSlot): string | null {
 }
 
 export function formatStoredTimeOfDay(slot: TimeSlot, startTime?: string, endTime?: string): string {
-  if (startTime && endTime) return `${slot}|${startTime} - ${endTime}`;
-  return slot;
+  const defaults = getSlotHours(slot);
+  const start = startTime?.trim() || defaults.start;
+  const end = endTime?.trim() || defaults.end;
+  return `${slot}|${start} - ${end}`;
 }

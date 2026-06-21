@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 import styles from './EventFormManager.module.css';
 import CheckCamera from '../CheckCamera/CheckCamera';
+import CheckDetailsForm from '../CheckDetailsForm/CheckDetailsForm';
+import { scanCheckImage, fileToDataUrl, type DepositCheckDetails } from '../../utils/checkOcr';
 import CancellationStats from '../CancellationStats/CancellationStats';
 import KashrutSelector from '../KashrutSelector/KashrutSelector';
 import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
@@ -52,6 +54,7 @@ interface EventFormData {
   entertainersWomen?: number;
   depositCheckUrl?: string;
   depositCheckStatus?: boolean;
+  depositCheckDetails?: DepositCheckDetails | null;
   akumPaid?: boolean; 
   akumCode?: string;
   kashrut?: string;
@@ -81,6 +84,7 @@ const EventFormManager = () => {
   
   const [formData, setFormData] = useState<EventFormData>({});
   const [depositCheckFile, setDepositCheckFile] = useState<File | null>(null);
+  const [checkScanning, setCheckScanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notesList, setNotesList] = useState<string[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -93,6 +97,12 @@ const EventFormManager = () => {
   const [isTableLayoutOpen, setIsTableLayoutOpen] = useState(false);
   const [savedTables, setSavedTables] = useState<TableData[] | undefined>(undefined);
   const [tableLayoutSaving, setTableLayoutSaving] = useState(false);
+  const [hasHonorTable, setHasHonorTable] = useState<boolean | null>(null);
+
+  const prepareFormDataForSave = (data: EventFormData): EventFormData => ({
+    ...data,
+    honorTableCount: hasHonorTable ? data.honorTableCount : null,
+  });
 
   const handleMenuSave = (menuSelections: Record<string, string[]>) => {
     setSelectedMenu(menuSelections);
@@ -131,6 +141,7 @@ const EventFormManager = () => {
     if (!selected) {
       setFormData({});
       setNotesList([]);
+      setHasHonorTable(null);
       return;
     }
     fetch(`http://localhost:5000/api/event-forms/${selected.id}`)
@@ -139,17 +150,20 @@ const EventFormManager = () => {
         if (form && form.id) {
           const { id, createdAt, updatedAt, booking, bookingId, tables, ...cleanForm } = form;
           setFormData(cleanForm);
+          setHasHonorTable(!!(form.honorTableCount && form.honorTableCount > 0));
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
           setSelectedMenu(form.menuSelections || null);
           setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
         } else {
           setFormData({});
+          setHasHonorTable(null);
           setNotesList([]);
           setSavedTables(undefined);
         }
       })
       .catch(() => {
         setFormData({});
+        setHasHonorTable(null);
         setNotesList([]);
         setSavedTables(undefined);
       });
@@ -220,9 +234,30 @@ const EventFormManager = () => {
     }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setDepositCheckFile(e.target.files[0]);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDepositCheckFile(file);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      handleInputChange('depositCheckUrl', dataUrl);
+      await processCheckImage(dataUrl);
+    } catch {
+      alert('שגיאה בטעינת קובץ הצ\'ק');
+    }
+  };
+
+  const processCheckImage = async (imageSrc: string) => {
+    setCheckScanning(true);
+    try {
+      const details = await scanCheckImage(imageSrc);
+      handleInputChange('depositCheckDetails', details);
+    } catch (error) {
+      console.error('Check OCR failed:', error);
+      handleInputChange('depositCheckDetails', { scannedAt: new Date().toISOString() });
+      alert('לא הצלחנו לזהות את כל פרטי הצ\'ק. ניתן למלא אותם ידנית.');
+    } finally {
+      setCheckScanning(false);
     }
   };
 
@@ -277,7 +312,8 @@ const EventFormManager = () => {
     setDepositCheckFile(null);
     setFormData(prev => ({
       ...prev,
-      depositCheckUrl: undefined
+      depositCheckUrl: undefined,
+      depositCheckDetails: undefined,
     }));
   };
 
@@ -316,12 +352,12 @@ const EventFormManager = () => {
     setSubmitting(true);
     try {
       const checkUrl = await uploadCheckFile();
-      const dataToSave: EventFormData = {
+      const dataToSave: EventFormData = prepareFormDataForSave({
         ...formData,
         depositCheckUrl: checkUrl || formData.depositCheckUrl,
         notes: JSON.stringify(notesList),
         menuSelections: selectedMenu
-      };
+      });
 
       const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
         method: 'POST',
@@ -645,14 +681,39 @@ const EventFormManager = () => {
             <div className={styles.section}>
               <h4>👑 שולחן כבוד</h4>
               <div className={styles.field}>
-                <label>כמות אנשים בשולחן כבוד</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.honorTableCount || ''}
-                  onChange={e => handleInputChange('honorTableCount', parseInt(e.target.value))}
-                />
+                <label>האם יש שולחן כבוד?</label>
+                <select
+                  value={hasHonorTable === null ? '' : hasHonorTable ? 'yes' : 'no'}
+                  onChange={e => {
+                    if (e.target.value === '') {
+                      setHasHonorTable(null);
+                      handleInputChange('honorTableCount', undefined);
+                      return;
+                    }
+                    const yes = e.target.value === 'yes';
+                    setHasHonorTable(yes);
+                    if (!yes) handleInputChange('honorTableCount', undefined);
+                  }}
+                >
+                  <option value="">בחר...</option>
+                  <option value="yes">כן</option>
+                  <option value="no">לא</option>
+                </select>
               </div>
+              {hasHonorTable && (
+                <div className={styles.field}>
+                  <label>כמות אנשים בשולחן כבוד</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.honorTableCount ?? ''}
+                    onChange={e => handleInputChange(
+                      'honorTableCount',
+                      e.target.value === '' ? undefined : parseInt(e.target.value, 10)
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             {/* עיצוב עם כפתור לגלריה */}
@@ -899,12 +960,17 @@ const EventFormManager = () => {
               <div className={styles.field}>
                 <label>תמונת צ'ק פיקדון</label>
                 
-                <CheckCamera 
-                  onCapture={(imageSrc) => {
-                    handleInputChange('depositCheckUrl', imageSrc);
-                    setDepositCheckFile(null); 
-                  }} 
-                />
+                {!formData.depositCheckUrl && !depositCheckFile && (
+                  <CheckCamera
+                    disabled={checkScanning}
+                    onCapture={async (imageSrc) => {
+                      handleInputChange('depositCheckUrl', imageSrc);
+                      setDepositCheckFile(null);
+                      await processCheckImage(imageSrc);
+                    }}
+                    onRetake={handleDeleteCheckImage}
+                  />
+                )}
 
                 <div className={styles.checkImageOptions} style={{ marginTop: '15px' }}>
                   <button 
@@ -934,6 +1000,16 @@ const EventFormManager = () => {
                     <p className={styles.fileName}>✓ צ'ק צולם/צורף בהצלחה</p>
                     <button onClick={handleDeleteCheckImage} className={styles.deleteBtn}>🗑️ מחק</button>
                   </div>
+                )}
+
+                {(formData.depositCheckUrl || formData.depositCheckDetails) && (
+                  <CheckDetailsForm
+                    details={formData.depositCheckDetails || {}}
+                    imageUrl={formData.depositCheckUrl}
+                    scanning={checkScanning}
+                    onChange={details => handleInputChange('depositCheckDetails', details)}
+                    styles={styles}
+                  />
                 )}
               </div>
               <div className={styles.checkboxRow}>
@@ -1152,12 +1228,12 @@ const EventFormManager = () => {
   onClick={async () => {
     try {
       const checkUrl = await uploadCheckFile();
-      const dataToSave = {
+      const dataToSave = prepareFormDataForSave({
         ...formData,
         depositCheckUrl: checkUrl || formData.depositCheckUrl,
         notes: JSON.stringify(notesList),
         menuSelections: selectedMenu
-      };
+      });
 
       // 1. שמירה אוטומטית ישירות למסד הנתונים
       const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
@@ -1216,12 +1292,12 @@ const EventFormManager = () => {
       alert('שומר את הטופס ושולח למייל... אנא המתן מעט'); 
       
       const checkUrl = await uploadCheckFile();
-      const dataToSave = {
+      const dataToSave = prepareFormDataForSave({
         ...formData,
         depositCheckUrl: checkUrl || formData.depositCheckUrl,
         notes: JSON.stringify(notesList),
         menuSelections: selectedMenu
-      };
+      });
 
       // 1. שמירה אוטומטית ישירות למסד הנתונים
       const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {

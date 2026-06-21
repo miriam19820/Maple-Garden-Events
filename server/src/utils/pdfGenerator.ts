@@ -2,6 +2,18 @@
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 
+type DepositCheckDetails = {
+  payee?: string;
+  amount?: string;
+  amountInWords?: string;
+  date?: string;
+  checkNumber?: string;
+  bank?: string;
+  bankCode?: string;
+  branch?: string;
+  account?: string;
+};
+
 interface EventFormPDFData {
   eventCode?: string;
   isOption?: boolean;
@@ -40,6 +52,7 @@ interface EventFormPDFData {
     entertainersWomen?: number | null;
     depositCheckUrl?: string | null;
     depositCheckStatus?: boolean;
+    depositCheckDetails?: unknown;
     akumCode?: string | null;
     kashrut?: string | null;
     notes?: string | null;
@@ -62,6 +75,8 @@ const row = (label: string, value: string) =>
 export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buffer> => {
   const f = data.eventForm;
   const formattedDate = format(new Date(data.eventDate), 'd בMMMM yyyy', { locale: he });
+
+  const checkDetails = f.depositCheckDetails as DepositCheckDetails | null | undefined;
 
   const equipment = [
     f.hasLighting && 'תאורה',
@@ -207,6 +222,13 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
     <div class="section-title">✅ אישורים</div>
     <table>
       ${row('צ\'ק פיקדון', f.depositCheckStatus ? 'התקבל ✓' : 'טרם התקבל')}
+      ${checkDetails?.checkNumber ? row("מספר צ'ק", checkDetails.checkNumber) : ''}
+      ${checkDetails?.bank ? row('בנק', checkDetails.bank) : ''}
+      ${checkDetails?.branch ? row('סניף', checkDetails.branch) : ''}
+      ${checkDetails?.account ? row('חשבון', checkDetails.account) : ''}
+      ${checkDetails?.payee ? row('לפקודת', checkDetails.payee) : ''}
+      ${checkDetails?.amount ? row('סכום', `₪${checkDetails.amount}`) : ''}
+      ${checkDetails?.date ? row('תאריך על הגבי', checkDetails.date) : ''}
       ${f.akumCode ? row('קוד אקו"ם', f.akumCode) : ''}
       ${row('כשרות', translateKashrut(f.kashrut))}
     </table>

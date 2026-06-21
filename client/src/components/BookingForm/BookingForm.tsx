@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
-import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate } from '../../utils/timeSlot';
+import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
 import { getSignatureDataUrl } from '../../utils/signature';
+import { scanCheckImage, fileToDataUrl, type DepositCheckDetails } from '../../utils/checkOcr';
 import SignatureCanvas from 'react-signature-canvas';
 
 import ClientsSection from './sections/ClientsSection';
@@ -16,13 +17,23 @@ import { NotesList } from '../NotesList/NotesList';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
 
 export const KOSHER_PRICING: Record<string, { label: string, extra: number }> = {
-  machpud: { label: 'מחפוד', extra: 0 },
-  rubin: { label: 'רובין', extra: 10 },
+  machpud: { label: 'הרב מחפוד', extra: 0 },
+  rubin: { label: 'הרב רובין', extra: 10 },
   kehilot: { label: 'קהילות', extra: 10 },
   gross: { label: 'הרב גרוס', extra: 10 },
-  landa: { label: 'לנדא', extra: 20 },
+  landa: { label: 'הרב לנדא', extra: 20 },
   badatz: { label: 'בד"ץ העדה החרדית', extra: 20 },
 };
+
+export const DEFAULT_KOSHER_TYPE = 'machpud';
+
+export const SERVING_STYLES: Record<string, string> = {
+  american: 'אמריקן סרביס',
+  center: 'מרכז שולחן',
+  bar: 'בר',
+};
+
+export const DEFAULT_SERVING_STYLE = 'american';
 
 export const UPGRADES_PRICING: Record<string, number> = {
   baseDesign: 4500, amplification: 1400, lighting: 1800, screens: 800,
@@ -72,6 +83,12 @@ const parseStoredTimeOfDay = (stored: string | null | undefined) => {
 
 const HALL_ONLY_EVENT_TYPE = 'השכרת אולם בלי אוכל';
 
+function calcOptionalGuestCount(guestCount: string | number): string {
+  const count = Number(guestCount);
+  if (!Number.isFinite(count) || count <= 0) return '';
+  return String(Math.ceil(count * 0.1));
+}
+
 function validateHallRentalPrice(value: string): string {
   const trimmed = (value ?? '').trim();
   if (!trimmed) return 'יש להזין מחיר השכרת אולם';
@@ -103,6 +120,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const availableSlots = isEditMode
     ? TIME_SLOTS
     : TIME_SLOTS.filter((slot) => !unavailableSlots.includes(slot));
+  const initialTimeSlot = (isEditMode ? 'evening' : getDefaultTimeSlot(availableSlots) || 'evening') as TimeSlot;
+  const initialSlotHours = getSlotHours(initialTimeSlot);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -124,20 +143,22 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [formData, setFormData] = useState({
     createdBy: '', clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
-    calendarDateId: '', eventType: '', timeOfDay: 'evening', startTime: '', endTime: '',
+    calendarDateId: '', eventType: '', timeOfDay: initialTimeSlot, startTime: initialSlotHours.start, endTime: initialSlotHours.end,
     guestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: '', clientSignatureUrl: '',
    
     akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
+    depositCheckUrl: '', depositCheckDetails: null as DepositCheckDetails | null,
   });
 
   const [menuNotesList, setMenuNotesList] = useState<string[]>([]);
   const [internalNotesList, setInternalNotesList] = useState<string[]>([]);
-  const [servingStyle, setServingStyle] = useState('american');
-  const [kosherType, setKosherType] = useState('machpud');
+  const [servingStyle, setServingStyle] = useState(DEFAULT_SERVING_STYLE);
+  const [kosherType, setKosherType] = useState(DEFAULT_KOSHER_TYPE);
   const [upgrades, setUpgrades] = useState({
     baseDesign: true, amplification: false, lighting: false, screens: false, reception: false, separateReception: false, extraSecurity: false, fireworks: false,
   });
   const [depositMethod, setDepositMethod] = useState('');
+  const [checkScanning, setCheckScanning] = useState(false);
   const [contractSigned, setContractSigned] = useState(false);
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
@@ -190,16 +211,23 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         setOrderNumber(b.eventCode || b.id.slice(0, 8));
         if (eventDateStr) setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: '' }]);
         const parsedTime = parseStoredTimeOfDay(b.timeOfDay);
+        const loadedSlot = parsedTime.timeOfDay as TimeSlot;
+        const defaultHours = loadedSlot && SLOT_HOURS[loadedSlot] ? getSlotHours(loadedSlot) : null;
         
      setFormData({
           createdBy: b.createdBy || '',
           clientAFullName: b.clientAFullName || '', clientAIdNumber: b.clientAIdNumber || '', clientAPhone: phoneA.phone, clientAPhone2: phoneA.phone2, clientAEmail: b.clientAEmail || '', clientACity: addrA.city, clientAAddress: addrA.address,
           clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
-          calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime, endTime: parsedTime.endTime,
-          guestCount: String(b.guestCount ?? ''), optionalGuestCount: '', finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
+          calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime || defaultHours?.start || '', endTime: parsedTime.endTime || defaultHours?.end || '',
+          guestCount: String(b.guestCount ?? ''), optionalGuestCount: calcOptionalGuestCount(b.guestCount ?? ''), finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
           akumApprovalCode: b.akumApprovalCode || '', hasMusic: !!b.hasMusic,
-          hallRentalPrice: b.hallRentalPrice ? String(b.hallRentalPrice) : '', // <--- התוספת החדשה
+          hallRentalPrice: b.hallRentalPrice ? String(b.hallRentalPrice) : '',
+          depositCheckUrl: b.depositCheckUrl || '',
+          depositCheckDetails: (b.depositCheckDetails as DepositCheckDetails | null) || null,
         });
+        if (b.depositCheckUrl) {
+          setDepositMethod(b.depositCheckUrl.startsWith('data:') ? 'check_capture' : 'check_upload');
+        }
         const notesBundle = parseNotesBundle(b.clientComments || '');
         setMenuNotesList(notesBundle.menu);
         setInternalNotesList(notesBundle.internal);
@@ -219,36 +247,42 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   useEffect(() => {
     if (isEditMode) return;
     const free = availableSlots;
-    if (formData.timeOfDay && unavailableSlots.includes(formData.timeOfDay as TimeSlot)) {
-      const next = free.includes('evening') ? 'evening' : free.length >= 1 ? free[0] : '';
-      setFormData((prev) => (prev.timeOfDay === next ? prev : { ...prev, timeOfDay: next }));
-    } else if (!formData.timeOfDay && free.includes('evening')) {
-      setFormData((prev) => ({ ...prev, timeOfDay: 'evening' }));
-    } else if (free.length === 1) {
-      setFormData((prev) => (prev.timeOfDay === free[0] ? prev : { ...prev, timeOfDay: free[0] }));
+    const current = formData.timeOfDay as TimeSlot;
+
+    if (current && unavailableSlots.includes(current)) {
+      const next = getDefaultTimeSlot(free);
+      if (!next) return;
+      const hours = getSlotHours(next);
+      setFormData((prev) =>
+        prev.timeOfDay === next && prev.startTime === hours.start && prev.endTime === hours.end
+          ? prev
+          : { ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }
+      );
+    } else if (!current && free.length > 0) {
+      const next = getDefaultTimeSlot(free);
+      const hours = getSlotHours(next);
+      setFormData((prev) => ({ ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }));
     }
-  }, [isEditMode, unavailableSlots.join(','), availableSlots.join(',')]);
+  }, [isEditMode, unavailableSlots.join(','), availableSlots.join(','), formData.timeOfDay]);
 
   useEffect(() => {
     if (isEditMode) return;
     if (formData.eventType === 'חתונה') {
-      const eveningOk = availableSlots.includes('evening');
-      setFormData((prev) => ({
-        ...prev,
-        startTime: '18:00',
-        endTime: '00:00',
-        timeOfDay: eveningOk && !unavailableSlots.includes('evening') ? 'evening' : prev.timeOfDay,
-      }));
-    } else if (formData.eventType === 'ברית') {
-      const eveningOk = availableSlots.includes('evening');
-      setFormData((prev) => ({
-        ...prev,
-        startTime: '09:00',
-        endTime: '14:00',
-        timeOfDay: eveningOk && !unavailableSlots.includes('evening') ? 'evening' : prev.timeOfDay,
-      }));
+      const eveningOk = availableSlots.includes('evening') && !unavailableSlots.includes('evening');
+      if (eveningOk && formData.timeOfDay !== 'evening') {
+        const { start, end } = getSlotHours('evening');
+        setFormData((prev) => ({ ...prev, timeOfDay: 'evening', startTime: start, endTime: end }));
+        return;
+      }
     }
-  }, [formData.eventType, isEditMode, unavailableSlots.join(',')]);
+    const slot = formData.timeOfDay as TimeSlot;
+    if (!slot || !SLOT_HOURS[slot]) return;
+    const { start, end } = getSlotHours(slot);
+    setFormData((prev) => {
+      if (prev.startTime === start && prev.endTime === end) return prev;
+      return { ...prev, startTime: start, endTime: end };
+    });
+  }, [formData.timeOfDay, formData.eventType, isEditMode, unavailableSlots.join(','), availableSlots.join(',')]);
 
   useEffect(() => {
     if (formData.eventType !== HALL_ONLY_EVENT_TYPE) {
@@ -259,7 +293,15 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     if (type === 'radio' && name === 'vatType') return setFormData(prev => ({ ...prev, vatType: value }));
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'guestCount') {
+      setFormData(prev => ({
+        ...prev,
+        guestCount: value,
+        optionalGuestCount: calcOptionalGuestCount(value),
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     if (name === 'hallRentalPrice') {
       setErrors(prev => ({ ...prev, hallRentalPrice: validateHallRentalPrice(value) }));
     } else if (errors[name]) {
@@ -270,6 +312,56 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const handleUpgradeChange = (key: keyof typeof upgrades) => {
     if (key === 'baseDesign') return;
     setUpgrades((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const processCheckImage = async (imageSrc: string) => {
+    setCheckScanning(true);
+    try {
+      const details = await scanCheckImage(imageSrc);
+      setFormData(prev => ({ ...prev, depositCheckDetails: details }));
+    } catch (error) {
+      console.error('Check OCR failed:', error);
+      setFormData(prev => ({ ...prev, depositCheckDetails: { scannedAt: new Date().toISOString() } }));
+      alert('לא הצלחנו לזהות את כל פרטי הצ\'ק. ניתן למלא אותם ידנית.');
+    } finally {
+      setCheckScanning(false);
+    }
+  };
+
+  const handleCheckCapture = async (imageSrc: string) => {
+    setFormData(prev => ({ ...prev, depositCheckUrl: imageSrc }));
+    await processCheckImage(imageSrc);
+  };
+
+  const handleCheckFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setFormData(prev => ({ ...prev, depositCheckUrl: dataUrl }));
+      await processCheckImage(dataUrl);
+    } catch {
+      alert('שגיאה בטעינת קובץ הצ\'ק');
+    }
+  };
+
+  const handleDeleteCheck = () => {
+    setFormData(prev => ({
+      ...prev,
+      depositCheckUrl: '',
+      depositCheckDetails: null,
+    }));
+  };
+
+  const handleCheckDetailsChange = (details: DepositCheckDetails) => {
+    setFormData(prev => ({ ...prev, depositCheckDetails: details }));
+  };
+
+  const handleDepositMethodChange = (method: string) => {
+    setDepositMethod(method);
+    if (method === 'credit_card') {
+      handleDeleteCheck();
+    }
   };
 
   const isHallOnly = formData.eventType === HALL_ONLY_EVENT_TYPE;
@@ -438,7 +530,27 @@ const calculateTotals = () => {
             <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder="לדוגמה: אלרגיות מיוחדות..." />
           </div>)}
 
-          <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} depositMethod={depositMethod} setDepositMethod={setDepositMethod} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} styles={styles} />
+          <PaymentAndUpgradesSection
+            formData={formData}
+            handleChange={handleChange}
+            upgrades={upgrades}
+            handleUpgradeChange={handleUpgradeChange}
+            isHallOnly={isHallOnly}
+            depositMethod={depositMethod}
+            setDepositMethod={handleDepositMethodChange}
+            checkScanning={checkScanning}
+            onCheckCapture={handleCheckCapture}
+            onCheckFileUpload={handleCheckFileUpload}
+            onDeleteCheck={handleDeleteCheck}
+            onCheckDetailsChange={handleCheckDetailsChange}
+            totals={totals}
+            isFoodRelevant={isFoodRelevant}
+            kosherType={kosherType}
+            isEditMode={isEditMode}
+            editId={editId}
+            errors={errors}
+            styles={styles}
+          />
 
           <div className={styles.sectionCard}>
             <h3 className={styles.sectionHeader}>הערות פנימיות לניהול</h3>

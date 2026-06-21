@@ -50,6 +50,8 @@ model Booking {
   eventForm           EventForm?
   feedbacks           Feedback[]
   clientSignatureUrl  String?
+  depositCheckUrl     String?
+  depositCheckDetails Json?
 }
 model MenuCategory {
   id     String @id @default(uuid())
@@ -102,6 +104,7 @@ model EventForm {
   entertainersWomen   Int?
   depositCheckUrl     String?
   depositCheckStatus  Boolean         @default(false)
+  depositCheckDetails Json?
   akumCode            String?
   kashrut             String?
   guestPortionCount   Int?

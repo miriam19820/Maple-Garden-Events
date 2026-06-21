@@ -201,6 +201,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           clientComments: data.clientComments || null,
           createdBy: isManager ? "מנהל מערכת" : "נציג מכירות",
           eventCode,
+          depositCheckUrl: data.depositCheckUrl || null,
+          depositCheckDetails: data.depositCheckDetails || null,
         }
       });
       createdBookings.push(newBooking);
@@ -376,6 +378,8 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
           ? !!(data.contractSigned && data.clientSignature)
           : booking.isContractSigned,
         clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
+        depositCheckUrl: data.depositCheckUrl !== undefined ? data.depositCheckUrl || null : (booking as { depositCheckUrl?: string | null }).depositCheckUrl,
+        depositCheckDetails: data.depositCheckDetails !== undefined ? data.depositCheckDetails || null : (booking as { depositCheckDetails?: unknown }).depositCheckDetails,
         updatedBy: 'מערכת',
       },
       include: { eventDate: true },

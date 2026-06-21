@@ -1,6 +1,6 @@
 import React from 'react';
-import { SLOT_LABELS } from '../../../utils/timeSlot';
-import { KOSHER_PRICING } from '../BookingForm';
+import { SLOT_LABELS, SLOT_HOURS, sortSlotsForDisplay } from '../../../utils/timeSlot';
+import { KOSHER_PRICING, SERVING_STYLES, DEFAULT_SERVING_STYLE } from '../BookingForm';
 
 // פונקציות עזר קטנות לתצוגת התאריך
 const HEBREW_NUMERALS: Record<number, string> = {
@@ -51,11 +51,6 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
       <h3 className={styles.sectionHeader}>הגדרות אירוע, זמנים ותפריט</h3>
       <div className={styles.eventDetailsGrid}>
         <div className={styles.inputGroup}>
-          <label>דרך מי הגיעו? (מקור הגעה)</label>
-          <input type="text" name="leadSource" value={formData.leadSource} onChange={handleChange} className={styles.input} placeholder="לדוגמה: פייסבוק, חבר שהמליץ..." />
-        </div>
-        
-        <div className={styles.inputGroup}>
           <label>{isOption ? 'תאריכים אופציונליים (לועזי)' : 'תאריך אירוע סופי (לועזי)'}</label>
           <input type="text" name="calendarDateId" value={dateStr} readOnly className={`${styles.input} ${styles.inputReadonly}`} />
         </div>
@@ -68,8 +63,10 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
         <div className={styles.inputGroup}>
           <label>זמן ביום </label>
           <select name="timeOfDay" required value={formData.timeOfDay} onChange={handleChange} className={styles.input}>
-            {availableSlots.map((slot: any) => (
-              <option key={slot} value={slot}>{SLOT_LABELS[slot as keyof typeof SLOT_LABELS]}</option>
+            {sortSlotsForDisplay(availableSlots).map((slot: any) => (
+              <option key={slot} value={slot}>
+                {SLOT_LABELS[slot as keyof typeof SLOT_LABELS]} ({SLOT_HOURS[slot as keyof typeof SLOT_HOURS].start} - {SLOT_HOURS[slot as keyof typeof SLOT_HOURS].end})
+              </option>
             ))}
           </select>
           {!isEditMode && takenSlots.length > 0 && availableSlots.length > 0 && (
@@ -95,10 +92,10 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
         {formData.eventType !== 'השכרת אולם בלי אוכל' && (
           <div className={styles.inputGroup}>
             <label>צורת הגשה (תפריט)</label>
-            <select value={servingStyle} onChange={(e) => setServingStyle(e.target.value)} className={styles.input}>
-              <option value="american">אמריקן סרביס (ברירת מחדל)</option>
-              <option value="center">מרכז שולחן</option>
-              <option value="bar">בר</option>
+            <select value={servingStyle || DEFAULT_SERVING_STYLE} onChange={(e) => setServingStyle(e.target.value)} className={styles.input}>
+              {Object.entries(SERVING_STYLES).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
         )}
@@ -112,7 +109,8 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
               </div>
               <div className={styles.inputGroup}>
                 <label>מנות אופציה (רזרבה)</label>
-                <input type="number" name="optionalGuestCount" value={formData.optionalGuestCount} onChange={handleChange} className={styles.input} />
+                <input type="number" name="optionalGuestCount" min="0" value={formData.optionalGuestCount} onChange={handleChange} className={styles.input} />
+                <span className={styles.slotHint}>מתמלא אוטומטית 10% מכמות המנות · ללא חיוב</span>
               </div>
             </div>
             

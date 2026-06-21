@@ -2,6 +2,12 @@ export type TimeSlot = 'morning' | 'noon' | 'evening';
 
 export const TIME_SLOTS: TimeSlot[] = ['morning', 'noon', 'evening'];
 
+/** משבצת ברירת מחדל בטופס הזמנה */
+export const DEFAULT_TIME_SLOT: TimeSlot = 'evening';
+
+/** סדר תצוגה ברשימת הבחירה — ערב ראשון */
+export const SLOT_DISPLAY_ORDER: TimeSlot[] = ['evening', 'morning', 'noon'];
+
 export const SLOT_LABELS: Record<TimeSlot, string> = {
   morning: 'בוקר',
   noon: 'צהריים',
@@ -13,6 +19,33 @@ export const SLOT_COLORS: Record<TimeSlot, string> = {
   noon: '#10B981',
   evening: '#6366F1',
 };
+
+/** שעות ברירת מחדל לכל משבצת: בוקר 08:00–12:00, צהריים 12:00–18:00, ערב 18:00–00:00 */
+export const SLOT_HOURS: Record<TimeSlot, { start: string; end: string }> = {
+  morning: { start: '08:00', end: '12:00' },
+  noon: { start: '12:00', end: '18:00' },
+  evening: { start: '18:00', end: '00:00' },
+};
+
+export function getSlotHours(slot: TimeSlot): { start: string; end: string } {
+  return SLOT_HOURS[slot];
+}
+
+/** ערב אם פנוי, אחרת המשבצת הראשונה לפי סדר התצוגה */
+export function getDefaultTimeSlot(available: TimeSlot[]): TimeSlot | '' {
+  if (available.length === 0) return '';
+  if (available.includes(DEFAULT_TIME_SLOT)) return DEFAULT_TIME_SLOT;
+  for (const slot of SLOT_DISPLAY_ORDER) {
+    if (available.includes(slot)) return slot;
+  }
+  return available[0];
+}
+
+export function sortSlotsForDisplay(slots: TimeSlot[]): TimeSlot[] {
+  return [...slots].sort(
+    (a, b) => SLOT_DISPLAY_ORDER.indexOf(a) - SLOT_DISPLAY_ORDER.indexOf(b)
+  );
+}
 
 export function getSlotColor(timeOfDay?: string | null): string {
   const slot = normalizeTimeSlot(timeOfDay);
@@ -45,8 +78,8 @@ export function normalizeTimeSlot(
   if (hourSource) {
     const hour = parseInt(hourSource.split(':')[0], 10);
     if (!isNaN(hour)) {
-      if (hour < 12) return 'morning';
-      if (hour < 17) return 'noon';
+      if (hour >= 8 && hour < 12) return 'morning';
+      if (hour >= 12 && hour < 18) return 'noon';
       return 'evening';
     }
   }
@@ -111,10 +144,11 @@ export function formatTimeOfDayDisplay(value: string | null | undefined): string
   if (!value) return 'שעה לא צוינה';
   const slot = normalizeTimeSlot(value);
   if (slot) {
+    const hours = getSlotHours(slot);
     const extra = value.includes('|') ? value.split('|')[1]?.trim() : value.includes(' - ') ? value : '';
     const label = SLOT_LABELS[slot];
     if (extra && extra !== slot && extra.includes(' - ')) return `${label} (${extra})`;
-    return label;
+    return `${label} (${hours.start} - ${hours.end})`;
   }
   return value;
 }

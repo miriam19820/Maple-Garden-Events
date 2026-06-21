@@ -1,8 +1,55 @@
 import React from 'react';
 import { KOSHER_PRICING } from '../BookingForm';
+import CheckCamera from '../../CheckCamera/CheckCamera';
+import CheckDetailsForm from '../../CheckDetailsForm/CheckDetailsForm';
+import type { DepositCheckDetails } from '../../../utils/checkOcr';
 
-const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpgradeChange, isHallOnly, depositMethod, setDepositMethod, totals, isFoodRelevant, kosherType, isEditMode, editId, errors, styles }: any) => {
-  
+interface PaymentAndUpgradesSectionProps {
+  formData: any;
+  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  upgrades: Record<string, boolean>;
+  handleUpgradeChange: (key: string) => void;
+  isHallOnly: boolean;
+  depositMethod: string;
+  setDepositMethod: (method: string) => void;
+  checkScanning: boolean;
+  onCheckCapture: (imageSrc: string) => void | Promise<void>;
+  onCheckFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+  onDeleteCheck: () => void;
+  onCheckDetailsChange: (details: DepositCheckDetails) => void;
+  totals: { base: number; discountVal: number; vatAmount: number; finalTotal: number };
+  isFoodRelevant: boolean;
+  kosherType: string;
+  isEditMode: boolean;
+  editId?: string;
+  errors?: Record<string, string>;
+  styles: Record<string, string>;
+}
+
+const PaymentAndUpgradesSection = ({
+  formData,
+  handleChange,
+  upgrades,
+  handleUpgradeChange,
+  isHallOnly,
+  depositMethod,
+  setDepositMethod,
+  checkScanning,
+  onCheckCapture,
+  onCheckFileUpload,
+  onDeleteCheck,
+  onCheckDetailsChange,
+  totals,
+  isFoodRelevant,
+  kosherType,
+  isEditMode,
+  editId,
+  errors,
+  styles,
+}: PaymentAndUpgradesSectionProps) => {
+  const isCheckDeposit = depositMethod === 'check_upload' || depositMethod === 'check_capture';
+  const hasCheckImage = !!formData.depositCheckUrl;
+
   return (
     <>
       <div className={styles.sectionCard}>
@@ -46,7 +93,6 @@ const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpg
       <div className={styles.sectionCard}>
         <h3 className={styles.sectionHeader}>סיכום, פיקדון ותשלום</h3>
 
-        {/* --- התוספת החדשה: מחיר השכרת אולם (מוצג רק בלי אוכל) --- */}
         {isHallOnly && (
           <div className={styles.inputGroup} style={{ backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px solid #bbf7d0', marginBottom: '20px' }}>
             <label style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#166534' }}>מחיר השכרת אולם (₪) *</label>
@@ -94,28 +140,56 @@ const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpg
 
         <div className={styles.depositOptions}>
           <label className={styles.radioLabel}>
-            <input type="radio" name="deposit" value="credit_card" onChange={(e) => setDepositMethod(e.target.value)} />
+            <input type="radio" name="deposit" value="credit_card" checked={depositMethod === 'credit_card'} onChange={(e) => setDepositMethod(e.target.value)} />
             <span>תשלום באשראי / מזומן</span>
           </label>
           <label className={styles.radioLabel}>
-            <input type="radio" name="deposit" value="check_upload" onChange={(e) => setDepositMethod(e.target.value)} />
+            <input type="radio" name="deposit" value="check_upload" checked={depositMethod === 'check_upload'} onChange={(e) => setDepositMethod(e.target.value)} />
             <span>העלאת צילום צ'ק פיקדון</span>
           </label>
           <label className={`${styles.radioLabel} ${styles.depositHighlight}`}>
-            <input type="radio" name="deposit" value="check_capture" onChange={(e) => setDepositMethod(e.target.value)} />
+            <input type="radio" name="deposit" value="check_capture" checked={depositMethod === 'check_capture'} onChange={(e) => setDepositMethod(e.target.value)} />
             <span>📸 צילום צ'ק כעת</span>
           </label>
         </div>
 
-        {depositMethod === 'check_upload' && (
-          <div className={styles.fileUploadBox}>
-            <input type="file" accept="image/*,.pdf" />
-          </div>
-        )}
+        {isCheckDeposit && (
+          <div className={styles.fileUploadBox} style={{ marginTop: '16px' }}>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: '10px' }}>תמונת צ'ק פיקדון</label>
 
-        {depositMethod === 'check_capture' && (
-          <div className={`${styles.fileUploadBox} ${styles.fileUploadBoxCapture}`}>
-            <input type="file" accept="image/*" capture="environment" />
+            {depositMethod === 'check_capture' && !hasCheckImage && (
+              <CheckCamera
+                disabled={checkScanning}
+                onCapture={onCheckCapture}
+                onRetake={onDeleteCheck}
+              />
+            )}
+
+            {(depositMethod === 'check_upload' || hasCheckImage) && (
+              <div style={{ marginTop: depositMethod === 'check_capture' && hasCheckImage ? '12px' : 0 }}>
+                {depositMethod === 'check_upload' && !hasCheckImage && (
+                  <input type="file" accept="image/*" onChange={onCheckFileUpload} className={styles.input} />
+                )}
+                {hasCheckImage && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ צ'ק צולם/צורף בהצלחה</span>
+                    <button type="button" onClick={onDeleteCheck} style={{ padding: '6px 12px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer' }}>
+                      🗑️ מחק
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(hasCheckImage || formData.depositCheckDetails) && (
+              <CheckDetailsForm
+                details={formData.depositCheckDetails || {}}
+                imageUrl={formData.depositCheckUrl || undefined}
+                scanning={checkScanning}
+                onChange={onCheckDetailsChange}
+                styles={styles}
+              />
+            )}
           </div>
         )}
 
@@ -123,10 +197,9 @@ const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpg
           <label>תנאי תשלום והסדרים מול הלקוח</label>
           <textarea name="paymentTerms" value={formData.paymentTerms} onChange={handleChange} className={styles.input} rows={2} placeholder="פירוט תנאי התשלום שסוכמו..."></textarea>
         </div>
-        
-        {/* כפתור צפייה בחוזה לעריכה */}
+
         {isEditMode && formData.clientSignatureUrl && (
-          <button 
+          <button
             type="button"
             onClick={() => window.open(`http://localhost:5000/api/bookings/${editId}/contract-pdf`, '_blank')}
             className={styles.viewContractBtn}
@@ -146,7 +219,8 @@ const PaymentAndUpgradesSection = ({ formData, handleChange, upgrades, handleUpg
           <p className={styles.totalsFinal}>₪ {totals.finalTotal.toLocaleString()}</p>
           {isFoodRelevant && formData.guestCount && (
             <p className={styles.totalsNote}>
-              כולל {formData.guestCount} מנות {formData.optionalGuestCount ? `+ ${formData.optionalGuestCount} רזרבה` : ''}, שדרוגים וכשרות {KOSHER_PRICING[kosherType].label}
+              כולל {formData.guestCount} מנות בתשלום
+              {formData.optionalGuestCount ? ` + ${formData.optionalGuestCount} רזרבה (ללא חיוב)` : ''}, שדרוגים וכשרות {KOSHER_PRICING[kosherType].label}
             </p>
           )}
         </div>
