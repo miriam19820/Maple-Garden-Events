@@ -9,6 +9,7 @@ router.get('/',               eventFormController.getAllForms);
 router.get('/:bookingId/pdf', eventFormController.generatePDF);
 router.get('/:bookingId',     eventFormController.getForm);
 router.post('/:bookingId',    eventFormController.upsertForm);
+router.post('/:bookingId/tables', eventFormController.saveTables);
 router.post('/:bookingId/send-email', eventFormController.sendEmail);
 
 export default router;

@@ -6,6 +6,9 @@ import CheckCamera from '../CheckCamera/CheckCamera';
 import CancellationStats from '../CancellationStats/CancellationStats';
 import KashrutSelector from '../KashrutSelector/KashrutSelector';
 import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
+import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
+import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
+import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
 
 interface Booking {
   id: string;
@@ -86,7 +89,10 @@ const EventFormManager = () => {
   const [isKashrutModalOpen, setIsKashrutModalOpen] = useState(false);
   
   const [selectedMenu, setSelectedMenu] = useState<Record<string, string[]> | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false); 
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isTableLayoutOpen, setIsTableLayoutOpen] = useState(false);
+  const [savedTables, setSavedTables] = useState<TableData[] | undefined>(undefined);
+  const [tableLayoutSaving, setTableLayoutSaving] = useState(false);
 
   const handleMenuSave = (menuSelections: Record<string, string[]>) => {
     setSelectedMenu(menuSelections);
@@ -131,20 +137,47 @@ const EventFormManager = () => {
       .then(r => r.json())
       .then(form => {
         if (form && form.id) {
-          const { id, createdAt, updatedAt, booking, bookingId, ...cleanForm } = form;
+          const { id, createdAt, updatedAt, booking, bookingId, tables, ...cleanForm } = form;
           setFormData(cleanForm);
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
           setSelectedMenu(form.menuSelections || null);
+          setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
         } else {
           setFormData({});
           setNotesList([]);
+          setSavedTables(undefined);
         }
       })
       .catch(() => {
         setFormData({});
         setNotesList([]);
+        setSavedTables(undefined);
       });
   }, [selected]);
+
+  const handleTableLayoutSave = async (tables: TableData[]) => {
+    if (!selected) return;
+    setTableLayoutSaving(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/tables`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tables: clientTablesToServer(tables) }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'שגיאה בשמירה');
+      }
+      setSavedTables(tables);
+      alert('סידור השולחנות נשמר בהצלחה!');
+      setIsTableLayoutOpen(false);
+    } catch (error) {
+      console.error('Table layout save error:', error);
+      alert('שגיאה בשמירת סידור השולחנות');
+    } finally {
+      setTableLayoutSaving(false);
+    }
+  };
 
   const filtered = bookings.filter(b =>
     b.clientAFullName?.includes(search) ||
@@ -581,6 +614,31 @@ const EventFormManager = () => {
                   })()}
                 </div>
               )}
+
+              <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                {savedTables && savedTables.length > 0 ? (
+                  <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 'bold' }}>
+                    ✓ סידור שולחנות שמור ({savedTables.length} שולחנות)
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>טרם נשמר סידור שולחנות לאירוע זה</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsTableLayoutOpen(true)}
+                  style={{
+                    padding: '10px 20px',
+                    background: savedTables?.length ? '#3b82f6' : '#8b5cf6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {savedTables?.length ? 'ערוך סידור שולחנות אולם' : '🪑 סידור שולחנות אולם'}
+                </button>
+              </div>
             </div>
 
             {/* שולחן כבוד */}
@@ -1030,6 +1088,28 @@ const EventFormManager = () => {
                          initialSelections={selectedMenu} 
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isTableLayoutOpen && (
+              <div
+                style={{ position: 'fixed', inset: 0, background: '#f8fafc', display: 'flex', flexDirection: 'column', zIndex: 9999 }}
+              >
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '16px' }}>
+                  <div style={{ marginBottom: '8px', textAlign: 'center' }}>
+                    <h3 style={{ margin: 0, color: '#334155' }}>סידור שולחנות אולם</h3>
+                    {tableLayoutSaving && <span style={{ color: '#64748b', fontSize: '14px' }}>שומר...</span>}
+                  </div>
+                  <div style={{ flex: 1, minHeight: 0 }}>
+                    <FloorPlanBuilder
+                      key={selected.id}
+                      initialTables={savedTables}
+                      onSave={handleTableLayoutSave}
+                      onClose={() => setIsTableLayoutOpen(false)}
+                      downloadFileName={`sidur-shulchanot-${selected.clientAFullName}-${dateStr(selected).replace(/\./g, '-')}.png`}
+                    />
                   </div>
                 </div>
               </div>
