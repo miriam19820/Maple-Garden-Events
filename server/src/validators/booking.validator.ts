@@ -20,6 +20,7 @@ export const createBookingSchema = z.object({
     clientAPhone: z.string().optional(),
 
     guestCount: optionalNumber,
+    minimumGuestCount: optionalNumber,
     finalPricePortion: optionalNumber,
     hallRentalPrice: optionalNumber,
     servingStyle: z.string().optional(),

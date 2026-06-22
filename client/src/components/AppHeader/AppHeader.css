@@ -7,13 +7,19 @@
   position: sticky;
   top: 0;
   z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .app-header-start {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-start;
+  min-width: 0;
+  flex: 1;
 }
 
 .app-header-brand {
@@ -24,6 +30,7 @@
   display: flex;
   align-items: center;
   transition: opacity var(--maple-transition);
+  flex-shrink: 0;
 }
 
 .app-header-brand:hover {
@@ -69,6 +76,47 @@
 
 .app-header-hamburger:hover span {
   background: var(--maple-green-dark);
+}
+
+.app-header-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--maple-green-light);
+  border: 1px solid var(--maple-green-muted);
+  border-radius: var(--maple-radius-sm);
+  color: var(--maple-green-deep);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--maple-transition);
+  font-family: var(--maple-font);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.app-header-back:hover {
+  background: var(--maple-green-muted);
+  border-color: var(--maple-green);
+  color: var(--maple-green-dark);
+}
+
+.app-header-back-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.app-header-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--maple-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* מגירת ניווט */
@@ -194,5 +242,16 @@
   .app-header-hamburger {
     width: 38px;
     height: 38px;
+  }
+
+  .app-header-back {
+    height: 38px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  .app-header-title {
+    font-size: 0.85rem;
+    max-width: 42vw;
   }
 }

@@ -52,14 +52,37 @@
   border-radius: var(--maple-radius);
   padding: 16px 18px;
   box-shadow: var(--maple-shadow-sm);
-  cursor: pointer;
   transition: all var(--maple-transition);
 }
 
 .card:hover {
   border-color: var(--maple-green-muted);
   box-shadow: var(--maple-shadow);
-  transform: translateY(-2px);
+}
+
+.cardCode {
+  font-size: 0.78rem;
+  color: var(--maple-green-dark);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.viewBtn {
+  margin-top: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--maple-green);
+  color: #fff;
+  border: none;
+  border-radius: var(--maple-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--maple-transition);
+}
+
+.viewBtn:hover {
+  background: var(--maple-green-dark);
 }
 
 .cardDate {
@@ -100,6 +123,10 @@
   box-shadow: var(--maple-shadow-lg);
   overflow: hidden;
   border: 1px solid var(--maple-border);
+}
+
+.detailsBox {
+  width: 620px;
 }
 
 .popupHeader {
@@ -155,4 +182,124 @@
 .popupRow span {
   color: var(--maple-text);
   font-size: 0.9rem;
+}
+
+.detailsSection {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--maple-border);
+}
+
+.sectionTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--maple-green-dark);
+  margin: 0 0 10px;
+}
+
+.totalPrice {
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.notesBlock {
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+}
+
+.additionItem {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dcfce7;
+  font-size: 0.9rem;
+}
+
+.additionMeta {
+  color: #4b5563;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.signatureBlock {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.signatureImg {
+  width: 150px;
+  height: 60px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+  display: block;
+  margin-top: 4px;
+}
+
+.detailsActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 2px solid var(--maple-border);
+}
+
+.btnPrimary {
+  padding: 12px 18px;
+  background: var(--maple-green-dark);
+  color: #fff;
+  border: none;
+  border-radius: var(--maple-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--maple-transition);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--maple-green);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  padding: 10px 16px;
+  background: var(--maple-surface);
+  color: var(--maple-green-dark);
+  border: 1px solid var(--maple-green-muted);
+  border-radius: var(--maple-radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--maple-transition);
+}
+
+.btnSecondary:hover {
+  background: var(--maple-green-light);
+}
+
+.btnAddition {
+  padding: 10px 16px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: var(--maple-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btnAddition:hover {
+  background: #15803d;
+}
+
+.editBlockedMsg {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--maple-text-muted);
+  margin: 0;
 }

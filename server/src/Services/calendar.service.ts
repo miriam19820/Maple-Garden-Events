@@ -180,7 +180,7 @@ export const calendarService = {
   async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
     const datesInRange = await prisma.eventDate.findMany({
       where: { date: { gte: startDate, lte: endDate } },
-      include: { bookings: true }
+      include: { bookings: { include: { eventForm: true, eventCheckIn: true } } }
     });
     
     const result = [];

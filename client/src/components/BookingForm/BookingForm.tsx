@@ -29,6 +29,7 @@ export const KOSHER_PRICING: Record<string, { label: string, extra: number }> = 
 };
 
 export const DEFAULT_KOSHER_TYPE = 'machpud';
+export const DEFAULT_VAT_TYPE = 'included';
 
 export const SERVING_STYLES: Record<string, string> = {
   american: 'אמריקן סרביס',
@@ -41,6 +42,38 @@ export const DEFAULT_SERVING_STYLE = 'american';
 export const UPGRADES_PRICING: Record<string, number> = {
   baseDesign: 4500, amplification: 1400, lighting: 1800, screens: 800,
   reception: 2000, separateReception: 3000, extraSecurity: 650, fireworks: 700,
+};
+
+/** סדר תצוגה בגריד התוספות (כמו במקור) */
+export const UPGRADE_DISPLAY_ORDER = [
+  'baseDesign', 'reception', 'separateReception', 'lighting',
+  'amplification', 'screens', 'fireworks', 'extraSecurity',
+] as const;
+
+/** תוספות שמשולמות לאולם (כולל כשרות — מחושבת בנפרד) */
+export const HALL_UPGRADE_KEYS = ['reception', 'separateReception', 'extraSecurity'] as const;
+
+/** שדרוגים שמשולמים לספקים חיצוניים */
+export const EXTERNAL_UPGRADE_KEYS = ['baseDesign', 'lighting', 'amplification', 'screens', 'fireworks'] as const;
+
+export const UPGRADE_LABELS: Record<string, string> = {
+  baseDesign: 'עיצוב בסיסי',
+  reception: 'קבלת פנים',
+  separateReception: 'קבלת פנים נפרד',
+  lighting: 'תאורה',
+  amplification: 'הגברה',
+  screens: 'מסכים',
+  fireworks: 'זיקוקים',
+  extraSecurity: 'מאבטח נוסף',
+};
+
+/** קישורי דמה לתשלום לספקים חיצוניים — יוחלפו בקישורים אמיתיים */
+export const EXTERNAL_SUPPLIER_LINKS: Record<string, string> = {
+  baseDesign: 'https://example.com/pay/design',
+  lighting: 'https://example.com/pay/lighting',
+  amplification: 'https://example.com/pay/sound',
+  screens: 'https://example.com/pay/screens',
+  fireworks: 'https://example.com/pay/fireworks',
 };
 
 interface BookingFormProps {
@@ -159,7 +192,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
     calendarDateId: '', eventType: '', timeOfDay: isOptionMode ? '' : initialTimeSlot, startTime: isOptionMode ? '' : initialSlotHours.start, endTime: isOptionMode ? '' : initialSlotHours.end,
-    guestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: '', clientSignatureUrl: '',
+    guestCount: '', minimumGuestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: DEFAULT_VAT_TYPE, paymentTerms: '', leadSource: '', clientSignatureUrl: '',
    
     akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
     depositCheckUrl: '', depositCheckDetails: null as DepositCheckDetails | null,
@@ -179,6 +212,16 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [vatRate, setVatRate] = useState(17);
+
+  useEffect(() => {
+    apiFetch('http://localhost:5000/api/settings/global')
+      .then(r => r.json())
+      .then(settings => {
+        if (settings?.vatRate) setVatRate(Number(settings.vatRate));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (isEditMode) return;
@@ -255,7 +298,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           clientAFullName: b.clientAFullName || '', clientAIdNumber: b.clientAIdNumber || '', clientAPhone: phoneA.phone, clientAPhone2: phoneA.phone2, clientAEmail: b.clientAEmail || '', clientACity: addrA.city, clientAAddress: addrA.address,
           clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
           calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime || defaultHours?.start || '', endTime: parsedTime.endTime || defaultHours?.end || '',
-          guestCount: String(b.guestCount ?? ''), optionalGuestCount: calcOptionalGuestCount(b.guestCount ?? ''), finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: 'not_included', paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
+          guestCount: String(b.guestCount ?? ''), minimumGuestCount: String(b.minimumGuestCount ?? b.guestCount ?? ''), optionalGuestCount: calcOptionalGuestCount(b.guestCount ?? ''), finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: DEFAULT_VAT_TYPE, paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
           akumApprovalCode: b.akumApprovalCode || '', hasMusic: !!b.hasMusic,
           hallRentalPrice: b.hallRentalPrice ? String(b.hallRentalPrice) : '',
           depositCheckUrl: b.depositCheckUrl || '',
@@ -309,6 +352,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       );
     } else if (!current && free.length > 0) {
       const next = getDefaultTimeSlot(free);
+      if (!next) return;
       const hours = getSlotHours(next);
       setFormData((prev) => ({ ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }));
     }
@@ -346,6 +390,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       setFormData(prev => ({
         ...prev,
         guestCount: value,
+        minimumGuestCount: value,
         optionalGuestCount: calcOptionalGuestCount(value),
       }));
     } else {
@@ -417,30 +462,69 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const isFoodRelevant = !isHallOnly;
   const isWedding = formData.eventType === 'חתונה';
 const calculateTotals = () => {
-  let base = 0;
-  
-  // הוספנו את התנאי הזה: אם זה רק אולם, מחיר הבסיס הוא המחיר שהמנהל הזין
+  let mainBase = 0;
+
   if (isHallOnly) {
-    base += Number(formData.hallRentalPrice) || 0;
+    mainBase += Number(formData.hallRentalPrice) || 0;
+  } else if (isFoodRelevant) {
+    const portions = Number(formData.guestCount) || 0;
+    const portionPrice = Number(formData.finalPricePortion) || 0;
+    mainBase += portions * portionPrice;
   }
 
-  Object.keys(upgrades).forEach((key) => {
-    if (key === 'baseDesign' && isHallOnly) return; 
-    if (upgrades[key as keyof typeof upgrades]) base += UPGRADES_PRICING[key];
-  });
-
+  let hallExtrasBase = 0;
   if (isFoodRelevant) {
     const portions = Number(formData.guestCount) || 0;
-    const basePrice = Number(formData.finalPricePortion) || 0;
-    base += portions * (basePrice + KOSHER_PRICING[kosherType].extra);
+    hallExtrasBase += portions * KOSHER_PRICING[kosherType].extra;
   }
+  HALL_UPGRADE_KEYS.forEach((key) => {
+    if (upgrades[key]) hallExtrasBase += UPGRADES_PRICING[key];
+  });
+
+  let externalExtrasBase = 0;
+  EXTERNAL_UPGRADE_KEYS.forEach((key) => {
+    if (key === 'baseDesign' && isHallOnly) return;
+    if (upgrades[key]) externalExtrasBase += UPGRADES_PRICING[key];
+  });
 
   let discountVal = 0;
-  if (formData.discountPercent) discountVal += base * (Number(formData.discountPercent) / 100);
+  if (formData.discountPercent) discountVal += mainBase * (Number(formData.discountPercent) / 100);
   if (formData.discountAmount) discountVal += Number(formData.discountAmount);
-  let subtotal = Math.max(0, base - discountVal);
-  let vatAmount = formData.vatType === 'not_included' ? subtotal * 0.18 : 0; 
-  return { base, discountVal, subtotal, vatAmount, finalTotal: subtotal + vatAmount };
+
+  const mainSubtotal = Math.max(0, mainBase - discountVal);
+  const hallExtrasSubtotal = hallExtrasBase;
+  const externalExtrasSubtotal = externalExtrasBase;
+
+  const mainVat = formData.vatType === 'not_included' ? mainSubtotal * (vatRate / 100) : 0;
+  const hallExtrasVat = formData.vatType === 'not_included' ? hallExtrasSubtotal * (vatRate / 100) : 0;
+  const externalExtrasVat = formData.vatType === 'not_included' ? externalExtrasSubtotal * (vatRate / 100) : 0;
+
+  const baseTotal = mainSubtotal + mainVat;
+  const hallExtrasTotal = hallExtrasSubtotal + hallExtrasVat;
+  const externalExtrasTotal = externalExtrasSubtotal + externalExtrasVat;
+  const extrasTotal = hallExtrasTotal;
+  const finalTotal = baseTotal + hallExtrasTotal + externalExtrasTotal;
+
+  return {
+    mainBase,
+    hallExtrasBase,
+    externalExtrasBase,
+    discountVal,
+    mainSubtotal,
+    hallExtrasSubtotal,
+    externalExtrasSubtotal,
+    mainVat,
+    hallExtrasVat,
+    externalExtrasVat,
+    baseTotal,
+    hallExtrasTotal,
+    externalExtrasTotal,
+    extrasTotal,
+    finalTotal,
+    base: mainBase + hallExtrasBase + externalExtrasBase,
+    subtotal: mainSubtotal + hallExtrasSubtotal + externalExtrasSubtotal,
+    vatAmount: mainVat + hallExtrasVat + externalExtrasVat,
+  };
 };
   const totals = calculateTotals();
 
@@ -517,7 +601,11 @@ const calculateTotals = () => {
 
     let datesForSubmit = selectedDatesDisplay;
     if (isOption && selectedDatesDisplay.length > 0) {
-      const slot = normalizeTimeSlot(formData.timeOfDay as string) || getDefaultTimeSlot();
+      const slot = normalizeTimeSlot(formData.timeOfDay as string) || getDefaultTimeSlot(availableSlots);
+      if (!slot) {
+        alert('חובה לבחור זמן ביום (בוקר / צהריים / ערב).');
+        return;
+      }
       const verify = await verifyAllOptionDates(
         selectedDatesDisplay.map(normalizeOptionDate),
         formData.eventType || 'חתונה',
@@ -619,8 +707,8 @@ const calculateTotals = () => {
           </div>
         </div>
 
-        <form className={styles.formBody} onSubmit={handleSubmit} style={{ direction: 'rtl' }}>
-          <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} />
+        <form className={styles.formWrapper} onSubmit={handleSubmit} style={{ direction: 'rtl' }}>
+          <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} selectedDatesDisplay={selectedDatesDisplay} />
           {isOption && (
             <OptionDatesBar
               selectedDates={selectedDatesDisplay}
@@ -629,42 +717,27 @@ const calculateTotals = () => {
               timeSlot={formData.timeOfDay || 'evening'}
             />
           )}
-          <ClientsSection formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isWedding={isWedding} isOption={isOption} styles={styles} />
-          <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} styles={styles} />
-             {isFoodRelevant && (
-          <div className={styles.sectionCard}>
-            <h3 className={styles.sectionHeader}>הערות לתפריט ובקשות מיוחדות</h3>
-            <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder="לדוגמה: אלרגיות מיוחדות..." />
-          </div>)}
 
-          <PaymentAndUpgradesSection
-            formData={formData}
-            handleChange={handleChange}
-            upgrades={upgrades}
-            handleUpgradeChange={handleUpgradeChange}
-            isHallOnly={isHallOnly}
-            depositMethod={depositMethod}
-            setDepositMethod={handleDepositMethodChange}
-            checkScanning={checkScanning}
-            onCheckCapture={handleCheckCapture}
-            onCheckFileUpload={handleCheckFileUpload}
-            onDeleteCheck={handleDeleteCheck}
-            onCheckDetailsChange={handleCheckDetailsChange}
-            totals={totals}
-            isFoodRelevant={isFoodRelevant}
-            kosherType={kosherType}
-            isEditMode={isEditMode}
-            editId={editId}
-            errors={errors}
-            styles={styles}
-          />
+          <div className={styles.formGrid}>
+            <div className={styles.formColumn}>
+              <ClientsSection formData={formData} handleChange={handleChange} errors={errors} setErrors={setErrors} isWedding={isWedding} isOption={isOption} styles={styles} />
+            </div>
 
-          <div className={styles.sectionCard}>
-            <h3 className={styles.sectionHeader}>הערות פנימיות לניהול</h3>
-            <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder="הוסף הערה פנימית..." />
+            <div className={styles.formColumn}>
+              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} styles={styles} />
+              {isFoodRelevant && (
+                <div className={`${styles.sectionCard} ${styles.compactNotesWrap}`}>
+                  <h3 className={styles.sectionHeader}>הערות לתפריט</h3>
+                  <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder="לדוגמה: אלרגיות..." />
+                </div>
+              )}
+            </div>
+
+            <div className={styles.formColumn}>
+              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange as (key: string) => void} isHallOnly={isHallOnly} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} />
+            </div>
           </div>
-          
-          {/* עריכת מלל חוזה לאירוע קיים */}
+
           {isEditMode && !isOption && (
             <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
               <p style={{ margin: '0 0 10px', color: '#1e40af', fontWeight: '500' }}>
@@ -688,108 +761,90 @@ const calculateTotals = () => {
             </div>
           )}
 
-          {/* הקופסה הירוקה לאישור החוזה - פותחת את המודאל בלחיצה */}
-          {!isEditMode && !isOption && (
-            <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', fontSize: '1.05rem', color: '#1f293b', fontWeight: '500' }}>
-                <input 
-                  type="checkbox" 
-                  checked={contractSigned} 
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setIsContractModalOpen(true); // לחיצה פותחת את המודאל
-                    } else {
-                      setContractSigned(false);
-                      setSavedSignature(null);
-                      sigCanvas.current?.clear();
-                    }
-                  }} 
-                  style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
-                />
-                קראתי את החוזה, אני מאשר את התנאים וחותם
-              </label>
-              <div 
-                onClick={() => setIsContractModalOpen(true)}
-                style={{ color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px', fontSize: '0.95rem', paddingRight: '30px' }}
-              >
-                לחץ כאן לקריאת החוזה המלא ולחתימה דיגיטלית
-              </div>
+          <div className={`${styles.formBottomRow} ${isOption ? styles.formBottomRowCompact : ''}`}>
+            <div className={`${styles.sectionCard} ${styles.compactNotesWrap}`}>
+              <h3 className={styles.sectionHeader}>הערות פנימיות</h3>
+              <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder="הוסף הערה פנימית..." />
             </div>
-          )}
-          
-          {/* 🎵 קופסת התשלום לאקו"ם (מותנה סוג אירוע/מוזיקה) 🎵 */}
-          {!isOption && (
-            <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
-              <span style={{ display: 'block', fontWeight: 'bold', color: '#92400e', marginBottom: '8px' }}>
-                 🎵 הסדרת רישיון אקו"ם
-              </span>
-              
-              {!isWedding && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', cursor: 'pointer', color: '#b45309', fontWeight: '500' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={formData.hasMusic} 
-                    onChange={(e) => setFormData(prev => ({ ...prev, hasMusic: e.target.checked }))} 
-                    style={{ width: '16px', height: '16px', accentColor: '#d97706' }}
+
+            {!isEditMode && (
+              <div className={styles.contractBox}>
+                <label className={styles.contractCheckLabel}>
+                  <input
+                    type="checkbox"
+                    checked={contractSigned}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setIsContractModalOpen(true);
+                      } else {
+                        setContractSigned(false);
+                        setSavedSignature(null);
+                        sigCanvas.current?.clear();
+                      }
+                    }}
                   />
-                  יש מוזיקה באירוע (דורש תשלום לאקו"ם)
+                  קראתי את החוזה, מאשר את התנאים וחותם
                 </label>
-              )}
+                <div className={styles.contractLink} onClick={() => setIsContractModalOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setIsContractModalOpen(true)}>
+                  לחץ לקריאת החוזה ולחתימה דיגיטלית
+                </div>
+              </div>
+            )}
 
-              {(isWedding || formData.hasMusic) && (
-                <>
-                  <span style={{ fontSize: '0.95rem', color: '#b45309', display: 'block', marginBottom: '10px' }}>
-                    {isWedding ? 'חובה להסדיר רישיון השמעת מוזיקה מול אקו"ם עבור אירועי חתונה.' : 'מכיוון שציינת שיש מוזיקה באירוע, חובה להסדיר רישיון מול אקו"ם.'}
-                  </span>
-                  <a 
-                    href="https://apps.acum.org.il/licenses/family-event/register-payment?action=payFamilyEvent" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    style={{ color: '#d97706', fontWeight: 'bold', textDecoration: 'underline', display: 'inline-block', marginBottom: '15px' }}
-                  >
-                    לתשלום והפקת הרישיון לאקו"ם לחצו כאן
-                  </a>
-                  
-                  <div className={styles.inputGroup}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#92400e' }}>קוד אישור אקו"ם (יתקבל לאחר התשלום):</label>
+            {!isOption && (
+              <div className={styles.akumBox}>
+                <span className={styles.akumTitle}>🎵 הסדרת רישיון אקו&quot;ם</span>
+
+                {!isWedding && (
+                  <label className={styles.akumCheckLabel}>
                     <input
-                      type="text"
-                      name="akumApprovalCode"
-                      value={formData.akumApprovalCode}
-                      onChange={handleChange}
-                      className={styles.input}
-                      placeholder="הזן מספר אישור שקיבלת לאחר התשלום..."
-                      style={{ borderColor: '#fcd34d', backgroundColor: '#fff', width: '100%', maxWidth: '300px' }}
+                      type="checkbox"
+                      checked={formData.hasMusic}
+                      onChange={(e) => setFormData(prev => ({ ...prev, hasMusic: e.target.checked }))}
                     />
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+                    יש מוזיקה באירוע (דורש תשלום לאקו&quot;ם)
+                  </label>
+                )}
 
-          {/* כפתור השמירה הראשי */}
-          <div className={styles.actions} style={{ display: 'flex', gap: '15px', justifyContent: 'flex-start', marginTop: '10px' }}>
+                {(isWedding || formData.hasMusic) && (
+                  <>
+                    <span className={styles.akumText}>
+                      {isWedding ? 'חובה להסדיר רישיון השמעת מוזיקה מול אקו"ם.' : 'חובה להסדיר רישיון מול אקו"ם.'}
+                    </span>
+                    <a
+                      href="https://apps.acum.org.il/licenses/family-event/register-payment?action=payFamilyEvent"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.akumLink}
+                    >
+                      לתשלום והפקת הרישיון לאקו&quot;ם
+                    </a>
+                    <div className={styles.inputGroup}>
+                      <label className={styles.akumInputLabel}>קוד אישור אקו&quot;ם:</label>
+                      <input
+                        type="text"
+                        name="akumApprovalCode"
+                        value={formData.akumApprovalCode}
+                        onChange={handleChange}
+                        className={`${styles.input} ${styles.akumInput}`}
+                        placeholder="מספר אישור לאחר התשלום..."
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={styles.formFooter}>
             <button
               type="submit"
               className={styles.submitBtn}
               disabled={isSubmitting || (!isEditMode && !isOption && !contractSigned)}
-              style={{
-                backgroundColor: '#A2C2A6', 
-                color: 'white',
-                padding: '12px 36px',
-                borderRadius: '8px',
-                border: 'none',
-                cursor: (!isEditMode && !isOption && !contractSigned) ? 'not-allowed' : 'pointer',
-                fontSize: '1.1rem',
-                fontWeight: 'bold',
-                opacity: (!isEditMode && !isOption && !contractSigned) ? 0.6 : 1,
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-              }}
             >
               {isSubmitting ? 'שומר נתונים...' : isEditMode ? 'שמירת שינויים' : (isOption ? 'שמירת אופציה' : 'שמירת וסגירת אירוע')}
             </button>
           </div>
-
         </form>
       </div>
 

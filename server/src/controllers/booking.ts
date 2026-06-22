@@ -50,6 +50,48 @@ function validateHallRentalPriceInput(data: { eventType?: string; hallRentalPric
   return null;
 }
 
+function extractPriceBreakdown(
+  data: {
+    eventType?: string;
+    calculatedTotals?: {
+      baseTotal?: number;
+      hallExtrasTotal?: number;
+      externalExtrasTotal?: number;
+      extrasTotal?: number;
+      finalTotal?: number;
+    };
+    guestCount?: unknown;
+    finalPricePortion?: unknown;
+    hallRentalPrice?: unknown;
+  },
+  liveAdditionsTotal = 0,
+) {
+  const totals = data.calculatedTotals;
+  if (totals?.baseTotal !== undefined) {
+    const basePrice = Number(totals.baseTotal) || 0;
+    const extrasPrice = Number(totals.hallExtrasTotal ?? totals.extrasTotal) || 0;
+    const externalExtrasPrice = Number(totals.externalExtrasTotal) || 0;
+    return {
+      basePrice,
+      extrasPrice,
+      externalExtrasPrice,
+      liveAdditionsTotal,
+      totalPrice: basePrice + extrasPrice + externalExtrasPrice + liveAdditionsTotal,
+    };
+  }
+  if (totals?.finalTotal !== undefined) {
+    const totalPrice = Number(totals.finalTotal) + liveAdditionsTotal;
+    return { basePrice: totalPrice, extrasPrice: 0, externalExtrasPrice: 0, liveAdditionsTotal, totalPrice };
+  }
+  let fallback = 0;
+  if (isHallOnlyBooking(data)) {
+    fallback = Number(data.hallRentalPrice) || 0;
+  } else {
+    fallback = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
+  }
+  return { basePrice: fallback, extrasPrice: 0, externalExtrasPrice: 0, liveAdditionsTotal, totalPrice: fallback + liveAdditionsTotal };
+}
+
 export const createBooking = catchAsync(async (req: AuthRequest, res: Response) => {
   const data = req.body;
   const isManager = req.user?.role === 'manager'; 
@@ -81,17 +123,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     expiryDate.setHours(expiryDate.getHours() + hoursToAdd);
   }
 
-  // 🔥 התיקון שלנו: חישוב חכם של המחיר הכולל (כולל השכרת אולם והנתונים שמגיעים מצד הלקוח)
-  let calculatedTotalPrice = 0;
-  if (isHallOnlyBooking(data)) {
-    calculatedTotalPrice = Number(data.hallRentalPrice) || 0;
-  } else {
-    calculatedTotalPrice = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
-  }
-  // לקיחת המחיר הסופי המדויק מצד הלקוח (כולל מע"מ, שדרוגים והנחות)
-  if (data.calculatedTotals && data.calculatedTotals.finalTotal !== undefined) {
-    calculatedTotalPrice = data.calculatedTotals.finalTotal;
-  }
+  // חישוב מחירים מפוצלים: בסיס / תוספות / סה"כ
+  const prices = extractPriceBreakdown(data, 0);
 
   const clientAPhoneCombined = data.clientAPhone2 ? `${data.clientAPhone} | נוסף: ${data.clientAPhone2}` : data.clientAPhone;
   const clientAAddressCombined = data.clientACity ? `${data.clientACity}, ${data.clientAAddress}` : data.clientAAddress;
@@ -227,8 +260,13 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           timeOfDay: timeString,
           timeSlot: slot,
           guestCount: Number(data.guestCount) || 0,
+          minimumGuestCount: Number(data.minimumGuestCount) || Number(data.guestCount) || 0,
           finalPricePortion: Number(data.finalPricePortion) || 0,
-          totalPrice: calculatedTotalPrice || 0,
+          basePrice: prices.basePrice,
+          extrasPrice: prices.extrasPrice,
+          externalExtrasPrice: prices.externalExtrasPrice,
+          liveAdditionsTotal: prices.liveAdditionsTotal,
+          totalPrice: prices.totalPrice,
           hallRentalPrice: data.hallRentalPrice ? Number(data.hallRentalPrice) : null, // 🔥 התיקון: שמירת מחיר אולם
           hasMusic: data.hasMusic !== undefined ? data.hasMusic : true,
           akumApprovalCode: data.akumApprovalCode || null,
@@ -282,6 +320,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         clientBEmail: savedBooking.clientBEmail || undefined,
         eventDate: new Date(firstDateString).toString(),
         guestCount: savedBooking.guestCount,
+        minimumGuestCount: savedBooking.minimumGuestCount ?? savedBooking.guestCount,
         eventType: savedBooking.eventType,
         timeOfDay: savedBooking.timeOfDay || undefined,
         clientSignatureUrl: data.clientSignature,
@@ -387,16 +426,8 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
       ? `${data.startTime} - ${data.endTime}`
       : booking.timeOfDay);
 
-  // 🔥 התיקון: חישוב מחיר כולל גם בזמן עריכה
-  let calculatedTotalPrice = booking.totalPrice;
-  if (isHallOnlyBooking(data)) {
-    calculatedTotalPrice = Number(data.hallRentalPrice) || 0;
-  } else {
-    calculatedTotalPrice = (Number(data.guestCount) || 0) * (Number(data.finalPricePortion) || 0);
-  }
-  if (data.calculatedTotals && data.calculatedTotals.finalTotal !== undefined) {
-    calculatedTotalPrice = data.calculatedTotals.finalTotal;
-  }
+  const liveTotal = Number(booking.liveAdditionsTotal) || 0;
+  const prices = extractPriceBreakdown(data, liveTotal);
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedBooking = await tx.booking.update({
@@ -416,8 +447,13 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
         timeOfDay: timeString,
         ...(slot ? { timeSlot: slot } : {}),
         guestCount: Number(data.guestCount) || 0,
+        minimumGuestCount: Number(data.minimumGuestCount) || Number(data.guestCount) || 0,
         finalPricePortion: Number(data.finalPricePortion) || 0,
-        totalPrice: calculatedTotalPrice,
+        basePrice: prices.basePrice,
+        extrasPrice: prices.extrasPrice,
+        externalExtrasPrice: prices.externalExtrasPrice,
+        liveAdditionsTotal: prices.liveAdditionsTotal,
+        totalPrice: prices.totalPrice,
         hallRentalPrice: data.hallRentalPrice !== undefined ? Number(data.hallRentalPrice) : (booking as any).hallRentalPrice, // 🔥 התיקון
         hasMusic: data.hasMusic !== undefined ? data.hasMusic : booking.hasMusic,
         akumApprovalCode: data.akumApprovalCode || null,
@@ -536,12 +572,19 @@ export const addEventAddition = async (req: Request, res: Response) => {
 
       const currentBooking = await tx.booking.findUnique({ where: { id: bookingId } });
       if (currentBooking) {
-        const currentTotal = Number(currentBooking.totalPrice) || 0;
         const additionCost = Number(cost) || 0;
-        
+        const currentLive = Number(currentBooking.liveAdditionsTotal) || 0;
+        const newLiveTotal = currentLive + additionCost;
+        const basePrice = Number(currentBooking.basePrice) || 0;
+        const extrasPrice = Number(currentBooking.extrasPrice) || 0;
+        const externalExtrasPrice = Number(currentBooking.externalExtrasPrice) || 0;
+
         await tx.booking.update({
           where: { id: bookingId },
-          data: { totalPrice: currentTotal + additionCost }
+          data: {
+            liveAdditionsTotal: newLiveTotal,
+            totalPrice: basePrice + extrasPrice + externalExtrasPrice + newLiveTotal,
+          },
         });
       }
       
@@ -637,6 +680,7 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         clientBEmail: updated.clientBEmail || undefined,
         eventDate: booking.eventDate.date.toString(),
         guestCount: updated.guestCount,
+        minimumGuestCount: updated.minimumGuestCount ?? updated.guestCount,
         eventType: updated.eventType,
         timeOfDay: updated.timeOfDay || undefined,
         clientSignatureUrl: finalSignature,

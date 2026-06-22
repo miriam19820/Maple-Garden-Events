@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigationContext } from '../../context/NavigationContext';
+import {
+  resolveDefaultBackPath,
+  resolveRouteTitle,
+  shouldShowGlobalBack,
+} from '../../utils/appNavigation';
 import './AppHeader.css';
 
 const NAV_ITEMS = [
@@ -15,7 +21,11 @@ const NAV_ITEMS = [
 export const AppHeader = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { override } = useNavigationContext();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const showBack = shouldShowGlobalBack(location.pathname) || !!override;
+  const pageTitle = resolveRouteTitle(location.pathname);
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : '';
@@ -25,6 +35,20 @@ export const AppHeader = () => {
   const goTo = (path: string) => {
     setMenuOpen(false);
     navigate(path);
+  };
+
+  const handleBack = () => {
+    setMenuOpen(false);
+    if (override?.onBack) {
+      override.onBack();
+      return;
+    }
+    const fallback = resolveDefaultBackPath(location.pathname);
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate(fallback);
   };
 
   return (
@@ -43,15 +67,33 @@ export const AppHeader = () => {
             <span />
           </button>
 
-          <button
-            type="button"
-            className="app-header-brand"
-            onClick={() => goTo('/')}
-            aria-label="חזרה ללוח השנה"
-          >
-            <img src="/logo.png" alt="מיפל - גן אירועים בעיר" className="app-header-logo" />
-          </button>
+          {showBack && (
+            <button
+              type="button"
+              className="app-header-back"
+              onClick={handleBack}
+              aria-label={pageTitle ? `חזרה — ${pageTitle}` : 'חזרה'}
+            >
+              <span className="app-header-back-icon" aria-hidden="true">→</span>
+              <span className="app-header-back-text">חזרה</span>
+            </button>
+          )}
+
+          {pageTitle && (
+            <p className="app-header-title" title={pageTitle}>
+              {pageTitle}
+            </p>
+          )}
         </div>
+
+        <button
+          type="button"
+          className="app-header-brand"
+          onClick={() => goTo('/')}
+          aria-label="חזרה ללוח השנה"
+        >
+          <img src="/logo.png" alt="מיפל - גן אירועים בעיר" className="app-header-logo" />
+        </button>
       </header>
 
       {menuOpen && (

@@ -17,6 +17,7 @@ import settingsRoutes from './routes/settings.routes';
 import feedbackRoutes from './routes/feedback.routes';
 import kashrutRoutes from './routes/kashrut.routes';
 import authRoutes from './routes/auth.routes';
+import checkInRoutes from './routes/checkIn.routes';
 
 validateEnv();
 
@@ -54,6 +55,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(requestLogger);
 
+app.use('/api/check-in', checkInRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/kashrut', kashrutRoutes);
 app.use('/api/menu', menuRoutes);

@@ -3,16 +3,151 @@
   background: var(--maple-bg);
   padding: 20px 16px 32px;
   direction: rtl;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .formCard {
   background: var(--maple-surface);
-  max-width: 960px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   border-radius: var(--maple-radius-lg);
   border: 1px solid var(--maple-border);
   box-shadow: var(--maple-shadow);
   overflow: hidden;
+}
+
+.formWrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 20px;
+  padding: 24px;
+}
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.formBottomRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.formFooter {
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--maple-border);
+  background: var(--maple-bg);
+  flex-shrink: 0;
+}
+
+.contractBox {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--maple-radius-sm);
+  padding: 12px 14px;
+  text-align: right;
+}
+
+.contractCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: #1f293b;
+  font-weight: 500;
+}
+
+.contractCheckLabel input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--maple-green);
+  flex-shrink: 0;
+}
+
+.contractLink {
+  color: var(--maple-green-dark);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  padding-right: 26px;
+}
+
+.akumBox {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--maple-radius-sm);
+  padding: 12px 14px;
+  text-align: right;
+}
+
+.akumTitle {
+  display: block;
+  font-weight: 700;
+  color: #92400e;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.akumCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: #b45309;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.akumCheckLabel input {
+  width: 15px;
+  height: 15px;
+  accent-color: #d97706;
+}
+
+.akumText {
+  font-size: 0.85rem;
+  color: #b45309;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.akumLink {
+  color: #d97706;
+  font-weight: 700;
+  text-decoration: underline;
+  display: inline-block;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+.akumInputLabel {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.akumInput {
+  border-color: #fcd34d !important;
+  background-color: #fff !important;
+  max-width: 100%;
 }
 
 .header {
@@ -179,6 +314,10 @@
   gap: 12px;
 }
 
+.splitRowThree {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .input {
   width: 100%;
   border: 1px solid var(--maple-border-strong);
@@ -311,13 +450,17 @@
 
 .upgradesGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(4, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 10px;
 }
 
 @media (min-width: 600px) {
   .upgradesGrid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, auto);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
   }
 }
 
@@ -566,13 +709,228 @@
 
 @media (max-width: 768px) {
   .container { padding: 12px 10px 24px; }
-  .formBody { padding: 16px; gap: 16px; }
+  .formWrapper { padding: 16px; gap: 16px; }
   .header { padding: 16px; flex-direction: column; align-items: flex-start; }
   .headerLogo { height: 42px; }
-  .inputRow, .splitRow, .eventDetailsGrid, .upgradesGrid, .paymentGrid {
+  .inputRow, .splitRow, .eventDetailsGrid, .paymentGrid {
     grid-template-columns: 1fr;
   }
-  .metaBar { grid-template-columns: 1fr; }
+
+  .upgradesGrid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+  }
+  .metaBar { grid-template-columns: 1fr; margin: 0; }
+}
+
+/* Desktop full-screen — must stay last so nothing overrides width */
+@media (min-width: 1024px) {
+  .container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+  }
+
+  .formCard {
+    flex: 1;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .header {
+    padding: 12px 24px;
+    flex-shrink: 0;
+  }
+
+  .headerLogo {
+    height: 40px;
+  }
+
+  .title {
+    font-size: 1.15rem;
+  }
+
+  .formWrapper {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    gap: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .metaBar {
+    margin: 0 24px 10px;
+    padding: 10px 14px;
+    gap: 10px;
+    grid-template-columns: repeat(5, 1fr);
+    flex-shrink: 0;
+  }
+
+  .formGrid {
+    flex: 0 1 auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding: 0 24px;
+    align-content: start;
+    overflow: visible;
+  }
+
+  .formColumn {
+    overflow: visible;
+    gap: 10px;
+  }
+
+  .formBottomRow {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding: 10px 24px 0;
+    flex-shrink: 0;
+  }
+
+  .formBottomRowCompact {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sectionCard {
+    padding: 12px 14px;
+  }
+
+  .sectionHeader {
+    font-size: 0.92rem;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+
+  .clientBlock {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .sectionTitle,
+  .sectionTitlePrimary,
+  .sectionTitleSecondary {
+    font-size: 0.88rem;
+    margin-bottom: 2px;
+    padding-bottom: 4px;
+  }
+
+  .input {
+    padding: 7px 10px;
+    font-size: 0.86rem;
+  }
+
+  .inputGroup label {
+    font-size: 0.78rem;
+  }
+
+  .eventDetailsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .upgradesGrid {
+    grid-template-rows: repeat(4, auto);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 8px;
+  }
+
+  .upgradeLabel {
+    padding: 5px 8px;
+    font-size: 0.8rem;
+  }
+
+  .paymentGrid {
+    padding: 10px;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .totalsBox {
+    margin-top: 10px;
+    padding: 12px;
+  }
+
+  .totalsTitle {
+    font-size: 0.92rem;
+  }
+
+  .totalsFinal {
+    font-size: 1.35rem;
+  }
+
+  .totalsBreakdown {
+    font-size: 0.82rem;
+    margin-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .totalsNote {
+    font-size: 0.78rem;
+  }
+
+  .depositOptions {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .radioLabel {
+    font-size: 0.82rem;
+  }
+
+  .formFooter {
+    padding: 10px 24px;
+    flex-shrink: 0;
+  }
+
+  .submitBtn {
+    padding: 10px 28px;
+    font-size: 0.92rem;
+  }
+
+  .clientsSectionWedding {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .compactNotesWrap :global(.notesList) {
+    max-height: 72px;
+    margin-bottom: 8px;
+  }
+
+  .compactNotesWrap :global(.noteInput) {
+    padding: 7px 10px;
+    font-size: 0.84rem;
+  }
+
+  .compactNotesWrap :global(.addNoteBtn) {
+    padding: 7px 12px;
+    font-size: 0.84rem;
+  }
+}
+
+@media (min-width: 1400px) {
+  .eventDetailsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 /* Acum Alert Box Styling */
 .akumAlertBox {

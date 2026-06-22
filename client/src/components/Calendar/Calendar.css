@@ -6,19 +6,17 @@
   direction: rtl;
   flex: 1;
   width: 100%;
+  min-height: 0;
   background: var(--maple-bg);
   font-family: var(--maple-font);
-  padding: 0 20px 28px;
+  padding: 0 20px 20px;
   box-sizing: border-box;
-  justify-content: center;
 }
 
-/* =========================================
-   מיכל הלוח
-========================================= */
 .calendar-container {
   width: 100%;
-  max-width: 1240px;
+  flex: 1;
+  min-height: 0;
   padding: 12px 0 8px;
   display: flex;
   flex-direction: column;
@@ -179,6 +177,10 @@
   padding: 16px;
   box-shadow: var(--maple-shadow);
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .calendar-grid {
@@ -187,6 +189,9 @@
   gap: 8px;
   direction: ltr;
   width: 100%;
+  flex: 1;
+  grid-auto-rows: 1fr;
+  align-content: stretch;
 }
 
 .week-day-label {
@@ -521,18 +526,51 @@
 /* =========================================
    רספונסיביות
 ========================================= */
-@media (min-width: 1280px) {
-  .calendar-container {
-    max-width: 1320px;
+@media (min-width: 769px) {
+  .app-layout-viewport-fill .calendar-page-layout {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 16px;
+    overflow: hidden;
   }
 
-  .calendar-cell {
-    min-height: clamp(100px, 10vh, 118px);
+  .app-layout-viewport-fill .calendar-container {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app-layout-viewport-fill .calendar-grid-wrapper {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app-layout-viewport-fill .calendar-cell {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .app-layout-viewport-fill .gregorian-num {
+    font-size: 1.2rem;
+  }
+
+  .app-layout-viewport-fill .week-day-label {
+    font-size: 0.95rem;
+    padding: 10px 4px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .app-layout-viewport-fill .calendar-page-layout {
+    padding: 0 32px 20px;
+  }
+
+  .app-layout-viewport-fill .calendar-cell {
     padding: 10px 11px;
   }
 
-  .gregorian-num {
-    font-size: 1.25rem;
+  .app-layout-viewport-fill .gregorian-num {
+    font-size: 1.3rem;
   }
 }
 
@@ -571,10 +609,13 @@
 
   .calendar-grid {
     min-width: 320px;
+    flex: none;
+    grid-auto-rows: auto;
   }
 
   .calendar-cell {
     min-height: 58px;
+    height: auto;
     padding: 6px 7px;
   }
 

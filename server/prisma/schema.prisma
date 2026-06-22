@@ -23,10 +23,15 @@ model Booking {
   timeOfDay           String
   timeSlot            String          @default("evening")
   guestCount          Int
+  minimumGuestCount   Int?
   finalPricePortion   Float
   managerComments     String?
   clientComments      String?
   totalPrice          Float
+  basePrice           Float           @default(0)
+  extrasPrice         Float           @default(0)
+  externalExtrasPrice Float           @default(0)
+  liveAdditionsTotal  Float           @default(0)
   hallRentalPrice     Float?          // <--- הנה השדה החדש שהוספנו!
   paidAmount          Float           @default(0)
   paymentStatus       String          @default("pending")
@@ -49,6 +54,7 @@ model Booking {
   eventDate           EventDate       @relation(fields: [calendarDateId], references: [id])
   additions           EventAddition[]
   eventForm           EventForm?
+  eventCheckIn        EventCheckIn?
   feedbacks           Feedback[]
   clientSignatureUrl  String?
   depositCheckUrl     String?
@@ -56,6 +62,22 @@ model Booking {
   contractText        String?         @db.Text
 
   @@unique([calendarDateId, timeSlot])
+}
+
+model EventCheckIn {
+  id                    String   @id @default(uuid())
+  bookingId             String   @unique
+  familiesLabel         String?
+  orderedPortions       Int?
+  entertainerPortions   Int?
+  reservePortions       Int?
+  hallReceivedConfirmed Boolean  @default(false)
+  reserveTables         Json?
+  specialAdditions      String?
+  customerSignature     String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  booking               Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
 model MenuCategory {
   id     String @id @default(uuid())

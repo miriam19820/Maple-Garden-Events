@@ -35,6 +35,29 @@
   position: relative;
 }
 
+.popup-header-close {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--maple-transition);
+}
+
+.popup-header-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 .popup-header h2 {
   margin: 0;
   font-size: 1.2rem;

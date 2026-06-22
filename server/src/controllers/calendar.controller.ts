@@ -5,7 +5,6 @@ export const calendarController = {
 
   async getAllDates(req: Request, res: Response) {
     try {
-      // הוספנו כאן את ה-eventType שמגיע מה-Frontend
       const { start, end, eventType } = req.query;
       const parseLocalDateStart = (s: string) => {
         const [y, m, d] = s.split('-').map(Number);
@@ -16,14 +15,17 @@ export const calendarController = {
         return new Date(y, m - 1, d, 23, 59, 59, 999);
       };
 
+      if (!start || !end || typeof start !== 'string' || typeof end !== 'string') {
+        return res.status(400).json({ error: 'חובה לשלוח פרמטרים start ו-end בפורמט YYYY-MM-DD' });
+      }
+
       const dates = await calendarService.getAllCalendarDates(
-        parseLocalDateStart(start as string),
-        parseLocalDateEnd(end as string),
+        parseLocalDateStart(start),
+        parseLocalDateEnd(end),
         eventType as string
       );
       res.json(dates);
     } catch (error) {
-      // הוספנו את ההדפסה הזו כדי לראות את השגיאה האמיתית בטרמינל!
       console.error('❌ שגיאה מפורטת ב-getAllDates:', error);
       res.status(500).json({ error: 'שגיאה בשליפת התאריכים' });
     }
@@ -65,12 +67,9 @@ export const calendarController = {
     try {
       const dateId = req.params.dateId as string;
       const bookingDetails = req.body;
-      
-      // כאן ה-Service בודק התנגשויות לפי ה-timeOfDay שמועבר ב-bookingDetails
       const result = await calendarService.bookEventFinal(dateId, bookingDetails);
       res.json(result);
     } catch (error: any) {
-      // אם יש התנגשות, ה-Service יזרוק שגיאה והיא תחזור ללקוח כאן
       res.status(400).json({ error: error.message });
     }
   }

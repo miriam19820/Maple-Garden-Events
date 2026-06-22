@@ -63,7 +63,6 @@ const GreetingBlast = () => {
     <div className={styles.container}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <button onClick={() => navigate('/')} className={styles.backBtn}>← חזרה ללוח</button>
           <h2 className={styles.title}>שליחת ברכה ללקוחות 💌</h2>
         </div>
 
