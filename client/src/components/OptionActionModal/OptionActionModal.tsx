@@ -98,6 +98,13 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
               <div className={styles.infoRow}><label>סוג אירוע:</label><span>{option.eventType}</span></div>
               <div className={styles.infoRow}><label>זמן:</label><span>{option.timeOfDay}</span></div>
               <div className={styles.infoRow}><label>מוזמנים:</label><span>{option.guestCount}</span></div>
+              <div className={styles.infoRow}><label>תשלום בסיסי:</label><span>₪{(option.basePrice ?? option.totalPrice)?.toLocaleString()}</span></div>
+              {(option.extrasPrice ?? 0) > 0 && (
+                <div className={styles.infoRow}><label>תוספות לאולם:</label><span>₪{option.extrasPrice?.toLocaleString()}</span></div>
+              )}
+              {(option.externalExtrasPrice ?? 0) > 0 && (
+                <div className={styles.infoRow}><label>ספקים חיצוניים:</label><span>₪{option.externalExtrasPrice?.toLocaleString()}</span></div>
+              )}
               <div className={styles.infoRow}><label>סה"כ לתשלום:</label><span style={{ fontWeight: 'bold' }}>₪{option.totalPrice?.toLocaleString()}</span></div>
               <div className={styles.infoRow}><label>טלפון:</label><span>{option.clientAPhone}</span></div>
             </div>
@@ -152,7 +159,14 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
               <div className={styles.infoBox}>
                 <div className={styles.infoRow}><label>תאריך:</label><span style={{ fontWeight: 'bold' }}>{eventDateStr}</span></div>
                 <div className={styles.infoRow}><label>לקוח:</label><span>{option.clientAFullName}</span></div>
-                <div className={styles.infoRow}><label>לתשלום:</label><span style={{ fontWeight: 'bold', color: '#1e293b' }}>₪{option.totalPrice?.toLocaleString()}</span></div>
+                <div className={styles.infoRow}><label>תשלום בסיסי:</label><span>₪{(option.basePrice ?? option.totalPrice)?.toLocaleString()}</span></div>
+                {(option.extrasPrice ?? 0) > 0 && (
+                  <div className={styles.infoRow}><label>תוספות לאולם:</label><span>₪{option.extrasPrice?.toLocaleString()}</span></div>
+                )}
+                {(option.externalExtrasPrice ?? 0) > 0 && (
+                  <div className={styles.infoRow}><label>ספקים חיצוניים:</label><span>₪{option.externalExtrasPrice?.toLocaleString()}</span></div>
+                )}
+                <div className={styles.infoRow}><label>סה"כ לתשלום:</label><span style={{ fontWeight: 'bold', color: '#1e293b' }}>₪{option.totalPrice?.toLocaleString()}</span></div>
               </div>
               
               <div className={styles.inputGroup}>

@@ -5,6 +5,8 @@ import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
 import { socket } from '../../services/socketService';
 import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS } from '../../utils/timeSlot';
+import { isEventLive } from '../../utils/eventStart';
+import liveStyles from '../LiveEvent/LiveEvent.module.css';
 interface DayData {
   id: string | null;
   date: string;
@@ -72,6 +74,12 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [selectedDateForAction, setSelectedDateForAction] = useState<string | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState('חתונה');
+  const [, setLiveTick] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setLiveTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const year  = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -219,8 +227,11 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   <div className="cell-events-container">
                     {day.bookings.map((b: any, idx: number) => {
                       const baseColor = getSlotColor(b.timeOfDay);
-                      
                       const isOption = day.status === 'OPTION';
+                      const isLive =
+                        !isOption
+                        && day.status === 'BOOKED'
+                        && isEventLive(day.date, b, b.eventForm);
                       
                       // העיצוב המתוקן שיוצר קונטרסט ברור:
                       const eventStyle = isOption
@@ -248,6 +259,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                             setSelectedDay(day);
                           }}
                         >
+                          {isLive && <span className={liveStyles.liveBadge}>חי</span>}
                           {getEventTitle(b)}
                         </div>
                       );
@@ -296,7 +308,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   });
                 }}
               >
-                שמירת אופציה
+                פתיחת אופציה
               </button>
             </div>
           </div>

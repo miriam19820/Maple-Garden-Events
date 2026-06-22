@@ -106,10 +106,15 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
 
         {isFoodRelevant && (
           <>
-            <div className={styles.splitRow}>
+            <div className={`${styles.splitRow} ${styles.splitRowThree}`}>
               <div className={styles.inputGroup}>
                 <label>כמות מנות (בפועל)</label>
                 <input type="number" name="guestCount" required value={formData.guestCount} onChange={handleChange} className={styles.input} />
+              </div>
+              <div className={styles.inputGroup}>
+                <label>מינימום מנות</label>
+                <input type="number" name="minimumGuestCount" min="0" value={formData.minimumGuestCount} readOnly className={`${styles.input} ${styles.inputReadonly}`} />
+                <span className={styles.slotHint}>מתמלא אוטומטית לפי כמות המנות</span>
               </div>
               <div className={styles.inputGroup}>
                 <label>מנות אופציה (רזרבה)</label>

@@ -27,6 +27,7 @@ interface EventFormPDFData {
   clientBEmail?: string;
   eventDate: string;
   guestCount: number;
+  minimumGuestCount?: number;
   eventType: string;
   timeOfDay?: string;
   clientSignatureUrl?: string | null;
@@ -176,7 +177,8 @@ export const generateEventFormPDF = async (data: EventFormPDFData): Promise<Buff
       ${data.clientBFullName ? row('צד ב\'', `<strong>${data.clientBFullName}</strong> | ת"ז: ${data.clientBIdNumber || '—'} <br/> טלפון: ${data.clientBPhone || '—'} | אימייל: ${data.clientBEmail || '—'}`) : ''}
       ${row('תאריך אירוע', formattedDate)}
       ${row('סוג אירוע', data.eventType)}
-      ${row('מוזמנים מקורי', String(data.guestCount))}
+      ${row('כמות מנות (בפועל)', String(data.guestCount))}
+      ${row('מינימום מנות', String(data.minimumGuestCount ?? data.guestCount))}
     </table>
   </div>
 

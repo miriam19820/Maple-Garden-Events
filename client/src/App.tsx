@@ -19,7 +19,7 @@ import Gallery from './components/Gallery/Gallery';
 const CalendarWrapper = () => {
   const navigate = useNavigate();
   return (
-    <AppLayout>
+    <AppLayout viewportFill>
       <Calendar
         onDateSelect={(day) => {
           navigate('/booking', {
@@ -73,13 +73,13 @@ function App() {
             נתיבים פרטיים למנהלים (חסומים בסיסמה) 
             ======================================= */}
         <Route path="/" element={<ProtectedRoute><CalendarWrapper /></ProtectedRoute>} />
-        <Route path="/booking" element={<ProtectedRoute><AppLayout><BookingForm /></AppLayout></ProtectedRoute>} />
-        <Route path="/booking/edit/:id" element={<ProtectedRoute><AppLayout><BookingForm /></AppLayout></ProtectedRoute>} />
+        <Route path="/booking" element={<ProtectedRoute><AppLayout viewportFill><BookingForm /></AppLayout></ProtectedRoute>} />
+        <Route path="/booking/edit/:id" element={<ProtectedRoute><AppLayout viewportFill><BookingForm /></AppLayout></ProtectedRoute>} />
         <Route path="/options-manager" element={<ProtectedRoute><PageShell><OptionsManager /></PageShell></ProtectedRoute>} />
         <Route path="/bookings-manager" element={<ProtectedRoute><PageShell><BookingsManager /></PageShell></ProtectedRoute>} />
         <Route path="/greeting" element={<ProtectedRoute><PageShell><GreetingBlast /></PageShell></ProtectedRoute>} />
-        <Route path="/event-form-manager" element={<ProtectedRoute><AppLayout><EventFormManager /></AppLayout></ProtectedRoute>} />
-        <Route path="/option" element={<ProtectedRoute><AppLayout><OptionPage /></AppLayout></ProtectedRoute>} />
+        <Route path="/event-form-manager" element={<ProtectedRoute><AppLayout viewportFill><EventFormManager /></AppLayout></ProtectedRoute>} />
+        <Route path="/option" element={<ProtectedRoute><AppLayout viewportFill><OptionPage /></AppLayout></ProtectedRoute>} />
         <Route path="/menu" element={<ProtectedRoute><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><PageShell><SettingsManager /></PageShell></ProtectedRoute>} />
         <Route path="/feedback-manager" element={<ProtectedRoute><PageShell><FeedbackManager /></PageShell></ProtectedRoute>} />

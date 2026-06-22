@@ -18,6 +18,7 @@ export const createBookingSchema = z.object({
     clientAPhone: z.string({ message: "טלפון הוא חובה" }).min(9, "מספר טלפון לא תקין"),
 
     guestCount: optionalNumber,
+    minimumGuestCount: optionalNumber,
     finalPricePortion: optionalNumber,
     hallRentalPrice: optionalNumber,
     servingStyle: z.string().optional(),

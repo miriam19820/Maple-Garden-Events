@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { canEditBooking } from '../../utils/bookingEdit';
+import { canEditCheckIn, canViewCheckIn } from '../../utils/eventStart';
 import {
   canAddMoreEventsForDate,
   formatAvailableSlotsLabelForDate,
@@ -11,6 +12,8 @@ import {
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
 import { printContract, openContractPdf } from '../../utils/contractPrint';
 import { NotesList } from '../NotesList/NotesList';
+import EventCheckInModal from '../LiveEvent/EventCheckInModal';
+import liveEventStyles from '../LiveEvent/LiveEvent.module.css';
 import './EventPopup.css';
 
 interface EventPopupProps {
@@ -21,6 +24,8 @@ interface EventPopupProps {
 
 export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
   const navigate = useNavigate();
+  const [checkInState, setCheckInState] = useState<{ bookingId: string; readOnly: boolean } | null>(null);
+  const [, setTick] = useState(0);
   const bookings = day.bookings || [];
   const isOptionDay = day.status === 'OPTION';
   const dateDisplay = day.date.split('-').reverse().join('/');
@@ -51,7 +56,15 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const dateDisplayHe = day.date.split('-').reverse().join('/');
+
   return createPortal(
+    <>
     <div className="popup-overlay" onClick={onClose}>
       <div
         className="popup-content"
@@ -60,6 +73,14 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
         aria-modal="true"
       >
         <div className="popup-header">
+          <button
+            type="button"
+            className="popup-header-close"
+            onClick={handleClose}
+            aria-label="סגירה"
+          >
+            ✕
+          </button>
           <div className="popup-header-text">
             <h2>פרטי אירועים</h2>
             <p className="popup-header-date">
@@ -85,6 +106,9 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
 
               const editable = canEditBooking(day.date);
               const clientNotes = parseNotesBundle(booking.clientComments);
+              const isBooked = !isOptionDay && day.status === 'BOOKED';
+              const showCheckIn = isBooked && canViewCheckIn(day.date, booking, booking.eventForm);
+              const checkInEditable = showCheckIn && canEditCheckIn(day.date, booking, booking.eventForm);
 
               return (
                 <div
@@ -136,6 +160,18 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                           </button>
                         </>
                       )}
+                      {showCheckIn && booking.id && (
+                        <button
+                          type="button"
+                          className={liveEventStyles.checkInBtn}
+                          onClick={() => setCheckInState({
+                            bookingId: booking.id,
+                            readOnly: !checkInEditable,
+                          })}
+                        >
+                          טופס קבלת אולם
+                        </button>
+                      )}
                       {!editable && (
                         <span className="edit-blocked-msg">לא ניתן לערוך ביום האירוע או לאחריו</span>
                       )}
@@ -165,6 +201,16 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                       <h4>פרטי העסקה</h4>
                       <p><strong>מוזמנים:</strong> {booking.guestCount || 'לא ידוע'}</p>
                       <p><strong>מחיר למנה:</strong> ₪{booking.finalPricePortion || 0}</p>
+                      <p><strong>תשלום בסיסי:</strong> ₪{booking.basePrice ?? booking.totalPrice ?? 0}</p>
+                      {(booking.extrasPrice ?? 0) > 0 && (
+                        <p><strong>תוספות לאולם:</strong> ₪{booking.extrasPrice}</p>
+                      )}
+                      {(booking.externalExtrasPrice ?? 0) > 0 && (
+                        <p><strong>ספקים חיצוניים:</strong> ₪{booking.externalExtrasPrice}</p>
+                      )}
+                      {(booking.liveAdditionsTotal ?? 0) > 0 && (
+                        <p><strong>תוספות בזמן האירוע:</strong> ₪{booking.liveAdditionsTotal}</p>
+                      )}
                       <p><strong>סה"כ:</strong> ₪{booking.totalPrice || 0}</p>
                       <p><strong>שולם:</strong> ₪{booking.paidAmount || 0}</p>
                       <p><strong>נציג:</strong> {booking.createdBy || 'לא ידוע'}</p>
@@ -220,7 +266,16 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
           </button>
         </div>
       </div>
-    </div>,
+    </div>
+    {checkInState && (
+      <EventCheckInModal
+        bookingId={checkInState.bookingId}
+        dateDisplay={dateDisplayHe}
+        readOnly={checkInState.readOnly}
+        onClose={() => setCheckInState(null)}
+      />
+    )}
+    </>,
     document.body,
   );
 };

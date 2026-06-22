@@ -5,14 +5,20 @@ export const calendarController = {
 
   async getAllDates(req: Request, res: Response) {
     try {
-      // הוספנו כאן את ה-eventType שמגיע מה-Frontend
       const { start, end, eventType } = req.query;
-      const parseLocalDate = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-      
+      const parseLocalDate = (s: string) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
+
+      if (!start || !end || typeof start !== 'string' || typeof end !== 'string') {
+        return res.status(400).json({ error: 'חובה לשלוח פרמטרים start ו-end בפורמט YYYY-MM-DD' });
+      }
+
       const dates = await calendarService.getAllCalendarDates(
-        parseLocalDate(start as string),
-        parseLocalDate(end as string),
-        eventType as string // מעבירים את סוג האירוע לשירות
+        parseLocalDate(start),
+        parseLocalDate(end),
+        eventType as string
       );
       res.json(dates);
     } catch (error) {

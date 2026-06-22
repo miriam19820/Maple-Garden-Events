@@ -1,5 +1,11 @@
 import React from 'react';
-import { KOSHER_PRICING } from '../BookingForm';
+import {
+  UPGRADES_PRICING,
+  UPGRADE_DISPLAY_ORDER,
+  HALL_UPGRADE_KEYS,
+  UPGRADE_LABELS,
+  EXTERNAL_SUPPLIER_LINKS,
+} from '../BookingForm';
 import CheckCamera from '../../CheckCamera/CheckCamera';
 import CheckDetailsForm from '../../CheckDetailsForm/CheckDetailsForm';
 import type { DepositCheckDetails } from '../../../utils/checkOcr';
@@ -18,14 +24,34 @@ interface PaymentAndUpgradesSectionProps {
   onCheckFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   onDeleteCheck: () => void;
   onCheckDetailsChange: (details: DepositCheckDetails) => void;
-  totals: { base: number; discountVal: number; vatAmount: number; finalTotal: number };
+  totals: {
+    mainBase: number;
+    hallExtrasBase: number;
+    externalExtrasBase: number;
+    discountVal: number;
+    mainVat: number;
+    hallExtrasVat: number;
+    externalExtrasVat: number;
+    baseTotal: number;
+    hallExtrasTotal: number;
+    externalExtrasTotal: number;
+    finalTotal: number;
+  };
   isFoodRelevant: boolean;
   kosherType: string;
   isEditMode: boolean;
   editId?: string;
   errors?: Record<string, string>;
+  vatRate?: number;
   styles: Record<string, string>;
 }
+
+const externalLinkStyle: React.CSSProperties = {
+  fontSize: '0.85rem',
+  color: '#1d4ed8',
+  marginRight: '8px',
+  textDecoration: 'underline',
+};
 
 const PaymentAndUpgradesSection = ({
   formData,
@@ -46,48 +72,53 @@ const PaymentAndUpgradesSection = ({
   isEditMode,
   editId,
   errors,
+  vatRate = 17,
   styles,
 }: PaymentAndUpgradesSectionProps) => {
   const isCheckDeposit = depositMethod === 'check_upload' || depositMethod === 'check_capture';
   const hasCheckImage = !!formData.depositCheckUrl;
+  const isHallUpgrade = (key: string) => (HALL_UPGRADE_KEYS as readonly string[]).includes(key);
+
+  const renderUpgrade = (key: typeof UPGRADE_DISPLAY_ORDER[number]) => {
+    const disabled = key === 'baseDesign' && isHallOnly;
+    const checked = disabled ? false : upgrades[key];
+    const isExternal = !isHallUpgrade(key);
+
+    return (
+      <label key={key} className={`${styles.upgradeLabel} ${disabled ? styles.upgradeLabelDisabled : ''}`}>
+        <input
+          type="checkbox"
+          checked={checked}
+          readOnly={key === 'baseDesign'}
+          disabled={disabled}
+          onChange={() => !disabled && handleUpgradeChange(key)}
+        />
+        <span>
+          {UPGRADE_LABELS[key]}
+          {key === 'baseDesign' && !isHallOnly ? ' (חובה)' : ''}
+          {' - '}{UPGRADES_PRICING[key].toLocaleString()} ₪
+        </span>
+        {isExternal && checked && !disabled && (
+          <a
+            href={EXTERNAL_SUPPLIER_LINKS[key]}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={externalLinkStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            תשלום לספק ↗
+          </a>
+        )}
+      </label>
+    );
+  };
 
   return (
     <>
       <div className={styles.sectionCard}>
         <h3 className={styles.sectionHeader}>חבילת תוספות ושדרוגים</h3>
         <div className={styles.upgradesGrid}>
-          <label className={`${styles.upgradeLabel} ${isHallOnly ? styles.upgradeLabelDisabled : ''}`}>
-            <input type="checkbox" checked={isHallOnly ? false : upgrades.baseDesign} readOnly disabled={isHallOnly} />
-            <span>עיצוב בסיסי {isHallOnly ? '(לא רלוונטי)' : '(חובה) - 4,500 ₪'}</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.amplification} onChange={() => handleUpgradeChange('amplification')} />
-            <span>הגברה - 1,400 ₪</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.lighting} onChange={() => handleUpgradeChange('lighting')} />
-            <span>תאורה - 1,800 ₪</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.screens} onChange={() => handleUpgradeChange('screens')} />
-            <span>מסכים - 800 ₪</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.reception} onChange={() => handleUpgradeChange('reception')} />
-            <span>קבלת פנים - 2,000 ₪</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.separateReception} onChange={() => handleUpgradeChange('separateReception')} />
-            <span>קבלת פנים נפרדת - 3,000 ₪</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.extraSecurity} onChange={() => handleUpgradeChange('extraSecurity')} />
-            <span>מאבטח פיצול כניסה - 650 ₪</span>
-          </label>
-          <label className={styles.upgradeLabel}>
-            <input type="checkbox" checked={upgrades.fireworks} onChange={() => handleUpgradeChange('fireworks')} />
-            <span>זיקוקים - 700 ₪</span>
-          </label>
+          {UPGRADE_DISPLAY_ORDER.map(renderUpgrade)}
         </div>
       </div>
 
@@ -125,7 +156,7 @@ const PaymentAndUpgradesSection = ({
             <input type="number" name="discountAmount" value={formData.discountAmount} onChange={handleChange} className={styles.input} placeholder="0" />
           </div>
           <div className={`${styles.inputGroup} ${styles.vatRow}`}>
-            <label>הגדרת מע"מ (18%)</label>
+            <label>הגדרת מע"מ ({vatRate}%)</label>
             <div className={styles.radioGroup}>
               <label className={styles.radioLabel}>
                 <input type="radio" name="vatType" value="not_included" checked={formData.vatType === 'not_included'} onChange={handleChange} />
@@ -227,17 +258,38 @@ const PaymentAndUpgradesSection = ({
         )}
 
         <div className={styles.totalsBox}>
-          <h4 className={styles.totalsTitle}>סה"כ הצעה / לתשלום</h4>
-          <div className={styles.totalsBreakdown}>
-            <span>סה"כ ביניים: ₪{totals.base.toLocaleString()}</span>
+          <h4 className={styles.totalsTitle}>סיכום תשלומים</h4>
+
+          <div className={styles.totalsBreakdown} style={{ marginBottom: '12px' }}>
+            <strong>תשלום בסיסי (אירוע)</strong>
+            <span>ביניים: ₪{totals.mainBase.toLocaleString()}</span>
             {totals.discountVal > 0 && <span className={styles.discountLine}>הנחות: -₪{totals.discountVal.toLocaleString()}</span>}
-            {totals.vatAmount > 0 && <span>תוספת מע"מ: ₪{totals.vatAmount.toLocaleString()}</span>}
+            {totals.mainVat > 0 && <span>מע"מ: ₪{totals.mainVat.toLocaleString()}</span>}
+            <span style={{ fontWeight: 700 }}>₪{totals.baseTotal.toLocaleString()}</span>
           </div>
-          <p className={styles.totalsFinal}>₪ {totals.finalTotal.toLocaleString()}</p>
+
+          <div className={styles.totalsBreakdown} style={{ marginBottom: '12px' }}>
+            <strong>תשלום תוספות (לאולם)</strong>
+            <span>כשרות + קבלת פנים + מאבטח: ₪{totals.hallExtrasBase.toLocaleString()}</span>
+            {totals.hallExtrasVat > 0 && <span>מע"מ: ₪{totals.hallExtrasVat.toLocaleString()}</span>}
+            <span style={{ fontWeight: 700 }}>₪{totals.hallExtrasTotal.toLocaleString()}</span>
+          </div>
+
+          {totals.externalExtrasBase > 0 && (
+            <div className={styles.totalsBreakdown} style={{ marginBottom: '12px' }}>
+              <strong>תשלום לספקים חיצוניים</strong>
+              <span>שדרוגים: ₪{totals.externalExtrasBase.toLocaleString()}</span>
+              {totals.externalExtrasVat > 0 && <span>מע"מ: ₪{totals.externalExtrasVat.toLocaleString()}</span>}
+              <span style={{ fontWeight: 700 }}>₪{totals.externalExtrasTotal.toLocaleString()}</span>
+              <span style={{ fontSize: '0.85rem', color: '#64748b' }}>תשלום ישיר לספק — לא כולל בצ'ק לאולם</span>
+            </div>
+          )}
+
+          <p className={styles.totalsFinal}>סה"כ הצעה: ₪ {totals.finalTotal.toLocaleString()}</p>
           {isFoodRelevant && formData.guestCount && (
             <p className={styles.totalsNote}>
-              כולל {formData.guestCount} מנות בתשלום
-              {formData.optionalGuestCount ? ` + ${formData.optionalGuestCount} רזרבה (ללא חיוב)` : ''}, שדרוגים וכשרות {KOSHER_PRICING[kosherType].label}
+              {formData.guestCount} מנות בתשלום
+              {formData.optionalGuestCount ? ` + ${formData.optionalGuestCount} רזרבה (ללא חיוב)` : ''}
             </p>
           )}
         </div>

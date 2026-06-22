@@ -53,6 +53,7 @@ router.get('/:id/contract-pdf', catchAsync(async (req: Request, res: Response) =
     clientAEmail: booking.clientAEmail ? toStr(booking.clientAEmail) : undefined,
     eventDate: booking.eventDate?.date ? booking.eventDate.date.toISOString() : new Date().toISOString(),
     guestCount: Number(booking.guestCount || 0),
+    minimumGuestCount: booking.minimumGuestCount ?? Number(booking.guestCount || 0),
     eventType: toStr(booking.eventType),
     clientSignatureUrl: booking.clientSignatureUrl,
     eventForm: booking.eventForm || {}

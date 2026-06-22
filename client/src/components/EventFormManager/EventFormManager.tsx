@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
+import { useNavigationOverride } from '../../context/NavigationContext';
 import styles from './EventFormManager.module.css';
 import CheckCamera from '../CheckCamera/CheckCamera';
 import CheckDetailsForm from '../CheckDetailsForm/CheckDetailsForm';
@@ -31,11 +31,28 @@ interface Booking {
   akumApprovalCode?: string;
 }
 
+const computePercentSplit = (menCount: number, womenCount: number) => {
+  const total = menCount + womenCount;
+  if (total <= 0) return { menPercent: undefined, womenPercent: undefined };
+  const menPercent = Math.round((menCount / total) * 100);
+  return { menPercent, womenPercent: 100 - menPercent };
+};
+
+const countsFromPercents = (menPercent?: number, womenPercent?: number, guestTotal?: number) => {
+  if (!guestTotal || guestTotal <= 0 || menPercent == null || womenPercent == null) {
+    return { menCount: undefined, womenCount: undefined };
+  }
+  const menCount = Math.round((guestTotal * menPercent) / 100);
+  return { menCount, womenCount: Math.max(0, guestTotal - menCount) };
+};
+
 interface EventFormData {
   eventTime?: string;
   receptionType?: string;
   finalGuestCount?: number;
   seatingType?: string;
+  menCount?: number;
+  womenCount?: number;
   menPercent?: number;
   womenPercent?: number;
   honorTableCount?: number;
@@ -98,11 +115,44 @@ const EventFormManager = () => {
   const [savedTables, setSavedTables] = useState<TableData[] | undefined>(undefined);
   const [tableLayoutSaving, setTableLayoutSaving] = useState(false);
   const [hasHonorTable, setHasHonorTable] = useState<boolean | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
 
-  const prepareFormDataForSave = (data: EventFormData): EventFormData => ({
-    ...data,
-    honorTableCount: hasHonorTable ? data.honorTableCount : null,
-  });
+  const handleStepBack = useCallback(() => {
+    if (showCamera) {
+      setShowCamera(false);
+      return;
+    }
+    if (isTableLayoutOpen) {
+      setIsTableLayoutOpen(false);
+      return;
+    }
+    if (isMenuOpen) {
+      setIsMenuOpen(false);
+      return;
+    }
+    if (isKashrutModalOpen) {
+      setIsKashrutModalOpen(false);
+      return;
+    }
+    if (selected) {
+      setSelected(null);
+    }
+  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, selected]);
+
+  const navigationOverride = useMemo(() => {
+    const inSubStep = showCamera || isTableLayoutOpen || isMenuOpen || isKashrutModalOpen || !!selected;
+    return inSubStep ? { onBack: handleStepBack } : null;
+  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, selected, handleStepBack]);
+
+  useNavigationOverride(navigationOverride);
+
+  const prepareFormDataForSave = (data: EventFormData): EventFormData => {
+    const { menCount, womenCount, ...rest } = data;
+    return {
+      ...rest,
+      honorTableCount: hasHonorTable ? data.honorTableCount : null,
+    };
+  };
 
   const handleMenuSave = (menuSelections: Record<string, string[]>) => {
     setSelectedMenu(menuSelections);
@@ -142,14 +192,22 @@ const EventFormManager = () => {
       setFormData({});
       setNotesList([]);
       setHasHonorTable(null);
+      setShowCamera(false);
       return;
     }
+    setShowCamera(false);
     fetch(`http://localhost:5000/api/event-forms/${selected.id}`)
       .then(r => r.json())
       .then(form => {
         if (form && form.id) {
           const { id, createdAt, updatedAt, booking, bookingId, tables, ...cleanForm } = form;
-          setFormData(cleanForm);
+          const guestTotal = cleanForm.finalGuestCount || selected.guestCount;
+          const { menCount, womenCount } = countsFromPercents(
+            cleanForm.menPercent,
+            cleanForm.womenPercent,
+            guestTotal
+          );
+          setFormData({ ...cleanForm, menCount, womenCount });
           setHasHonorTable(!!(form.honorTableCount && form.honorTableCount > 0));
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
           setSelectedMenu(form.menuSelections || null);
@@ -203,22 +261,17 @@ const EventFormManager = () => {
   const dateStr = (b: Booking) => b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '';
 
   const handleInputChange = (field: keyof EventFormData, value: any) => {
-    if (field === 'menPercent') {
-      const newMenPercent = Math.min(parseInt(value) || 0, 100);
-      const womenPercent = 100 - newMenPercent;
-      setFormData(prev => ({
-        ...prev,
-        menPercent: newMenPercent,
-        womenPercent: womenPercent
-      }));
-    } else if (field === 'womenPercent') {
-      const newWomenPercent = Math.min(parseInt(value) || 0, 100);
-      const menPercent = 100 - newWomenPercent;
-      setFormData(prev => ({
-        ...prev,
-        womenPercent: newWomenPercent,
-        menPercent: menPercent
-      }));
+    if (field === 'menCount' || field === 'womenCount') {
+      setFormData(prev => {
+        const menCount = field === 'menCount'
+          ? Math.max(0, parseInt(value, 10) || 0)
+          : (prev.menCount || 0);
+        const womenCount = field === 'womenCount'
+          ? Math.max(0, parseInt(value, 10) || 0)
+          : (prev.womenCount || 0);
+        const { menPercent, womenPercent } = computePercentSplit(menCount, womenCount);
+        return { ...prev, menCount, womenCount, menPercent, womenPercent };
+      });
     } else {
       setFormData(prev => ({
         ...prev,
@@ -337,7 +390,7 @@ const EventFormManager = () => {
       currentReception &&
       formData.finalGuestCount &&
       currentSeating &&
-      (currentSeating === 'mixed' || (formData.menPercent !== undefined && formData.womenPercent !== undefined)) &&
+      (currentSeating === 'mixed' || ((formData.menCount || 0) + (formData.womenCount || 0) > 0)) &&
       (formData.depositCheckUrl || depositCheckFile) && 
       formData.kashrut
     );
@@ -346,7 +399,7 @@ const EventFormManager = () => {
   const handleSaveForm = async () => {
     if (!selected) return;
     if (!isFormValid()) {
-      alert('אנא מלא את כל השדות החובה:\n✓ שעה וקבלת פנים\n✓ סוג ישיבה\n✓ מוזמנים סופיים\n✓ חלוקה (אחוזים)\n✓ צ"ק פיקדון\n✓ כשרות\n\nהערות = אופציונלי');
+      alert('אנא מלא את כל השדות החובה:\n✓ שעה וקבלת פנים\n✓ סוג ישיבה\n✓ מוזמנים סופיים\n✓ חלוקה (כמות גברים/נשים)\n✓ צ"ק פיקדון\n✓ כשרות\n\nהערות = אופציונלי');
       return;
     }
     setSubmitting(true);
@@ -389,32 +442,32 @@ const EventFormManager = () => {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${selected ? styles.containerFormMode : ''}`}>
+      {!selected && (
       <div className={styles.header}>
         <h2 className={styles.title}>טופס הפקת אירוע</h2>
-        {!selected && (
-          <div className={styles.viewTabs}>
-            <button
-              onClick={() => setViewMode('bookings')}
-              className={`${styles.tabBtn} ${viewMode === 'bookings' ? styles.tabBtnActive : ''}`}
-            >
-              חיפוש הזמנה
-            </button>
-            <button
-              onClick={() => setViewMode('forms')}
-              className={`${styles.tabBtn} ${viewMode === 'forms' ? styles.tabBtnActive : ''}`}
-            >
-              כל הטפסים
-            </button>
-            <button
-              onClick={() => setViewMode('stats')}
-              className={`${styles.tabBtn} ${styles.tabBtnStats} ${viewMode === 'stats' ? styles.tabBtnActive : ''}`}
-            >
-              סטטיסטיקות
-            </button>
-          </div>
-        )}
+        <div className={styles.viewTabs}>
+          <button
+            onClick={() => setViewMode('bookings')}
+            className={`${styles.tabBtn} ${viewMode === 'bookings' ? styles.tabBtnActive : ''}`}
+          >
+            חיפוש הזמנה
+          </button>
+          <button
+            onClick={() => setViewMode('forms')}
+            className={`${styles.tabBtn} ${viewMode === 'forms' ? styles.tabBtnActive : ''}`}
+          >
+            כל הטפסים
+          </button>
+          <button
+            onClick={() => setViewMode('stats')}
+            className={`${styles.tabBtn} ${styles.tabBtnStats} ${viewMode === 'stats' ? styles.tabBtnActive : ''}`}
+          >
+            סטטיסטיקות
+          </button>
+        </div>
       </div>
+      )}
 
       {!selected ? (
         <>
@@ -434,7 +487,7 @@ const EventFormManager = () => {
                 <>
                   {filtered.filter(b => !b.eventForm).length > 0 && (
                     <>
-                      <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#e53e3e' }}>⚠️ ממתינות למילוי טופס ({filtered.filter(b => !b.eventForm).length})</p>
+                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitlePending}`}>⚠️ ממתינות למילוי טופס ({filtered.filter(b => !b.eventForm).length})</p>
                       <div className={styles.grid}>
                         {filtered.filter(b => !b.eventForm).map(b => (
                           <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
@@ -450,7 +503,7 @@ const EventFormManager = () => {
                   )}
                   {filtered.filter(b => b.eventForm).length > 0 && (
                     <>
-                      <p style={{ margin: '20px 0 10px 0', fontWeight: 'bold', color: '#38a169' }}>✓ טפסים שמורים ({filtered.filter(b => b.eventForm).length})</p>
+                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitleDone}`}>✓ טפסים שמורים ({filtered.filter(b => b.eventForm).length})</p>
                       <div className={styles.grid}>
                         {filtered.filter(b => b.eventForm).map(b => (
                           <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
@@ -478,13 +531,13 @@ const EventFormManager = () => {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
-              <p style={{ marginBottom: '20px', color: '#666', fontSize: '14px' }}>
+              <p className={styles.listCount}>
                 📊 סה"כ טפסים שנשמרו: {allForms.length}
               </p>
               {allForms.length === 0 ? (
                 <p className={styles.empty}>אין טפסים שנשמרו עדיין.</p>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
+                <div className={styles.savedFormsGrid}>
                   {allForms
                     .filter((form) =>
                       !search ||
@@ -492,29 +545,19 @@ const EventFormManager = () => {
                       form.booking?.clientBFullName?.includes(search)
                     )
                     .map((form, idx) => (
-                    <div key={idx} style={{
-                      padding: '16px', border: '1px solid #ddd', borderRadius: '8px', background: 'white',
-                      cursor: 'pointer', transition: 'all 0.3s ease',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
-                    onClick={() => {
-                      if (form.booking) {
-                        setSelected(form.booking as Booking);
-                      }
-                    }}>
-                      <h4 style={{ margin: '0 0 8px 0' }}>
-                        {form.booking?.clientAFullName || '—'}
-                      </h4>
-                      <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>
-                        📅 {form.booking?.eventDate?.date ? new Date(form.booking.eventDate.date).toLocaleDateString('he-IL') : '—'}
-                      </p>
-                      <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>
-                        👥 {form.finalGuestCount || '—'} מוזמנים
-                      </p>
-                      <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#999' }}>
-                        💾 שמור: {form.createdAt ? new Date(form.createdAt).toLocaleString('he-IL') : '—'}
-                      </p>
+                    <div
+                      key={idx}
+                      className={styles.savedFormCard}
+                      onClick={() => {
+                        if (form.booking) {
+                          setSelected(form.booking as Booking);
+                        }
+                      }}
+                    >
+                      <h4>{form.booking?.clientAFullName || '—'}</h4>
+                      <p>📅 {form.booking?.eventDate?.date ? new Date(form.booking.eventDate.date).toLocaleDateString('he-IL') : '—'}</p>
+                      <p>👥 {form.finalGuestCount || '—'} מוזמנים</p>
+                      <p>💾 שמור: {form.createdAt ? new Date(form.createdAt).toLocaleString('he-IL') : '—'}</p>
                     </div>
                   ))}
                 </div>
@@ -531,15 +574,24 @@ const EventFormManager = () => {
       ) : (
         <div className={styles.formContainer}>
           <div className={styles.formHeader}>
-            <h3>{selected.clientAFullName} {selected.clientBFullName ? `+ ${selected.clientBFullName}` : ''}</h3>
-            <p>{dateStr(selected)}</p>
+            <div className={styles.formHeaderText}>
+              <h3>{selected.clientAFullName} {selected.clientBFullName ? `+ ${selected.clientBFullName}` : ''}</h3>
+              <p>{dateStr(selected)} · {selected.eventType} · {selected.timeOfDay} · {selected.guestCount} מוזמנים</p>
+            </div>
+            <div className={styles.formHeaderMeta}>
+              <span className={styles.headerMetaChip}>סופי: {formData.finalGuestCount || '—'}</span>
+              <span className={styles.headerMetaChip}>כשרות: {formData.kashrut || '—'}</span>
+            </div>
             <button onClick={() => setSelected(null)} className={styles.closeBtn}>✕ סגור</button>
           </div>
 
           <div className={styles.formBody}>
+            <div className={styles.formBoard}>
             {/* שעה וקבלת פנים */}
-            <div className={styles.section}>
-              <h4>📅 שעה וקבלת פנים</h4>
+            <div className={`${styles.section} ${styles.boardTime}`}>
+              <div className={styles.sectionHeader}>
+                <h4>שעה וקבלת פנים</h4>
+              </div>
               <div className={styles.row}>
                 <div className={styles.field}>
                   <label>שעת קבלת פנים</label>
@@ -560,9 +612,18 @@ const EventFormManager = () => {
             </div>
 
             {/* מוזמנים וישיבה */}
-            <div className={styles.section}>
-              <h4>👥 מוזמנים וישיבה</h4>
-              <div className={styles.row}>
+            <div className={`${styles.section} ${styles.boardGuests}`}>
+              <div className={styles.sectionHeader}>
+                <h4>מוזמנים וישיבה</h4>
+                <button
+                  type="button"
+                  onClick={() => setIsTableLayoutOpen(true)}
+                  className={savedTables?.length ? styles.btnSecondary : styles.btnPrimary}
+                >
+                  {savedTables?.length ? `🪑 ${savedTables.length} שולחנות` : '🪑 סידור'}
+                </button>
+              </div>
+              <div className={`${styles.row} ${styles.rowThree}`}>
                 <div className={styles.field}>
                   <label>כמות מוזמנים סופית</label>
                   <input
@@ -579,163 +640,97 @@ const EventFormManager = () => {
                     <option value="mixed">מעורב</option>
                   </select>
                 </div>
-              </div>
-              {formData.seatingType === 'separate' && (
-                <div className={styles.row}>
-                  <div className={styles.field}>
-                    <label>אחוז גברים</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.menPercent || ''}
-                      onChange={e => handleInputChange('menPercent', parseInt(e.target.value))}
-                    />
-                  </div>
-                  <div className={styles.field}>
-                    <label>אחוז נשים</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.womenPercent || ''}
-                      onChange={e => handleInputChange('womenPercent', parseInt(e.target.value))}
-                    />
-                  </div>
+                <div className={styles.field}>
+                  <label>שולחן כבוד</label>
+                  <select
+                    value={hasHonorTable === null ? '' : hasHonorTable ? 'yes' : 'no'}
+                    onChange={e => {
+                      if (e.target.value === '') {
+                        setHasHonorTable(null);
+                        handleInputChange('honorTableCount', undefined);
+                        return;
+                      }
+                      const yes = e.target.value === 'yes';
+                      setHasHonorTable(yes);
+                      if (!yes) handleInputChange('honorTableCount', undefined);
+                    }}
+                  >
+                    <option value="">—</option>
+                    <option value="yes">כן</option>
+                    <option value="no">לא</option>
+                  </select>
                 </div>
-              )}
-
-              {formData.seatingType === 'separate' && formData.menPercent && formData.womenPercent && (
-                <div className={styles.chartContainer}>
-                  {(() => {
-                    const totalGuests = formData.finalGuestCount || 0;
-                    const menCount = Math.round((formData.menPercent / 100) * totalGuests);
-                    const womenCount = totalGuests - menCount;
-                    return (
-                      <>
-                        <div className={styles.chartStats}>
-                          <div className={styles.statItem}>
-                            <span className={styles.statColor} style={{ backgroundColor: '#2196F3' }}></span>
-                            <span>גברים: {formData.menPercent}% ({menCount} אנשים)</span>
-                          </div>
-                          <div className={styles.statItem}>
-                            <span className={styles.statColor} style={{ backgroundColor: '#F44336' }}></span>
-                            <span>נשים: {formData.womenPercent}% ({womenCount} אנשים)</span>
-                          </div>
-                        </div>
-                        <ResponsiveContainer width="100%" height={300}>
-                          <PieChart>
-                            <Pie
-                              data={[
-                                { name: `גברים (${menCount})`, value: formData.menPercent },
-                                { name: `נשים (${womenCount})`, value: formData.womenPercent }
-                              ]}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={false}
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              <Cell fill="#2196F3" />
-                              <Cell fill="#F44336" />
-                            </Pie>
-                            <Tooltip formatter={(value) => `${value}%`} />
-                            <Legend />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-
-              <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                {savedTables && savedTables.length > 0 ? (
-                  <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 'bold' }}>
-                    ✓ סידור שולחנות שמור ({savedTables.length} שולחנות)
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>טרם נשמר סידור שולחנות לאירוע זה</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsTableLayoutOpen(true)}
-                  style={{
-                    padding: '10px 20px',
-                    background: savedTables?.length ? '#3b82f6' : '#8b5cf6',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {savedTables?.length ? 'ערוך סידור שולחנות אולם' : '🪑 סידור שולחנות אולם'}
-                </button>
-              </div>
-            </div>
-
-            {/* שולחן כבוד */}
-            <div className={styles.section}>
-              <h4>👑 שולחן כבוד</h4>
-              <div className={styles.field}>
-                <label>האם יש שולחן כבוד?</label>
-                <select
-                  value={hasHonorTable === null ? '' : hasHonorTable ? 'yes' : 'no'}
-                  onChange={e => {
-                    if (e.target.value === '') {
-                      setHasHonorTable(null);
-                      handleInputChange('honorTableCount', undefined);
-                      return;
-                    }
-                    const yes = e.target.value === 'yes';
-                    setHasHonorTable(yes);
-                    if (!yes) handleInputChange('honorTableCount', undefined);
-                  }}
-                >
-                  <option value="">בחר...</option>
-                  <option value="yes">כן</option>
-                  <option value="no">לא</option>
-                </select>
               </div>
               {hasHonorTable && (
-                <div className={styles.field}>
-                  <label>כמות אנשים בשולחן כבוד</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formData.honorTableCount ?? ''}
-                    onChange={e => handleInputChange(
-                      'honorTableCount',
-                      e.target.value === '' ? undefined : parseInt(e.target.value, 10)
-                    )}
-                  />
+                <div className={styles.row}>
+                  <div className={styles.field}>
+                    <label>כמות בשולחן כבוד</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={formData.honorTableCount ?? ''}
+                      onChange={e => handleInputChange(
+                        'honorTableCount',
+                        e.target.value === '' ? undefined : parseInt(e.target.value, 10)
+                      )}
+                    />
+                  </div>
                 </div>
               )}
+              {formData.seatingType === 'separate' && (
+                <div className={`${styles.row} ${styles.rowThree}`}>
+                  <div className={styles.field}>
+                    <label>כמות גברים</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.menCount ?? ''}
+                      onChange={e => handleInputChange('menCount', e.target.value)}
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label>כמות נשים</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.womenCount ?? ''}
+                      onChange={e => handleInputChange('womenCount', e.target.value)}
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label>חלוקה (אחוזים)</label>
+                    {formData.menPercent != null && formData.womenPercent != null ? (
+                      <div className={styles.splitBadge}>
+                        <span className={styles.splitMen}>ג {formData.menPercent}%</span>
+                        <span className={styles.splitWomen}>נ {formData.womenPercent}%</span>
+                      </div>
+                    ) : (
+                      <div className={styles.splitBadgeEmpty}>—</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
 
-            {/* עיצוב עם כפתור לגלריה */}
-            <div className={styles.section}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h4 style={{ margin: 0 }}>🎨 עיצוב</h4>
-                <button 
-                  onClick={() => navigate('/gallery')} 
-                  style={{
-                    padding: '6px 12px', background: '#ecfdf5', color: '#059669', 
-                    border: '1px solid #10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
-                  }}
+            {/* עיצוב */}
+            <div className={`${styles.section} ${styles.boardDesign}`}>
+              <div className={styles.sectionHeader}>
+                <h4>עיצוב</h4>
+                <button
+                  type="button"
+                  onClick={() => navigate('/gallery')}
+                  className={styles.btnOutline}
                 >
-                  🖼️ מעבר לגלריה לבחירת תמונות
+                  🖼️ גלריה
                 </button>
               </div>
-              <div className={styles.row}>
+              <div className={`${styles.row} ${styles.rowFour}`}>
                 <div className={styles.field}>
-                  <label>מפות שולחן</label>
+                  <label>מפות</label>
                   <input
                     type="text"
-                    placeholder="בחר מפה..."
+                    placeholder="מפה..."
                     value={formData.tableclothId || ''}
                     onChange={e => handleInputChange('tableclothId', e.target.value)}
                   />
@@ -744,18 +739,16 @@ const EventFormManager = () => {
                   <label>מפיות</label>
                   <input
                     type="text"
-                    placeholder="בחר מפית..."
+                    placeholder="מפית..."
                     value={formData.napkinId || ''}
                     onChange={e => handleInputChange('napkinId', e.target.value)}
                   />
                 </div>
-              </div>
-              <div className={styles.row}>
                 <div className={styles.field}>
                   <label>מרכזי שולחן</label>
                   <input
                     type="text"
-                    placeholder="תיאור מרכזי שולחן"
+                    placeholder="מרכז..."
                     value={formData.centerpiece || ''}
                     onChange={e => handleInputChange('centerpiece', e.target.value)}
                   />
@@ -764,7 +757,7 @@ const EventFormManager = () => {
                   <label>כסא כלה</label>
                   <input
                     type="text"
-                    placeholder="תיאור כסא כלה"
+                    placeholder="כסא..."
                     value={formData.bridgeChair || ''}
                     onChange={e => handleInputChange('bridgeChair', e.target.value)}
                   />
@@ -773,10 +766,12 @@ const EventFormManager = () => {
             </div>
 
             {/* ציוד טכני */}
-            <div className={styles.section}>
-              <h4>⚡ ציוד טכני</h4>
-              <div className={styles.checkboxRow}>
-                <label>
+            <div className={`${styles.section} ${styles.boardEquip}`}>
+              <div className={styles.sectionHeader}>
+                <h4>ציוד טכני</h4>
+              </div>
+              <div className={styles.checkboxInlineRow}>
+                <label className={styles.checkboxPill}>
                   <input
                     type="checkbox"
                     checked={formData.hasLighting || false}
@@ -784,7 +779,7 @@ const EventFormManager = () => {
                   />
                   תאורה
                 </label>
-                <label>
+                <label className={styles.checkboxPill}>
                   <input
                     type="checkbox"
                     checked={formData.hasSoundSystem || false}
@@ -792,7 +787,7 @@ const EventFormManager = () => {
                   />
                   הגברה
                 </label>
-                <label>
+                <label className={styles.checkboxPill}>
                   <input
                     type="checkbox"
                     checked={formData.hasScreens || false}
@@ -800,7 +795,7 @@ const EventFormManager = () => {
                   />
                   מסכים
                 </label>
-                <label>
+                <label className={styles.checkboxPill}>
                   <input
                     type="checkbox"
                     checked={formData.hasFireworks || false}
@@ -812,11 +807,13 @@ const EventFormManager = () => {
             </div>
 
     {/* משמחים */}
-            <div className={styles.section}>
-              <h4>משמחים 🎭</h4>
-              <div className={styles.row}>
+            <div className={`${styles.section} ${styles.boardEnt}`}>
+              <div className={styles.sectionHeader}>
+                <h4>משמחים</h4>
+              </div>
+              <div className={`${styles.row} ${styles.rowFour}`}>
                 <div className={styles.field}>
-                  <label>סוג משמחים</label>
+                  <label>סוג</label>
                   <select
                     value={
                       formData.entertainersBar !== undefined ? 'bar' :
@@ -824,11 +821,8 @@ const EventFormManager = () => {
                     }
                     onChange={e => {
                       const type = e.target.value;
-                      
-                      // איפוס שדות בעת החלפת סוג
                       handleInputChange('entertainersMen', undefined);
                       handleInputChange('entertainersWomen', undefined);
-                      
                       if (type === 'bar') {
                         handleInputChange('entertainersBar', 0);
                         handleInputChange('entertainersSitting', undefined);
@@ -841,166 +835,82 @@ const EventFormManager = () => {
                       }
                     }}
                   >
-                    <option value="">בחר סוג...</option>
+                    <option value="">—</option>
                     <option value="bar">בר</option>
                     <option value="sitting">ישיבה</option>
                   </select>
                 </div>
-              </div>
-
-              {/* נציג את השדות רק אם נבחר סוג */}
               {(formData.entertainersBar !== undefined || formData.entertainersSitting !== undefined) && (() => {
-                // מזהים מה נבחר ומה הסך הכל הנוכחי
                 const isBar = formData.entertainersBar !== undefined;
                 const currentTotal = isBar ? (formData.entertainersBar || 0) : (formData.entertainersSitting || 0);
-
                 return (
                   <>
-                    <div className={styles.row}>
-                      <div className={styles.field}>
-                        <label>סה"כ כמות משתתפים</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={currentTotal || ''}
-                          onChange={e => {
-                            const total = parseInt(e.target.value) || 0;
-                            const men = formData.entertainersMen || 0;
-                            
-                            // מעדכן את השדה הנכון (בר או ישיבה) לפי מה שנבחר
-                            handleInputChange(isBar ? 'entertainersBar' : 'entertainersSitting', total);
-                            // משלים אוטומטית נשים
-                            handleInputChange('entertainersWomen', Math.max(0, total - men));
-                          }}
-                        />
-                      </div>
+                    <div className={styles.field}>
+                      <label>סה"כ</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={currentTotal || ''}
+                        onChange={e => {
+                          const total = parseInt(e.target.value) || 0;
+                          const men = formData.entertainersMen || 0;
+                          handleInputChange(isBar ? 'entertainersBar' : 'entertainersSitting', total);
+                          handleInputChange('entertainersWomen', Math.max(0, total - men));
+                        }}
+                      />
                     </div>
-
-                    <div className={styles.row}>
-                      <div className={styles.field}>
-                        <label>כמות גברים</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formData.entertainersMen || ''}
-                          onChange={e => {
-                            const men = parseInt(e.target.value) || 0;
-                            handleInputChange('entertainersMen', men);
-                            // משלים אוטומטית נשים מתוך הסך הכל הקיים
-                            handleInputChange('entertainersWomen', Math.max(0, currentTotal - men));
-                          }}
-                        />
-                      </div>
-                      <div className={styles.field}>
-                        <label>כמות נשים (מושלם אוטומטית)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formData.entertainersWomen || ''}
-                          readOnly
-                          style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}
-                        />
-                      </div>
+                    <div className={styles.field}>
+                      <label>גברים</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.entertainersMen || ''}
+                        onChange={e => {
+                          const men = parseInt(e.target.value) || 0;
+                          handleInputChange('entertainersMen', men);
+                          handleInputChange('entertainersWomen', Math.max(0, currentTotal - men));
+                        }}
+                      />
                     </div>
-
-                    {/* גרף עוגה למשמחים */}
-                    {currentTotal > 0 && (
-                      <div className={styles.chartContainer}>
-                        {(() => {
-                          const entMen = formData.entertainersMen || 0;
-                          const entWomen = formData.entertainersWomen || 0;
-                          const entMenPercent = ((entMen / currentTotal) * 100).toFixed(0);
-                          const entWomenPercent = ((entWomen / currentTotal) * 100).toFixed(0);
-
-                          return (
-                            <>
-                              <div className={styles.chartStats}>
-                                <div className={styles.statItem}>
-                                  <span className={styles.statColor} style={{ backgroundColor: '#2196F3' }}></span>
-                                  <span>גברים: {entMenPercent}% ({entMen} איש)</span>
-                                </div>
-                                <div className={styles.statItem}>
-                                  <span className={styles.statColor} style={{ backgroundColor: '#F44336' }}></span>
-                                  <span>נשים: {entWomenPercent}% ({entWomen} אישה)</span>
-                                </div>
-                              </div>
-                              <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                  <Pie
-                                    data={[
-                                      { name: `גברים`, value: entMen },
-                                      { name: `נשים`, value: entWomen }
-                                    ]}
-                                    cx="50%"
-                                    cy="50%"
-                                    labelLine={false}
-                                    outerRadius={80}
-                                    dataKey="value"
-                                  >
-                                    <Cell fill="#2196F3" />
-                                    <Cell fill="#F44336" />
-                                  </Pie>
-                                  <Tooltip formatter={(value: any, name: any) => [`${value} משתתפים (${((Number(value) / currentTotal) * 100).toFixed(0)}%)`, name]} />
-                                  <Legend />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </>
-                          )
-                        })()}
-                      </div>
-                    )}
+                    <div className={styles.field}>
+                      <label>נשים</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.entertainersWomen || ''}
+                        readOnly
+                        className={styles.inputAuto}
+                      />
+                    </div>
                   </>
                 );
               })()}
+              </div>
             </div>
 
-            {/* צ'ק פיקדון */}
-            <div className={styles.section}>
-              <h4>💳 צ'ק פיקדון</h4>
-              <div className={styles.field}>
-                <label>תמונת צ'ק פיקדון</label>
-                
-                {!formData.depositCheckUrl && !depositCheckFile && (
-                  <CheckCamera
-                    disabled={checkScanning}
-                    onCapture={async (imageSrc) => {
-                      handleInputChange('depositCheckUrl', imageSrc);
-                      setDepositCheckFile(null);
-                      await processCheckImage(imageSrc);
-                    }}
-                    onRetake={handleDeleteCheckImage}
-                  />
-                )}
+            {/* תשלומים וכשרות */}
+            <div className={`${styles.section} ${styles.boardPay}`}>
+              <div className={styles.sectionHeader}>
+                <h4>תשלומים וכשרות</h4>
+              </div>
 
-                <div className={styles.checkImageOptions} style={{ marginTop: '15px' }}>
-                  <button 
-                    type="button"
-                    className={styles.uploadBtn}
-                    onClick={() => document.getElementById('fileInput')?.click()}
-                  >
-                    📁 העלה תמונה מהמחשב / גלריה
+              <div className={styles.payGrid}>
+                <div className={styles.payActions}>
+                  <button type="button" className={styles.btnOutline} onClick={() => setShowCamera(true)}>
+                    📸 צלם
                   </button>
-                  <input 
-                    type="file"
-                    id="fileInput"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    style={{ display: 'none' }}
-                  />
+                  <button type="button" className={styles.uploadBtn} onClick={() => document.getElementById('fileInput')?.click()}>
+                    📁 העלה
+                  </button>
+                  <input type="file" id="fileInput" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                  <label className={styles.checkboxInline}>
+                    <input type="checkbox" checked={formData.depositCheckStatus || false} onChange={e => handleCheckboxChange('depositCheckStatus', e.target.checked)} />
+                    צ'ק קיבל
+                  </label>
+                  {(depositCheckFile || formData.depositCheckUrl) && (
+                    <span className={styles.fileTag}>✓ צ'ק צורף</span>
+                  )}
                 </div>
-
-                {depositCheckFile && (
-                  <div className={styles.fileContainer}>
-                    <p className={styles.fileName}>✓ {depositCheckFile.name}</p>
-                    <button onClick={handleDeleteCheckImage} className={styles.deleteBtn}>🗑️ מחק</button>
-                  </div>
-                )}
-                {formData.depositCheckUrl && !depositCheckFile && (
-                  <div className={styles.fileContainer}>
-                    <p className={styles.fileName}>✓ צ'ק צולם/צורף בהצלחה</p>
-                    <button onClick={handleDeleteCheckImage} className={styles.deleteBtn}>🗑️ מחק</button>
-                  </div>
-                )}
 
                 {(formData.depositCheckUrl || formData.depositCheckDetails) && (
                   <CheckDetailsForm
@@ -1011,154 +921,136 @@ const EventFormManager = () => {
                     styles={styles}
                   />
                 )}
-              </div>
-              <div className={styles.checkboxRow}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formData.depositCheckStatus || false}
-                    onChange={e => handleCheckboxChange('depositCheckStatus', e.target.checked)}
-                  />
-                  צ'ק קיבל
-                </label>
-              </div>
-            </div>
-            {selected.clientSignatureUrl && (
-  <div className={styles.section}>
-    <h4>✍️ חוזה חתום</h4>
-    <img src={selected.clientSignatureUrl} alt="חתימת חוזה" style={{ width: '100%', maxWidth: '300px', border: '1px solid #ddd' }} />
-  </div>
-)}
 
-           {/* אקו"ם */}
-            <div className={styles.section}>
-              <h4>🎵 אקו"ם</h4>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                {/* שדה תצוגה אוטומטי לקוד האישור מההזמנה */}
-                <div className={styles.field}>
-                  <label>קוד אישור אקו"ם </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={selected.akumApprovalCode || 'לא הוזן קוד אישור'}
-                    style={{ 
-                      backgroundColor: '#f8fafc', 
-                      color: selected.akumApprovalCode ? '#15803d' : '#94a3b8', 
-                      fontWeight: 'bold', 
-                      cursor: 'not-allowed',
-                      borderColor: selected.akumApprovalCode ? '#bbf7d0' : '#e2e8f0'
-                    }}
-                  />
+                <div className={styles.row}>
+                  <div className={styles.field}>
+                    <label>קוד אקו"ם</label>
+                    <input type="text" readOnly value={selected.akumApprovalCode || 'לא הוזן'} className={selected.akumApprovalCode ? styles.inputReadonlyOk : styles.inputReadonlyEmpty} />
+                  </div>
+                  <div className={styles.field}>
+                    <label>כשרות</label>
+                    <div className={styles.kashrutRow}>
+                      <select value={formData.kashrut || ''} onChange={(e) => handleInputChange('kashrut', e.target.value)}>
+                        <option value="">בחר...</option>
+                        {KASHRUT_LIST.map((kName, idx) => (
+                          <option key={idx} value={kName}>{kName}</option>
+                        ))}
+                      </select>
+                      {kashrutImage ? (
+                        <div onClick={() => setIsKashrutModalOpen(true)} className={styles.kashrutThumb} title="הגדלת תעודה">
+                          <img src={kashrutImage} alt="כשרות" />
+                        </div>
+                      ) : (
+                        <div className={styles.kashrutThumbEmpty}>—</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className={styles.field}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 'bold' }}>
-                    <input
-                      type="checkbox"
-                      // אם יש קוד אישור שמור בהזמנה, נסמן את התיבה אוטומטית. אחרת, נסתמך על מה שנשמר בטופס
-                      checked={formData.akumPaid || !!selected.akumApprovalCode}
-                      onChange={e => handleCheckboxChange('akumPaid', e.target.checked)}
-                      style={{ width: '18px', height: '18px', accentColor: '#16a34a' }}
-                    />
-                    האם שילם לאקו"ם
+                <div className={styles.payFooter}>
+                  <label className={styles.checkboxInline}>
+                    <input type="checkbox" checked={formData.akumPaid || !!selected.akumApprovalCode} onChange={e => handleCheckboxChange('akumPaid', e.target.checked)} />
+                    שילם לאקו"ם
                   </label>
+                  {selected.clientSignatureUrl && (
+                    <img src={selected.clientSignatureUrl} alt="חוזה" className={styles.signatureThumb} title="חוזה חתום" />
+                  )}
+                  {(depositCheckFile || formData.depositCheckUrl) && (
+                    <button onClick={handleDeleteCheckImage} className={styles.deleteBtn}>מחק צ'ק</button>
+                  )}
                 </div>
               </div>
-            </div>
-
-            {/* כשרות */}
-            <div className={styles.section}>
-              <h4>כשרות</h4>
-              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <select 
-                  value={formData.kashrut || ''} 
-                  onChange={(e) => handleInputChange('kashrut', e.target.value)}
-                  style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                >
-                  <option value="">בחר כשרות...</option>
-                  {KASHRUT_LIST.map((kName, idx) => (
-                    <option key={idx} value={kName}>{kName}</option>
-                  ))}
-                </select>
-
-                {/* תצוגת התעודה ליד הכשרות! */}
-                {kashrutImage ? (
-                  <div 
-                    onClick={() => setIsKashrutModalOpen(true)}
-                    style={{ cursor: 'pointer', width: '50px', height: '50px', border: '2px solid #ddd', borderRadius: '6px', overflow: 'hidden' }}
-                    title="לחץ להגדלת התעודה"
-                  >
-                    <img src={kashrutImage} alt="תעודת כשרות" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                ) : (
-                  <div style={{ width: '50px', height: '50px', background: '#f1f5f9', border: '1px dashed #cbd5e1', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#999', textAlign: 'center' }}>
-                    אין תמונה בשרת
-                  </div>
-                )}
-              </div>
-
-              {/* מודאל הגדלת התמונה של הכשרות */}
               {isKashrutModalOpen && kashrutImage && (
-                <div 
-                  onClick={() => setIsKashrutModalOpen(false)}
-                  style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '20px' }}
-                >
-                  <div onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                    <img src={kashrutImage} alt="תעודה מוגדלת" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '8px', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }} />
-                    <button 
-                      onClick={() => setIsKashrutModalOpen(false)}
-                      style={{ display: 'block', margin: '20px auto 0', padding: '10px 30px', background: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
-                    >
-                      סגור חלון
-                    </button>
+                <div onClick={() => setIsKashrutModalOpen(false)} className={styles.modalOverlay}>
+                  <div onClick={e => e.stopPropagation()} className={styles.modalContent}>
+                    <img src={kashrutImage} alt="תעודה מוגדלת" className={styles.modalImg} />
+                    <button onClick={() => setIsKashrutModalOpen(false)} className={styles.modalCloseBtn}>סגור</button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ---> כפתור בחירת תפריט אלגנטי <--- */}
-            <div className={styles.section} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '15px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '20px' }}>
-              <div>
-                <h4 style={{ margin: '0 0 5px 0' }}>🍽️ תפריט האירוע</h4>
-                {selectedMenu ? (
-                  <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: 'bold' }}>✓ תפריט נבחר ושמור בטופס</span>
-                ) : (
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>טרם נבחר תפריט לאירוע זה</span>
-                )}
+            <div className={`${styles.section} ${styles.boardMenu}`}>
+              <div className={styles.menuRow}>
+                <div>
+                  <h4 className={styles.inlineTitle}>תפריט האירוע</h4>
+                  {selectedMenu ? (
+                    <span className={styles.statusOk}>✓ תפריט נבחר</span>
+                  ) : (
+                    <span className={styles.statusPending}>טרם נבחר תפריט</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(true)}
+                  className={selectedMenu ? styles.btnSecondary : styles.btnPrimary}
+                >
+                  {selectedMenu ? 'ערוך תפריט' : 'בחירת תפריט'}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen(true)}
-                style={{
-                  padding: '10px 20px', background: selectedMenu ? '#3b82f6' : '#d4af37', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
-                }}
-              >
-                {selectedMenu ? 'ערוך תפריט נבחר' : '📋 בחירת תפריט'}
-              </button>
             </div>
 
-            {/* ---> מודאל צף לבחירת תפריט - בתצוגת מסך מלא <--- */}
+            <div className={`${styles.section} ${styles.boardNotes}`}>
+              <div className={styles.sectionHeader}>
+                <h4>הערות</h4>
+                {notesList.length > 0 && <span className={styles.notesBadge}>{notesList.length}</span>}
+              </div>
+              {notesList.length > 0 && (
+                <div className={styles.notesList}>
+                  {notesList.map((note, idx) => (
+                    <div key={idx} className={styles.noteItem}>
+                      <span className={styles.noteNumber}>{idx + 1}.</span>
+                      <span className={styles.noteText}>{note}</span>
+                      <button onClick={() => removeNote(idx)} className={styles.removeNoteBtn}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className={styles.addNoteRow}>
+                <input
+                  type="text"
+                  placeholder="הוסף הערה..."
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && addNote()}
+                  className={styles.noteInput}
+                />
+                <button onClick={addNote} className={styles.addNoteBtn}>+</button>
+              </div>
+            </div>
+            </div>
+
+            {showCamera && (
+              <div className={styles.cameraOverlay}>
+                <div className={styles.cameraModal}>
+                  <button type="button" className={styles.cameraCloseBtn} onClick={() => setShowCamera(false)}>✕</button>
+                  <CheckCamera
+                    disabled={checkScanning}
+                    onCapture={async (imageSrc) => {
+                      handleInputChange('depositCheckUrl', imageSrc);
+                      setDepositCheckFile(null);
+                      setShowCamera(false);
+                      await processCheckImage(imageSrc);
+                    }}
+                    onRetake={handleDeleteCheckImage}
+                  />
+                </div>
+              </div>
+            )}
+
             {isMenuOpen && (
-              <div 
-                style={{ position: 'fixed', inset: 0, background: '#f8fafc', display: 'flex', justifyContent: 'center', zIndex: 9999 }}
-              >
-                <div 
-                  onClick={e => e.stopPropagation()} 
-                  style={{ width: '100vw', height: '100vh', position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-                >
-                  {/* כפתור סגירה צף ובולט בפינה */}
+              <div className={styles.fullscreenOverlay}>
+                <div className={styles.fullscreenInner}>
                   <button 
                     onClick={() => setIsMenuOpen(false)}
-                    style={{ position: 'absolute', top: '20px', left: '30px', background: 'white', color: '#ef4444', border: '2px solid #ef4444', borderRadius: '8px', padding: '8px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                    className={styles.fullscreenCloseBtn}
                     title="סגור חלון"
                   >
                     ✕ סגור וחזור לטופס
                   </button>
                   
-                  {/* אזור התוכן המרווח שנגלל על כל המסך */}
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '40px 20px' }}>
-                    <div style={{ maxWidth: '1200px', margin: '0 auto', background: 'white', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '30px' }}>
+                  <div className={styles.fullscreenScroll}>
+                    <div className={styles.fullscreenPanel}>
                       <MenuSelectionForm 
                          onSaveMenu={handleMenuSave} 
                          initialSelections={selectedMenu} 
@@ -1170,15 +1062,13 @@ const EventFormManager = () => {
             )}
 
             {isTableLayoutOpen && (
-              <div
-                style={{ position: 'fixed', inset: 0, background: '#f8fafc', display: 'flex', flexDirection: 'column', zIndex: 9999 }}
-              >
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '16px' }}>
+              <div className={styles.tableLayoutOverlay}>
+                <div className={styles.tableLayoutInner}>
                   <div style={{ marginBottom: '8px', textAlign: 'center' }}>
-                    <h3 style={{ margin: 0, color: '#334155' }}>סידור שולחנות אולם</h3>
-                    {tableLayoutSaving && <span style={{ color: '#64748b', fontSize: '14px' }}>שומר...</span>}
+                    <h3 className={styles.tableLayoutTitle}>סידור שולחנות אולם</h3>
+                    {tableLayoutSaving && <span className={styles.tableLayoutSaving}>שומר...</span>}
                   </div>
-                  <div style={{ flex: 1, minHeight: 0 }}>
+                  <div className={styles.tableLayoutBuilder}>
                     <FloorPlanBuilder
                       key={selected.id}
                       initialTables={savedTables}
@@ -1190,40 +1080,20 @@ const EventFormManager = () => {
                 </div>
               </div>
             )}
-           
-            {/* הערות ממוספרות */}
-            <div className={styles.section}>
-              <h4>📝 הערות (אופציונלי)</h4>
-              <div className={styles.notesContainer}>
-                {notesList.length > 0 && (
-                  <div className={styles.notesList}>
-                    {notesList.map((note, idx) => (
-                      <div key={idx} className={styles.noteItem}>
-                        <span className={styles.noteNumber}>{idx + 1}.</span>
-                        <span className={styles.noteText}>{note}</span>
-                        <button onClick={() => removeNote(idx)} className={styles.removeNoteBtn}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className={styles.addNoteRow}>
-                <input
-                  type="text"
-                  placeholder="הוסף הערה חדשה..."
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                  onKeyPress={e => e.key === 'Enter' && addNote()}
-                  className={styles.noteInput}
-                />
-                <button onClick={addNote} className={styles.addNoteBtn}>+ הוסף</button>
-              </div>
-            </div>
 
-          {/* כפתורים למטה */}
-            <div className={styles.formFooter} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          </div>
+
+          <div className={styles.formFooter}>
               <button onClick={() => setSelected(null)} className={styles.cancelBtn}>ביטול</button>
               
+              <button
+                onClick={handleSaveForm}
+                className={styles.saveBtn}
+                disabled={submitting}
+              >
+                {submitting ? 'שומר...' : 'שמירת טופס'}
+              </button>
+
        <button
   onClick={async () => {
     try {
@@ -1235,7 +1105,6 @@ const EventFormManager = () => {
         menuSelections: selectedMenu
       });
 
-      // 1. שמירה אוטומטית ישירות למסד הנתונים
       const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
         method: 'POST',
         headers: {
@@ -1249,7 +1118,6 @@ const EventFormManager = () => {
          return;
       }
       
-      // 2. אחרי שהשמירה הצליחה - קוראים לפונקציית ההורדה שלך
       await handleDownloadPDF(); 
       
     } catch (error) {
@@ -1257,31 +1125,22 @@ const EventFormManager = () => {
       alert('שגיאת תקשורת עם השרת בעת הפעולה.');
     }
   }}
-  style={{
-    padding: '10px 20px', background: '#f59e0b', color: 'white', border: 'none', 
-    borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: 1,
-    display: 'flex', alignItems: 'center', gap: '8px'
-  }}
+  className={styles.downloadBtn}
   title="שמור והורד PDF"
 >
   הורד PDF 📥
 </button>
 
-              {/* כפתור ווצאפ עם לוגו מקורי */}
               <button
                 onClick={() => {
                   const clientName = `${selected.clientAFullName} ${selected.clientBFullName ? `ו${selected.clientBFullName}` : ''}`;
                   const textMsg = `שלום, מצורף עדכון לגבי טופס הפקת אירוע - משפחת ${clientName} בתאריך ${dateStr(selected)}.\nמוזמנים: ${formData.finalGuestCount || 'לא צוין'}.`;
                   window.open(`https://wa.me/?text=${encodeURIComponent(textMsg)}`, '_blank');
                 }}
-              
-                style={{
-                  padding: '10px 20px', background: '#25D366', color: 'white', border: 'none', borderRadius: '6px', 
-                  display: 'flex', alignItems: 'center', gap: '8px'
-                }}
+                className={styles.whatsappBtn}
                 title={!isFormValid() ? 'יש למלא טופס לפני שיתוף' : 'שלח לווצאפ'}
               >
-                <svg fill="currentColor" viewBox="0 0 448 512" height="18px" width="18px" xmlns="http://www.w3.org/2000/svg">
+                <svg className={styles.btnIcon} fill="currentColor" viewBox="0 0 448 512" xmlns="http://www.w3.org/2000/svg">
                   <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"></path>
                 </svg>
                 שלח ווצאפ
@@ -1299,7 +1158,6 @@ const EventFormManager = () => {
         menuSelections: selectedMenu
       });
 
-      // 1. שמירה אוטומטית ישירות למסד הנתונים
       const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
         method: 'POST',
         headers: {
@@ -1313,7 +1171,6 @@ const EventFormManager = () => {
          return;
       }
       
-      // 2. אחרי שהשמירה הצליחה - מבקשים מהשרת לשלוח את המייל
       const emailResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/send-email`, {
         method: 'POST',
       });
@@ -1329,21 +1186,16 @@ const EventFormManager = () => {
       alert('שגיאת תקשורת עם השרת בעת הפעולה.');
     }
   }}
-  style={{
-    padding: '10px 20px', background: '#0ea5e9', color: 'white', border: 'none', 
-    borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: 1,
-    display: 'flex', alignItems: 'center', gap: '8px'
-  }}
+  className={styles.emailBtn}
   title="שמור ושלח למייל"
 >
-  <svg fill="currentColor" viewBox="0 0 512 512" height="18px" width="18px" xmlns="http://www.w3.org/2000/svg">
+  <svg className={styles.btnIcon} fill="currentColor" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
     <path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48H48zM0 176V384c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V176L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"></path>
   </svg>                                
   שלח למייל
 </button>
             </div>
           </div>
-        </div>
       )}
     </div>
   );
