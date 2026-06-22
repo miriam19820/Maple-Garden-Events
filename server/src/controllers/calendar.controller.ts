@@ -7,12 +7,19 @@ export const calendarController = {
     try {
       // הוספנו כאן את ה-eventType שמגיע מה-Frontend
       const { start, end, eventType } = req.query;
-      const parseLocalDate = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-      
+      const parseLocalDateStart = (s: string) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d, 0, 0, 0);
+      };
+      const parseLocalDateEnd = (s: string) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d, 23, 59, 59, 999);
+      };
+
       const dates = await calendarService.getAllCalendarDates(
-        parseLocalDate(start as string),
-        parseLocalDate(end as string),
-        eventType as string // מעבירים את סוג האירוע לשירות
+        parseLocalDateStart(start as string),
+        parseLocalDateEnd(end as string),
+        eventType as string
       );
       res.json(dates);
     } catch (error) {

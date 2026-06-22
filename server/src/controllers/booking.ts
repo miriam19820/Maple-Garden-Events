@@ -12,6 +12,7 @@ import {
   formatStoredTimeOfDay,
   SLOT_LABELS,
   parseDateLocal,
+  getLocalDayBounds,
   isDateFullyBooked,
   type TimeSlot,
 } from '../utils/timeSlot';
@@ -109,13 +110,21 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
 
     for (const dateItem of datesToProcess) {
       const dateString = typeof dateItem === 'object' && dateItem !== null ? dateItem.date : dateItem;
-      const possibleDate = new Date(dateString);
+      const possibleDate = parseDateLocal(dateString);
       
       if (isNaN(possibleDate.getTime())) continue;
 
+      const { start: dayStart, end: dayEnd } = getLocalDayBounds(possibleDate);
+      const lockKey =
+        possibleDate.getFullYear() * 10000 +
+        (possibleDate.getMonth() + 1) * 100 +
+        possibleDate.getDate();
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+
       let eventDate = await tx.eventDate.findFirst({
-        where: { date: possibleDate },
+        where: { date: { gte: dayStart, lte: dayEnd } },
         include: { bookings: true },
+        orderBy: { date: 'asc' },
       });
 
       if (!eventDate) {
@@ -123,8 +132,11 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           data: { date: possibleDate, status: newStatus, optionExpiresAt: expiryDate },
           include: { bookings: true },
         });
-      } else {
-        await tx.$executeRaw`SELECT id FROM "EventDate" WHERE id = ${eventDate.id} FOR UPDATE`;
+      }
+
+      await tx.$executeRaw`SELECT id FROM "EventDate" WHERE id = ${eventDate.id} FOR UPDATE`;
+
+      if (eventDate.status !== 'BOOKED' || newStatus === 'BOOKED') {
         const updatePayload: Record<string, unknown> = {};
         if (newStatus === 'BOOKED') {
           updatePayload.status = 'BOOKED';

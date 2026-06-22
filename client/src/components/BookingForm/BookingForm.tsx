@@ -15,6 +15,7 @@ import PaymentAndUpgradesSection from './sections/PaymentAndUpgradesSection';
 import ContractModal from './sections/ContractModal';
 import MetaBar from './sections/MetaBar';
 import OptionDatesBar, { normalizeOptionDate } from './sections/OptionDatesBar';
+import { verifyAllOptionDates } from '../../utils/optionDateApi';
 import { NotesList } from '../NotesList/NotesList';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
 
@@ -513,6 +514,23 @@ const calculateTotals = () => {
       alert('חובה לבחור תאריך לאירוע.');
       return;
     }
+
+    let datesForSubmit = selectedDatesDisplay;
+    if (isOption && selectedDatesDisplay.length > 0) {
+      const slot = normalizeTimeSlot(formData.timeOfDay as string) || getDefaultTimeSlot();
+      const verify = await verifyAllOptionDates(
+        selectedDatesDisplay.map(normalizeOptionDate),
+        formData.eventType || 'חתונה',
+        slot
+      );
+      if (!verify.ok) {
+        alert(`לא ניתן לשמור — התאריך כבר לא זמין:\n${verify.error}`);
+        return;
+      }
+      datesForSubmit = verify.dates;
+      setSelectedDatesDisplay(verify.dates);
+    }
+
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (formData.clientAEmail?.trim() && !emailPattern.test(formData.clientAEmail.trim())) {
       alert('כתובת האימייל של בעל/ת השמחה אינה תקינה.');
@@ -538,7 +556,7 @@ const calculateTotals = () => {
         hasMusic: isWedding ? true : formData.hasMusic,
         clientComments: serializeNotesBundle({ menu: menuNotesList, internal: internalNotesList }),
         createdAt: new Date().toISOString(),
-        allSelectedDates: selectedDatesDisplay,
+        allSelectedDates: datesForSubmit,
         isOption,
         optionDurationHours,
         servingStyle,

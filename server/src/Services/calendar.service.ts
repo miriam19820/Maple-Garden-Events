@@ -2,7 +2,7 @@
 import hebcal from 'hebcal';
 import prisma from "../config/prisma";
 import { io } from "../server";
-import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay, getBlockedSlotsForDate, isDateFullyBooked, validateSlotOnDate, parseDateLocal } from '../utils/timeSlot';
+import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay, getBlockedSlotsForDate, isDateFullyBooked, validateSlotOnDate, parseDateLocal, toLocalDateKey } from '../utils/timeSlot';
 import { validateSlotAvailability, resolveBookingSlot } from '../utils/bookingDateValidation';
 import { allocateEventCode } from '../utils/eventCode';
 
@@ -14,13 +14,6 @@ export enum EventStatus {
   BLOCKED   = 'BLOCKED',      // חסום לגמרי (אדום - כמו שבת)
   FORBIDDEN = 'FORBIDDEN',    // אסור לאירוע (ורוד - חגים/צומות קשים)
   PROBLEMATIC = 'PROBLEMATIC' // תאריך דפוק/אפשרי חלקית (כתום)
-}
-
-function toLocalDateKey(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
 }
 
 const HEBREW_NUMERALS: Record<number, string> = {
@@ -199,10 +192,19 @@ export const calendarService = {
       const staticSt = getDayStaticStatus(current, eventType);
       const blockedSlots = getBlockedSlotsForDate(current);
       
-      const record = datesInRange.find((d: any) => toLocalDateKey(new Date(d.date)) === dateKey);
-      const bookings = record?.bookings || [];
+      const recordsForDay = datesInRange.filter((d: any) => toLocalDateKey(new Date(d.date)) === dateKey);
+      const record =
+        recordsForDay.find((d: any) => d.status === EventStatus.BOOKED) ||
+        recordsForDay.find((d: any) => d.status === EventStatus.OPTION) ||
+        recordsForDay.find((d: any) => (d.bookings?.length ?? 0) > 0) ||
+        recordsForDay[0];
+      const bookings = recordsForDay.flatMap((d: any) => d.bookings || []);
 
-      const dbStatus = record?.status;
+      const dbStatus = recordsForDay.some((d: any) => d.status === EventStatus.BOOKED)
+        ? EventStatus.BOOKED
+        : recordsForDay.some((d: any) => d.status === EventStatus.OPTION)
+          ? EventStatus.OPTION
+          : record?.status;
       const hasBookingStatus = dbStatus === EventStatus.OPTION || dbStatus === EventStatus.BOOKED;
       const fullyBooked = isDateFullyBooked(current, bookings);
 

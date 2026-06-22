@@ -83,6 +83,20 @@ export function parseDateLocal(dateInput: string | Date): Date {
   return new Date(`${dateInput}T12:00:00`);
 }
 
+export function getLocalDayBounds(date: Date): { start: Date; end: Date } {
+  return {
+    start: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0),
+    end: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999),
+  };
+}
+
+export function toLocalDateKey(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function getBookableSlotsForDate(date: Date, bookings: { timeOfDay?: string | null }[]): TimeSlot[] {
   const taken = getTakenSlots(bookings);
   const blocked = new Set(getBlockedSlotsForDate(date));

@@ -1,10 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { apiFetch } from '../../../services/api';
+import React, { useCallback, useEffect, useState } from 'react';
 import styles from '../BookingForm.module.css';
 import { type TimeSlot, DEFAULT_TIME_SLOT, normalizeTimeSlot } from '../../../utils/timeSlot';
 import { validateOptionDateSelection } from '../../../utils/optionDateValidation';
+import {
+  type OptionDateItem,
+  fetchCalendarDays,
+  resolveOptionDate,
+} from '../../../utils/optionDateApi';
+import { socket } from '../../../services/socketService';
 
-export type OptionDateItem = { date: string; hebrewDate?: string };
+export type { OptionDateItem };
 
 const MAX_OPTION_DATES = 3;
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -25,50 +30,6 @@ function formatDisplay(dateStr: string): string {
 function getDayOfWeek(dateStr: string): string {
   const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
   return days[new Date(dateStr + 'T12:00:00').getDay()];
-}
-
-function getHebrewDateLabel(dateStr: string): string {
-  try {
-    return new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric', month: 'long' }).format(
-      new Date(dateStr + 'T12:00:00')
-    );
-  } catch {
-    return '';
-  }
-}
-
-function getEventTypeFilter(eventType: string): string {
-  return eventType === 'חתונה' || eventType === 'אירוסין' ? 'חתונה' : 'אירוע אחר';
-}
-
-async function resolveOptionDate(
-  date: string,
-  eventType: string,
-  excludeDates: string[],
-  timeSlot: TimeSlot
-): Promise<{ ok: true; item: OptionDateItem } | { ok: false; error: string }> {
-  const localError = validateOptionDateSelection(date, undefined, timeSlot, excludeDates);
-  if (localError) return { ok: false, error: localError };
-
-  try {
-    const filter = getEventTypeFilter(eventType);
-    const res = await apiFetch(
-      `http://localhost:5000/api/calendar/dates?start=${date}&end=${date}&eventType=${filter}`
-    );
-    if (!res.ok) {
-      return { ok: false, error: 'לא ניתן לוודא את התאריך — נסי שוב.' };
-    }
-    const data = await res.json();
-    const day = data?.[0];
-    const serverError = validateOptionDateSelection(date, day, timeSlot, excludeDates);
-    if (serverError) return { ok: false, error: serverError };
-    return {
-      ok: true,
-      item: { date, hebrewDate: day?.hebrewDate || getHebrewDateLabel(date) },
-    };
-  } catch {
-    return { ok: false, error: 'שגיאת חיבור — לא ניתן לאמת את התאריך.' };
-  }
 }
 
 export function normalizeOptionDate(d: string | OptionDateItem): OptionDateItem {
@@ -99,26 +60,42 @@ export const OptionDatePickerModal = ({
   const [manualDate, setManualDate] = useState('');
   const [manualError, setManualError] = useState('');
   const [manualAdding, setManualAdding] = useState(false);
+  const [selectingDate, setSelectingDate] = useState<string | null>(null);
+  const [pickerError, setPickerError] = useState('');
 
-  const eventTypeFilter = getEventTypeFilter(eventType);
   const todayStr = formatDateLocal(new Date());
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setManualDate('');
-    setManualError('');
+  const loadMonthDays = useCallback(async () => {
     const year = current.getFullYear();
     const month = current.getMonth();
     const start = formatDateLocal(new Date(year, month, 1));
     const end = formatDateLocal(new Date(year, month + 1, 0));
 
     setLoading(true);
-    apiFetch(`http://localhost:5000/api/calendar/dates?start=${start}&end=${end}&eventType=${eventTypeFilter}`)
-      .then(r => r.json())
-      .then(setDays)
-      .catch(() => setDays([]))
-      .finally(() => setLoading(false));
-  }, [isOpen, current, eventTypeFilter]);
+    try {
+      const data = await fetchCalendarDays(start, end, eventType);
+      setDays(data);
+    } catch {
+      setDays([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [current, eventType]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setManualDate('');
+    setManualError('');
+    setPickerError('');
+    loadMonthDays();
+  }, [isOpen, loadMonthDays]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const refresh = () => { loadMonthDays(); };
+    socket.on('date-updated', refresh);
+    return () => { socket.off('date-updated', refresh); };
+  }, [isOpen, loadMonthDays]);
 
   if (!isOpen) return null;
 
@@ -150,6 +127,22 @@ export const OptionDatePickerModal = ({
     setManualAdding(false);
     if (!result.ok) {
       setManualError(result.error);
+      loadMonthDays();
+      return;
+    }
+    onSelect(result.item);
+    onClose();
+  };
+
+  const handleCalendarSelect = async (cell: { date: string; hebrewDate: string }) => {
+    if (selectingDate) return;
+    setPickerError('');
+    setSelectingDate(cell.date);
+    const result = await resolveOptionDate(cell.date, eventType, excludeDates, timeSlot);
+    setSelectingDate(null);
+    if (!result.ok) {
+      setPickerError(result.error);
+      loadMonthDays();
       return;
     }
     onSelect(result.item);
@@ -200,6 +193,7 @@ export const OptionDatePickerModal = ({
           <p className={styles.optionPickerLoading}>טוען...</p>
         ) : (
           <>
+            {pickerError && <p className={styles.optionManualError}>{pickerError}</p>}
             <div className={styles.optionPickerWeekdays}>
               {COL_HEADERS.map(d => <span key={d}>{d}</span>)}
             </div>
@@ -209,15 +203,14 @@ export const OptionDatePickerModal = ({
                   <button
                     key={cell.date}
                     type="button"
-                    disabled={cell.disabled}
+                    disabled={cell.disabled || selectingDate === cell.date}
                     title={cell.reason}
                     className={`${styles.optionPickerDay} ${cell.disabled ? styles.optionPickerDayDisabled : ''}`}
-                    onClick={() => {
-                      onSelect({ date: cell.date, hebrewDate: cell.hebrewDate });
-                      onClose();
-                    }}
+                    onClick={() => handleCalendarSelect(cell)}
                   >
-                    <span className={styles.optionPickerDayNum}>{new Date(cell.date + 'T12:00:00').getDate()}</span>
+                    <span className={styles.optionPickerDayNum}>
+                      {selectingDate === cell.date ? '…' : new Date(cell.date + 'T12:00:00').getDate()}
+                    </span>
                     {cell.hebrewDate && <span className={styles.optionPickerDayHeb}>{cell.hebrewDate}</span>}
                   </button>
                 ) : (
