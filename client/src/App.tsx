@@ -74,6 +74,7 @@ function App() {
             ======================================= */}
         <Route path="/" element={<ProtectedRoute><CalendarWrapper /></ProtectedRoute>} />
         <Route path="/booking" element={<ProtectedRoute><AppLayout viewportFill><BookingForm /></AppLayout></ProtectedRoute>} />
+        <Route path="/booking/close-option/:optionId" element={<ProtectedRoute><AppLayout viewportFill><BookingForm /></AppLayout></ProtectedRoute>} />
         <Route path="/booking/edit/:id" element={<ProtectedRoute><AppLayout viewportFill><BookingForm /></AppLayout></ProtectedRoute>} />
         <Route path="/options-manager" element={<ProtectedRoute><PageShell><OptionsManager /></PageShell></ProtectedRoute>} />
         <Route path="/bookings-manager" element={<ProtectedRoute><PageShell><BookingsManager /></PageShell></ProtectedRoute>} />

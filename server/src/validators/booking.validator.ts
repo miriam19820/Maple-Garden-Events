@@ -14,6 +14,8 @@ const optionalNumber = z.preprocess(
 
 export const createBookingSchema = z.object({
   body: z.object({
+    isOption: z.boolean().optional(),
+    createdBy: z.string().optional(),
     clientAFullName: z.string({ message: "שם לקוח הוא חובה" }).min(2, "שם הלקוח חייב להכיל לפחות 2 תווים"),
     clientAPhone: z.string({ message: "טלפון הוא חובה" }).min(9, "מספר טלפון לא תקין"),
 
@@ -26,17 +28,47 @@ export const createBookingSchema = z.object({
     clientAEmail: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal('')),
     clientBFullName: z.string().optional(),
 
-    timeOfDay: z.string({ message: "חובה לבחור שעת אירוע" }).min(1, "חובה לבחור שעת אירוע"),
+    timeOfDay: z.string().optional(),
     eventType: z.string({ message: "חובה לבחור סוג אירוע" }).min(1, "חובה לבחור סוג אירוע"),
 
     allSelectedDates: z.array(z.any()).optional(),
     calendarDateId: z.string().optional(),
   })
-    .refine((data) => data.allSelectedDates?.length || data.calendarDateId, {
-      message: "חובה לבחור לפחות תאריך אחד לאירוע",
-      path: ["allSelectedDates"],
-    })
     .superRefine((data, ctx) => {
+      if (data.isOption) {
+        if (!data.clientAEmail?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "אימייל הוא חובה",
+            path: ["clientAEmail"],
+          });
+        }
+        if (!data.createdBy?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "חובה לבחור מי סגר את האופציה",
+            path: ["createdBy"],
+          });
+        }
+        return;
+      }
+
+      if (!data.timeOfDay?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "חובה לבחור שעת אירוע",
+          path: ["timeOfDay"],
+        });
+      }
+
+      if (!data.allSelectedDates?.length && !data.calendarDateId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "חובה לבחור לפחות תאריך אחד לאירוע",
+          path: ["allSelectedDates"],
+        });
+      }
+
       if (isHallOnlyBooking(data)) {
         const price = Number(data.hallRentalPrice);
         if (!Number.isFinite(price) || price <= 0) {

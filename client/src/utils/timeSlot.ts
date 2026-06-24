@@ -132,6 +132,14 @@ export function formatAvailableSlotsLabelForDate(
     .join(' · ');
 }
 
+export function hasOptionOnDay(day: {
+  status?: string;
+  bookings?: { isOption?: boolean }[];
+}): boolean {
+  if (day.status === 'OPTION') return true;
+  return (day.bookings ?? []).some((b) => b.isOption === true);
+}
+
 export function canAddMoreEvents(bookings: { timeOfDay?: string | null }[]): boolean {
   return bookings.length < 3 && getAvailableSlots(bookings).length > 0;
 }

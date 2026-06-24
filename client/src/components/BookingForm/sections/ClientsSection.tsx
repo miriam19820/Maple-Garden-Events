@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const ClientsSection = ({ formData, handleChange, errors, isWedding, styles }: any) => {
+const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption, styles }: any) => {
   const [activeEmailField, setActiveEmailField] = useState<string | null>(null);
   const emailSuffixes = ['@gmail.com', '@hotmail.com', '@yahoo.com', '@walla.co.il'];
 
@@ -39,8 +39,8 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, styles }: a
             </div>
           </div>
           <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
-            <label>אימייל</label>
-            <input type="email" name="clientAEmail" value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} dir="ltr" style={{ textAlign: 'right' }} className={styles.input} autoComplete="off" />
+            <label>אימייל{isOption ? ' *' : ''}</label>
+            <input type="email" name="clientAEmail" required={isOption} value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} dir="ltr" style={{ textAlign: 'right' }} className={styles.input} autoComplete="off" />
             {activeEmailField === 'clientAEmail' && formData.clientAEmail.includes('@') && (
               <ul className={styles.emailSuggestions}>
                 {emailSuffixes.map(s => <li key={s} onClick={() => handleEmailSelect('clientAEmail', s)} dir="ltr">{formData.clientAEmail.split('@')[0]}{s}</li>)}
@@ -60,7 +60,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, styles }: a
             <div className={styles.inputRow}>
                 <div className={styles.inputGroup}>
                   <label>שם מלא</label>
-                  <input type="text" name="clientBFullName" required={isWedding} value={formData.clientBFullName} onChange={handleChange} className={`${styles.input} ${errors?.clientBFullName ? styles.inputError : ''}`} />
+                  <input type="text" name="clientBFullName" required={isWedding && !isOption} value={formData.clientBFullName} onChange={handleChange} className={`${styles.input} ${errors?.clientBFullName ? styles.inputError : ''}`} />
                 </div>
                 <div className={styles.inputGroup}>
                   <label>תעודת זהות</label>
@@ -70,7 +70,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, styles }: a
               <div className={styles.inputRow}>
                 <div className={styles.inputGroup}>
                   <label>טלפון 1 *</label>
-                  <input type="tel" name="clientBPhone" required={isWedding} value={formData.clientBPhone} onChange={handleChange} className={`${styles.input} ${errors?.clientBPhone ? styles.inputError : ''}`} />
+                  <input type="tel" name="clientBPhone" required={isWedding && !isOption} value={formData.clientBPhone} onChange={handleChange} className={`${styles.input} ${errors?.clientBPhone ? styles.inputError : ''}`} />
                 </div>
                 <div className={styles.inputGroup}>
                   <label>טלפון 2</label>

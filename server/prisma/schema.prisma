@@ -19,6 +19,7 @@ model Booking {
   clientBEmail        String?
   clientBAddress      String?
   calendarDateId      String
+  timeSlot            String?
   eventType           String
   timeOfDay           String
   guestCount          Int
@@ -58,6 +59,8 @@ model Booking {
   clientSignatureUrl  String?
   depositCheckUrl     String?
   depositCheckDetails Json?
+
+  @@unique([calendarDateId, timeSlot])
 }
 
 model EventCheckIn {

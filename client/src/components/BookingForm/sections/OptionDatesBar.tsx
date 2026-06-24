@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../../services/api';
+import { getBookableSlotsForDate } from '../../../utils/timeSlot';
 import styles from '../BookingForm.module.css';
 
 export type OptionDateItem = { date: string; hebrewDate?: string };
@@ -62,8 +63,9 @@ async function resolveOptionDate(
     );
     const data = await res.json();
     const day = data?.[0];
-    if (day?.bookings?.length) {
-      return { ok: false, error: 'התאריך תפוס — יש כבר אירוע.' };
+    const bookings = day?.bookings ?? [];
+    if (bookings.length > 0 && getBookableSlotsForDate(date, bookings).length === 0) {
+      return { ok: false, error: 'אין משבצות פנויות בתאריך זה.' };
     }
     if (day?.status === 'BLOCKED' || day?.status === 'FORBIDDEN') {
       return { ok: false, error: 'התאריך חסום בלוח.' };
@@ -138,13 +140,15 @@ export const OptionDatePickerModal = ({
     const date = formatDateLocal(new Date(year, month, day));
     const srv = serverMap.get(date);
     const status = srv?.status ?? 'AVAILABLE';
-    const hasBookings = (srv?.bookings?.length ?? 0) > 0;
+    const bookings = srv?.bookings ?? [];
+    const hasBookableSlots = getBookableSlotsForDate(date, bookings).length > 0;
+    const noFreeSlots = bookings.length > 0 && !hasBookableSlots;
     const disabled =
       date < todayStr ||
       excludeDates.includes(date) ||
       status === 'BLOCKED' ||
       status === 'FORBIDDEN' ||
-      hasBookings;
+      noFreeSlots;
     cells.push({
       date,
       hebrewDate: srv?.hebrewDate ?? '',
@@ -152,8 +156,8 @@ export const OptionDatePickerModal = ({
       reason: disabled
         ? excludeDates.includes(date)
           ? 'כבר נבחר'
-          : hasBookings
-            ? 'תפוס'
+          : noFreeSlots
+            ? 'אין משבצות פנויות'
             : status === 'BLOCKED' || status === 'FORBIDDEN'
               ? 'חסום'
               : 'עבר'

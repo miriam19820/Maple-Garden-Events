@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
 import { socket } from '../../services/socketService';
-import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS } from '../../utils/timeSlot';
+import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS, getTakenSlots, getBookableSlotsForDate, hasOptionOnDay, type TimeSlot } from '../../utils/timeSlot';
 import { isEventLive } from '../../utils/eventStart';
 import liveStyles from '../LiveEvent/LiveEvent.module.css';
 interface DayData {
@@ -155,6 +155,37 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
     if (dayObj) onDateSelect(dayObj);
   };
 
+  const handleOverrideOptionBook = (day: DayData) => {
+    if (!day.id) {
+      alert('לא ניתן לשחרר את האופציה — נסי לרענן את הלוח שנה.');
+      return;
+    }
+    const optionBooking = day.bookings?.find((b: { isOption?: boolean }) => b.isOption) || day.bookings?.[0];
+    const clientName = optionBooking?.clientAFullName || 'לקוח';
+    const isShabbat = new Date(`${day.date}T12:00:00`).getDay() === 6;
+    const bookable = getBookableSlotsForDate(day.date, day.bookings || []);
+    const shabbatNote = isShabbat && bookable.length === 0
+      ? '\n\nשימי לב: בשבת ניתן לקבוע אירוע בערב בלבד.'
+      : '';
+    const confirmed = window.confirm(
+      `קיימת אופציה עבור ${clientName} בתאריך זה.\n\nהאם את בטוחה שברצונך לשחרר את האופציה ולקבוע אירוע אחר?${shabbatNote}`,
+    );
+    if (!confirmed) return;
+
+    const optionSlots = Array.from(getTakenSlots(day.bookings || []));
+    navigate('/booking', {
+      state: {
+        date: day.date,
+        hebrewDate: day.hebrewDate,
+        blockedSlots: (day.blockedSlots || []) as TimeSlot[],
+        takenSlots: optionSlots,
+        overrideOptionDateId: day.id,
+        overrideOptionSlots: optionSlots,
+        overrideOptionClientName: clientName,
+      },
+    });
+  };
+
   return (
     <div className="calendar-page-layout">
       <div className="calendar-container">
@@ -227,7 +258,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   <div className="cell-events-container">
                     {day.bookings.map((b: any, idx: number) => {
                       const baseColor = getSlotColor(b.timeOfDay);
-                      const isOption = day.status === 'OPTION';
+                      const isOption = hasOptionOnDay(day);
                       const isLive =
                         !isOption
                         && day.status === 'BOOKED'
@@ -280,6 +311,22 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
             setSelectedDay(null);
             onDateSelect(dayToBook);
           }}
+          onAddOption={() => {
+            const dayToOption = selectedDay;
+            setSelectedDay(null);
+            navigate('/option', {
+              state: {
+                selectedDates: [{ date: dayToOption.date, hebrewDate: dayToOption.hebrewDate || '' }],
+                takenSlots: Array.from(getTakenSlots(dayToOption.bookings || [])),
+                blockedSlots: (dayToOption.blockedSlots || []) as TimeSlot[],
+              },
+            });
+          }}
+          onOverrideOptionBook={
+            hasOptionOnDay(selectedDay)
+              ? () => handleOverrideOptionBook(selectedDay)
+              : undefined
+          }
         />
       )}
 

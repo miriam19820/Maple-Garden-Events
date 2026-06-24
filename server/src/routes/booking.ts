@@ -10,6 +10,7 @@ import {
   createBooking,
   getAllBookings,
   getBookingById,
+  getRelatedOptionBookings,
   updateBooking,
   releaseOptions,
   bumpOption,
@@ -71,6 +72,7 @@ router.get('/next-code', getNextEventCode);
 // --- ראוטים של הזמנות ---
 router.post('/', requireAuth, validate(createBookingSchema), createBooking);
 router.get('/', getAllBookings);
+router.get('/:id/related-options', getRelatedOptionBookings);
 router.get('/:id', getBookingById);
 router.put('/:id', updateBooking);
 router.post('/release', releaseOptions);

@@ -8,6 +8,7 @@ import {
   formatAvailableSlotsLabelForDate,
   formatTimeOfDayDisplay,
   getSlotColor,
+  hasOptionOnDay,
 } from '../../utils/timeSlot';
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
 import { printContract, openContractPdf } from '../../utils/contractPrint';
@@ -20,29 +21,38 @@ interface EventPopupProps {
   day: any;
   onClose: () => void;
   onAddEvent?: () => void;
+  onAddOption?: () => void;
+  onOverrideOptionBook?: () => void;
 }
 
-export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
+export const EventPopup = ({ day, onClose, onAddEvent, onAddOption, onOverrideOptionBook }: EventPopupProps) => {
   const navigate = useNavigate();
   const [checkInState, setCheckInState] = useState<{ bookingId: string; readOnly: boolean } | null>(null);
   const [, setTick] = useState(0);
   const bookings = day.bookings || [];
-  const isOptionDay = day.status === 'OPTION';
+  const isOptionDay = hasOptionOnDay(day);
   const dateDisplay = day.date.split('-').reverse().join('/');
   const hebrewDate = day.hebrewDate || '';
   const todayStr = new Date().toISOString().split('T')[0];
   const isPast = day.date < todayStr;
   const availableSlotsLabel = formatAvailableSlotsLabelForDate(day.date, bookings);
-  const showAddEvent =
+  const hasFreeSlots =
     !isPast
     && day.status !== 'BLOCKED'
     && day.status !== 'FORBIDDEN'
-    && canAddMoreEventsForDate(day.date, bookings)
-    && !!onAddEvent;
+    && canAddMoreEventsForDate(day.date, bookings);
+  const showAddEvent = hasFreeSlots && !!onAddEvent;
+  const showAddOption = hasFreeSlots && !!onAddOption;
+  const showOverrideOption = isOptionDay && !!onOverrideOptionBook && !hasFreeSlots;
 
   const handleEdit = (bookingId: string) => {
     onClose();
     navigate(`/booking/edit/${bookingId}`);
+  };
+
+  const handleCloseOption = (bookingId: string) => {
+    onClose();
+    navigate(`/booking/close-option/${bookingId}`);
   };
 
   const handleClose = (e: React.MouseEvent) => {
@@ -127,6 +137,15 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                       </span>
                     </div>
                     <div className="event-actions">
+                      {isOptionDay && booking.id && (
+                        <button
+                          type="button"
+                          className="edit-btn finalize-option-btn"
+                          onClick={() => handleCloseOption(booking.id)}
+                        >
+                          סגור כהזמנה
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="edit-btn"
@@ -252,6 +271,15 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
         </div>
 
         <div className="popup-footer">
+          {showOverrideOption && (
+            <button
+              type="button"
+              className="popup-override-btn"
+              onClick={() => { onClose(); onOverrideOptionBook?.(); }}
+            >
+              סגירת אירוע במקום האופציה
+            </button>
+          )}
           {showAddEvent && (
             <button
               type="button"
@@ -259,6 +287,15 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
               onClick={() => { onClose(); onAddEvent?.(); }}
             >
               + אירוע נוסף ({availableSlotsLabel})
+            </button>
+          )}
+          {showAddOption && (
+            <button
+              type="button"
+              className="popup-option-btn"
+              onClick={() => { onClose(); onAddOption?.(); }}
+            >
+              + אופציה ({availableSlotsLabel})
             </button>
           )}
           <button type="button" className="popup-close-btn" onClick={handleClose}>

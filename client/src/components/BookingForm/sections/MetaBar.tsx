@@ -17,9 +17,9 @@ const MetaBar = ({ formData, handleChange, isOption, orderNumber, optionDuration
       </div>
       
       <div className={styles.inputGroup}>
-        <label className={styles.metaLabel}>שם הנציג / סוכן *</label>
+        <label className={styles.metaLabel}>{isOption ? 'מי סגר את האופציה *' : 'שם הנציג / סוכן *'}</label>
         <select name="createdBy" required value={formData.createdBy} onChange={handleChange} className={styles.input}>
-          <option value="">בחרי נציג מהרשימה</option>
+          <option value="">{isOption ? 'בחרי מי סגר את האופציה' : 'בחרי נציג מהרשימה'}</option>
           {representatives.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
       </div>

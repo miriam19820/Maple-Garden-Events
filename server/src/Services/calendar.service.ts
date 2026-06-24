@@ -277,6 +277,7 @@ export const calendarService = {
       data: {
         ...bookingDetails,
         timeOfDay: storedTime,
+        timeSlot: slot,
         eventDate: { connect: { id: dateId } },
         eventCode,
       },

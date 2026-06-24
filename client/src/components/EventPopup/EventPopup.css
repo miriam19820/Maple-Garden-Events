@@ -113,6 +113,40 @@
   background: var(--maple-green-dark);
 }
 
+.popup-option-btn {
+  background: var(--maple-surface);
+  color: var(--maple-green-dark);
+  border: 2px dashed var(--maple-green);
+  border-radius: var(--maple-radius-sm);
+  padding: 10px 20px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--maple-font);
+  transition: background var(--maple-transition);
+}
+
+.popup-option-btn:hover {
+  background: var(--maple-green-light);
+}
+
+.popup-override-btn {
+  background: #b45309;
+  color: #fff;
+  border: none;
+  border-radius: var(--maple-radius-sm);
+  padding: 10px 20px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--maple-font);
+  transition: background var(--maple-transition);
+}
+
+.popup-override-btn:hover {
+  background: #92400e;
+}
+
 .popup-close-btn {
   background: var(--maple-surface);
   color: var(--maple-text-secondary);
