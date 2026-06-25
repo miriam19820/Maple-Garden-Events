@@ -14,6 +14,7 @@ import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
 import { printContract, openContractPdf } from '../../utils/contractPrint';
 import { NotesList } from '../NotesList/NotesList';
 import EventCheckInModal from '../LiveEvent/EventCheckInModal';
+import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
 import liveEventStyles from '../LiveEvent/LiveEvent.module.css';
 import './EventPopup.css';
 
@@ -28,6 +29,7 @@ interface EventPopupProps {
 export const EventPopup = ({ day, onClose, onAddEvent, onAddOption, onOverrideOptionBook }: EventPopupProps) => {
   const navigate = useNavigate();
   const [checkInState, setCheckInState] = useState<{ bookingId: string; readOnly: boolean } | null>(null);
+  const [notifyBooking, setNotifyBooking] = useState<any | null>(null);
   const [, setTick] = useState(0);
   const bookings = day.bookings || [];
   const isOptionDay = hasOptionOnDay(day);
@@ -116,7 +118,8 @@ export const EventPopup = ({ day, onClose, onAddEvent, onAddOption, onOverrideOp
 
               const editable = canEditBooking(day.date);
               const clientNotes = parseNotesBundle(booking.clientComments);
-              const isBooked = !isOptionDay && day.status === 'BOOKED';
+              const isOptionBooking = booking.isOption === true;
+              const isBooked = !isOptionBooking;
               const showCheckIn = isBooked && canViewCheckIn(day.date, booking, booking.eventForm);
               const checkInEditable = showCheckIn && canEditCheckIn(day.date, booking, booking.eventForm);
 
@@ -132,12 +135,21 @@ export const EventPopup = ({ day, onClose, onAddEvent, onAddOption, onOverrideOp
                         {booking.eventCode && <span className="event-code-badge">#{booking.eventCode} · </span>}
                         {booking.eventType} — {formatTimeOfDayDisplay(booking.timeOfDay)}
                       </h3>
-                      <span className={`status-badge ${isOptionDay ? 'option' : 'booked'}`}>
-                        {isOptionDay ? 'אופציה' : 'הזמנה סגורה'}
+                      <span className={`status-badge ${isOptionBooking ? 'option' : 'booked'}`}>
+                        {isOptionBooking ? 'אופציה' : 'הזמנה סגורה'}
                       </span>
                     </div>
                     <div className="event-actions">
-                      {isOptionDay && booking.id && (
+                      {isOptionBooking && booking.id && (
+                        <button
+                          type="button"
+                          className="edit-btn notify-option-btn"
+                          onClick={() => setNotifyBooking(booking)}
+                        >
+                          הקפץ הודעה ללקוח
+                        </button>
+                      )}
+                      {isOptionBooking && booking.id && (
                         <button
                           type="button"
                           className="edit-btn finalize-option-btn"
@@ -310,6 +322,13 @@ export const EventPopup = ({ day, onClose, onAddEvent, onAddOption, onOverrideOp
         dateDisplay={dateDisplayHe}
         readOnly={checkInState.readOnly}
         onClose={() => setCheckInState(null)}
+      />
+    )}
+    {notifyBooking && (
+      <NotifyOptionModal
+        booking={notifyBooking}
+        eventDateStr={day.date}
+        onClose={() => setNotifyBooking(null)}
       />
     )}
     </>,

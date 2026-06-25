@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { sendBumpEmail } from '../utils/mailer';
-import { sendBumpWhatsApp } from '../utils/whatsapp';
+import { sendBumpEmail, sendOptionInterestEmail } from '../utils/mailer';
+import { sendBumpWhatsApp, sendOptionInterestWhatsApp } from '../utils/whatsapp';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
@@ -278,7 +278,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       }
 
       const timeString = formatStoredTimeOfDay(slot, data.startTime, data.endTime);
-      const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT');
+      const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT', tx);
 
       const newBooking = await tx.booking.create({
         data: {
@@ -936,4 +936,84 @@ export const bumpOption = catchAsync(async (req: Request, res: Response) => {
   }
 
   res.status(200).json({ success: true, message: 'הדד-ליין קוצר.', newDeadline });
+});
+
+export const notifyOptionInterest = catchAsync(async (req: Request, res: Response) => {
+  const { bookingId, message } = req.body as { bookingId?: string; message?: string };
+
+  if (!bookingId) {
+    return res.status(400).json({ success: false, message: 'חסר מזהה הזמנה.' });
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { eventDate: true },
+  });
+
+  if (!booking || !booking.isOption) {
+    return res.status(400).json({ success: false, message: 'ההזמנה אינה אופציה פעילה.' });
+  }
+
+  if (!booking.eventDate) {
+    return res.status(400).json({ success: false, message: 'לא נמצא תאריך מקושר להזמנה.' });
+  }
+
+  const eventDateStr = booking.eventDate.date.toString();
+  const skippedReasons: string[] = [];
+  let emailSent = false;
+  let whatsappSent = false;
+  let whatsappSimulated = false;
+
+  if (booking.clientAEmail) {
+    emailSent = await sendOptionInterestEmail(
+      booking.clientAEmail,
+      booking.clientAFullName,
+      eventDateStr,
+      message,
+    );
+    if (!emailSent) {
+      skippedReasons.push('שליחת המייל נכשלה');
+    }
+  } else {
+    skippedReasons.push('לא הוזן אימייל ללקוח');
+  }
+
+  if (booking.clientAPhone) {
+    const phone = booking.clientAPhone.split(' | ')[0].trim();
+    const waResult = await sendOptionInterestWhatsApp(
+      phone,
+      booking.clientAFullName,
+      eventDateStr,
+      message,
+    );
+    whatsappSent = waResult.sent;
+    whatsappSimulated = waResult.simulated;
+
+    if (waResult.hasWhatsApp === false) {
+      skippedReasons.push('למספר הטלפון אין וואטסאפ');
+    } else if (waResult.simulated) {
+      skippedReasons.push('וואטסאפ: לא מוגדר (לא נשלח בפועל)');
+    } else if (!waResult.sent) {
+      skippedReasons.push('שליחת הוואטסאפ נכשלה');
+    }
+  } else {
+    skippedReasons.push('לא הוזן טלפון ללקוח');
+  }
+
+  if (!emailSent && !whatsappSent) {
+    return res.status(400).json({
+      success: false,
+      message: 'לא ניתן לשלוח — חסרים פרטי קשר או השליחה נכשלה.',
+      skippedReasons,
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'ההודעה נשלחה בהצלחה.',
+    emailSent,
+    whatsappSent,
+    whatsappSimulated,
+    skippedReasons,
+  });
 });

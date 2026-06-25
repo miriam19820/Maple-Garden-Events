@@ -1,97 +1,97 @@
-# Maple Garden Events — Interview Cheat Sheet (English)
+# Maple Garden Events — דף עזר לראיון (עברית)
 
-Use this as your speaking notes. Practice the **30-second pitch** and **2-minute version** out loud.
+השתמש/י בזה כהערות לדיבור. תרגל/י בקול את **ה-pitch של 30 שניות** ואת **גרסת 2 הדקות**.
 
 ---
 
-## 1. Project Identity
+## 1. זהות הפרויקט
 
-| Field | What to say |
+| שדה | מה לומר |
 |--------|-------------|
-| **Project name** | Maple Garden Events — Event venue management system |
-| **Type** | Full-stack web application (real business use case) |
-| **Your role** | Full-stack developer — frontend, backend, database, and feature delivery end-to-end |
-| **Problem it solves** | Replaces paper/manual workflows for booking events, managing options, contracts, production forms, and live hall check-in |
+| **שם הפרויקט** | Maple Garden Events — מערכת לניהול אולם אירועים |
+| **סוג** | אפליקציית web full-stack (מקרה שימוש עסקי אמיתי) |
+| **התפקיד שלך** | מפתח/ת full-stack — frontend, backend, בסיס נתונים, ומסירת פיצ'רים end-to-end |
+| **הבעיה שהיא פותרת** | מחליפה תהליכי נייר/ידניים בהזמנת אירועים, ניהול אופציות, חוזים, טפסי הפקה, וקבלה באולם בזמן אירוע חי |
 
 ---
 
 ## 2. Elevator Pitch
 
-### 30 seconds
+### 30 שניות
 
-> "I built a full-stack event venue management system for a wedding hall. Managers use it to manage the calendar, create options and bookings, generate digital contracts and PDFs, fill production forms, and capture hall reception details during live events. It's built with **React and TypeScript** on the frontend, **Node.js, Express, and Prisma** on the backend, and **PostgreSQL** for the database."
+> "בניתי מערכת full-stack לניהול אולם אירועים. המנהלים משתמשים בה לניהול לוח שנה, יצירת אופציות והזמנות, הפקת חוזים דיגיטליים ו-PDF, מילוי טפסי הפקה, וקליטת פרטי קבלה באולם בזמן אירוע חי. בצד הלקוח **React ו-TypeScript**, בצד השרת **Node.js, Express ו-Prisma**, ובסיס נתונים **PostgreSQL**."
 
-### 2 minutes (if they say "Tell me more")
+### 2 דקות (אם אומרים "ספר/י לי עוד")
 
-> "The system covers the full event lifecycle: first an **option** is saved on the calendar, then it becomes a **confirmed booking** with pricing, VAT, discounts, and digital signature. Staff use an **event production form** for guest counts, menu, seating, and table layout. On event day, a **hall reception form** opens from the calendar — pre-filled from booking data, editable only during the event, view-only afterward, with a required customer signature.
+> "המערכת מכסה את מחזור החיים המלא של אירוע: קודם נשמרת **אופציה** בלוח השנה, ואז היא הופכת ל**הזמנה מאושרת** עם תמחור, מע"מ, הנחות וחתימה דיגיטלית. הצוות משתמש ב**טופס הפקת אירוע** למספר אורחים, תפריט, חלוקת ישיבה וסידור שולחנות. ביום האירוע, **טופס קבלה באולם** נפתח מלוח השנה — ממולא מראש מנתוני ההזמנה, ניתן לעריכה רק במהלך האירוע, לצפייה בלבד אחריו, עם חתימת לקוח חובה.
 >
-> Technically it's a separated **client–server architecture**: React SPA talking to a REST API, with **JWT + Google OAuth** for admin access, **Socket.io** for real-time calendar updates, and **Puppeteer** for PDF generation. I used **TypeScript** on both sides and **Prisma** for type-safe database access and migrations."
+> מבחינה טכנית זו **ארכיטקטורת client–server** מופרדת: React SPA שמדבר עם REST API, עם **JWT + Google OAuth** לגישת מנהלים, **Socket.io** לעדכוני לוח שנה בזמן אמת, ו-**Puppeteer** להפקת PDF. השתמשתי ב-**TypeScript** בשני הצדדים וב-**Prisma** לגישה type-safe לבסיס הנתונים ול-migrations."
 
 ---
 
-## 3. Tech Stack — Quick Reference
+## 3. Tech Stack — עזר מהיר
 
 ### Frontend
 
 - **React 19** + **TypeScript**
-- **Vite** (build tool & dev server)
-- **React Router** (multi-page navigation)
-- **CSS Modules** (component-scoped styling)
+- **Vite** (כלי build ושרת פיתוח)
+- **React Router** (ניווט בין דפים)
+- **CSS Modules** (עיצוב scoped לרכיב)
 - **Axios** (HTTP client)
-- **Zustand** (client state)
-- **Socket.io Client** (real-time updates)
-- **react-signature-canvas** (digital signatures)
-- **react-webcam** (camera capture, e.g. deposit checks)
-- **Tesseract.js** (OCR for bank check scanning)
-- **Recharts** (charts/reports)
+- **Zustand** (state בצד הלקוח)
+- **Socket.io Client** (עדכונים בזמן אמת)
+- **react-signature-canvas** (חתימות דיגיטליות)
+- **react-webcam** (צילום ממצלמה, למשל צ'קים לפיקדון)
+- **Tesseract.js** (OCR לסריקת צ'קים בנקאיים)
+- **Recharts** (גרפים ודוחות)
 - **Google OAuth** (`@react-oauth/google`)
 
 ### Backend
 
 - **Node.js** + **Express 5** + **TypeScript**
 - **Prisma ORM** + **PostgreSQL**
-- **Zod** (request validation)
-- **JWT** + **Google Auth Library** (authentication)
-- **Helmet** + **express-rate-limit** (security)
+- **Zod** (validation לבקשות)
+- **JWT** + **Google Auth Library** (אימות)
+- **Helmet** + **express-rate-limit** (אבטחה)
 - **Socket.io** (WebSockets)
-- **Puppeteer** (PDF from HTML)
-- **Nodemailer** (email)
-- **Multer** (file uploads)
-- **node-cron** (scheduled jobs)
-- **Hebcal** (Hebrew calendar / business rules)
+- **Puppeteer** (PDF מ-HTML)
+- **Nodemailer** (אימייל)
+- **Multer** (העלאת קבצים)
+- **node-cron** (משימות מתוזמנות)
+- **Hebcal** (לוח שנה עברי / כללי עסק)
 
-### Architecture & Tools
+### ארכיטקטורה וכלים
 
-- **REST API** under `/api/*`
-- **Separate client and server** folders
-- **Environment variables** (`.env`) for secrets
-- **Prisma migrations** for schema changes
-- **Git** for version control
+- **REST API** תחת `/api/*`
+- תיקיות **client ו-server** נפרדות
+- **משתני סביבה** (`.env`) לסודות
+- **Prisma migrations** לשינויי schema
+- **Git** לניהול גרסאות
 
 ---
 
-## 4. Main Features (What You Built)
+## 4. פיצ'רים עיקריים (מה שבנית)
 
-Say these as **business features**, not only tech:
+תגיד/י את אלה כ**פיצ'רים עסקיים**, לא רק טכנולוגיה:
 
-| Feature | One-line explanation |
+| פיצ'ר | הסבר בשורה אחת |
 |---------|----------------------|
-| **Calendar** | Visual calendar for options and booked events, time slots, live updates |
-| **Option & booking flow** | Option → confirmed event with pricing, extras, VAT, payment terms |
-| **Digital contract** | Client signature + printable/downloadable PDF contract |
-| **Event production form** | Guest count, menu, seating split, entertainers, table layout editor |
-| **Hall reception form (Check-in)** | Opens on event day from calendar; auto-fill; signature required; read-only after event |
-| **Bookings manager** | Search, view, edit existing bookings |
-| **Options manager** | Manage open options |
-| **Feedback system** | Customer feedback collection |
-| **Admin auth** | Google login + allowlist of authorized emails |
-| **PDF generation** | Contracts and event detail documents |
-| **OCR for checks** | Scan deposit checks from Israeli banks |
-| **Navigation UX** | Global back button, consistent header, modal close patterns |
+| **Calendar** | לוח שנה ויזואלי לאופציות ואירועים מוזמנים, חלונות זמן, עדכונים חיים |
+| **Option & booking flow** | אופציה → אירוע מאושר עם תמחור, תוספות, מע"מ ותנאי תשלום |
+| **Digital contract** | חתימת לקוח + חוזה PDF להדפסה/הורדה |
+| **Event production form** | מספר אורחים, תפריט, חלוקת ישיבה, מביאי כיף, עורך סידור שולחנות |
+| **Hall reception form (Check-in)** | נפתח ביום האירוע מלוח השנה; מילוי אוטומטי; חתימה חובה; read-only אחרי האירוע |
+| **Bookings manager** | חיפוש, צפייה ועריכה של הזמנות קיימות |
+| **Options manager** | ניהול אופציות פתוחות |
+| **Feedback system** | איסוף משוב מלקוחות |
+| **Admin auth** | התחברות Google + allowlist של אימיילים מורשים |
+| **PDF generation** | חוזים ומסמכי פרטי אירוע |
+| **OCR for checks** | סריקת צ'קי פיקדון מבנקים ישראליים |
+| **Navigation UX** | כפתור חזרה גלובלי, header עקבי, דפוסי סגירת modal |
 
 ---
 
-## 5. Architecture (Simple Diagram to Explain)
+## 5. ארכיטקטורה (דיאגרמה פשוטה להסבר)
 
 ```
 Browser (React + TypeScript)
@@ -101,160 +101,160 @@ Server (Express + TypeScript)
 PostgreSQL Database
 ```
 
-**One sentence:**
+**משפט אחד:**
 
-> "The React client calls REST endpoints on Express; Prisma maps models like Booking, EventForm, and EventCheckIn to PostgreSQL; Socket.io pushes calendar changes without refresh."
-
----
-
-## 6. Database / Data Model (If They Ask)
-
-Main entities you can mention:
-
-- **Booking** — clients, date, guest count, pricing, status, signatures
-- **EventForm** — production details (time, menu, seating, entertainers)
-- **EventCheckIn** — live hall reception data linked to booking
-- **CalendarDate** — dates on the calendar with linked bookings
-- **AuthorizedEmail** — who can log in as manager
-
-**Sample line:**
-
-> "I designed relational models with Prisma — for example, one Booking has one optional EventForm and one optional EventCheckIn, with foreign keys and migrations when adding fields like minimumGuestCount."
+> "ה-client ב-React קורא ל-REST endpoints ב-Express; Prisma ממפה מודלים כמו Booking, EventForm ו-EventCheckIn ל-PostgreSQL; Socket.io דוחף שינויים בלוח השנה בלי refresh."
 
 ---
 
-## 7. Technical Highlights (Impressive Points)
+## 6. בסיס נתונים / מודל נתונים (אם שואלים)
 
-Pick 2–3 you're comfortable explaining deeply:
+ישויות עיקריות שאפשר להזכיר:
 
-1. **End-to-end feature delivery** — UI + API + DB + PDF (e.g. minimum portions field)
-2. **Time-based business logic** — `eventStart` utility: when check-in is viewable vs editable
-3. **Security** — OAuth verification server-side, JWT, rate limiting, Helmet
+- **Booking** — לקוחות, תאריך, מספר אורחים, תמחור, סטטוס, חתימות
+- **EventForm** — פרטי הפקה (שעה, תפריט, ישיבה, מביאי כיף)
+- **EventCheckIn** — נתוני קבלה באולם בזמן אמת, מקושרים להזמנה
+- **CalendarDate** — תאריכים בלוח השנה עם הזמנות מקושרות
+- **AuthorizedEmail** — מי יכול להתחבר כמנהל
+
+**משפט לדוגמה:**
+
+> "תכננתי מודלים relational עם Prisma — למשל, ל-Booking אחד יש EventForm אופציונלי אחד ו-EventCheckIn אופציונלי אחד, עם foreign keys ו-migrations כשמוסיפים שדות כמו minimumGuestCount."
+
+---
+
+## 7. נקודות טכניות מרשימות
+
+בחר/י 2–3 שאת/ה מרגיש/ה בנוח להסביר לעומק:
+
+1. **מסירת פיצ'ר end-to-end** — UI + API + DB + PDF (למשל שדה minimum portions)
+2. **לוגיקה עסקית מבוססת זמן** — utility של `eventStart`: מתי check-in ניתן לצפייה לעומת עריכה
+3. **אבטחה** — אימות OAuth בצד השרת, JWT, rate limiting, Helmet
 4. **PDF pipeline** — HTML template → Puppeteer → PDF buffer → download/email
-5. **Real-time UX** — Socket.io for calendar sync
-6. **Validation** — Zod on server, form validation on client
-7. **Digital signatures** — canvas capture stored and validated before save
+5. **Real-time UX** — Socket.io לסנכרון לוח שנה
+6. **Validation** — Zod בשרת, validation בטפסים בלקוח
+7. **חתימות דיגיטליות** — capture ב-canvas, שמירה ו-validation לפני save
 
 ---
 
-## 8. Challenges & How You Solved Them (STAR Format)
+## 8. אתגרים ואיך פתרת אותם (פורמט STAR)
 
-### Example 1 — White screen / CSS import
+### דוגמה 1 — מסך לבן / import של CSS
 
-- **Situation:** App crashed with blank screen after adding check-in modal
-- **Task:** Find root cause and fix without breaking other modules
-- **Action:** Traced Vite error — regular `.css` imported as default module; moved styles to `.module.css` and fixed imports
-- **Result:** App loads; learned Vite CSS module rules
+- **Situation:** האפליקציה קרסה עם מסך ריק אחרי הוספת modal של check-in
+- **Task:** למצוא את שורש הבעיה ולתקן בלי לשבור מודולים אחרים
+- **Action:** עקבתי אחרי שגיאת Vite — קובץ `.css` רגיל יובא כ-default module; העברתי styles ל-`.module.css` ותיקנתי imports
+- **Result:** האפליקציה נטענת; למדתי את כללי CSS modules של Vite
 
-### Example 2 — Check-in only during event
+### דוגמה 2 — Check-in רק במהלך האירוע
 
-- **Situation:** Button appeared before event start; needed view after event but edit only during
-- **Task:** Implement correct time windows on client and server
-- **Action:** Built `canViewCheckIn` / `canEditCheckIn` using event start/end from booking + production form; enforced save on API with 403
-- **Result:** Correct UX + server-side protection
+- **Situation:** הכפתור הופיע לפני תחילת האירוע; היה צורך בצפייה אחרי האירוע אבל עריכה רק במהלכו
+- **Task:** ליישם חלונות זמן נכונים בלקוח ובשרת
+- **Action:** בניתי `canViewCheckIn` / `canEditCheckIn` לפי תחילת/סיום האירוע מה-booking + טופס ההפקה; אכפתתי save ב-API עם 403
+- **Result:** UX נכון + הגנה בצד השרת
 
-### Example 3 — Prisma generate while server running
+### דוגמה 3 — Prisma generate כשהשרת רץ
 
-- **Situation:** `EPERM` when running `prisma generate`
-- **Task:** Update client after schema change
-- **Action:** Stopped Node process locking DLL, ran generate, restarted server
-- **Result:** Schema synced; understood file locking on Windows
-
----
-
-## 9. Common Interview Questions — Ready Answers
-
-**Q: Why TypeScript?**
-
-> "Large domain with many entities and API contracts. TypeScript catches errors early and makes refactoring safer across client and server."
-
-**Q: Why Prisma over raw SQL?**
-
-> "Type-safe queries, clear relations, and migrations when the schema evolves — e.g. adding EventCheckIn or minimumGuestCount."
-
-**Q: How does authentication work?**
-
-> "Manager logs in with Google. The server verifies the ID token, checks email against an authorized list in the database, then issues a JWT for protected routes."
-
-**Q: How do you generate PDFs?**
-
-> "Server builds HTML from booking data, renders it with Puppeteer, returns a PDF buffer for download or email."
-
-**Q: How is real-time implemented?**
-
-> "Socket.io — when data changes on the server, connected clients refresh calendar state without full page reload."
-
-**Q: How did you handle validation?**
-
-> "Zod schemas on the API layer plus client-side checks before submit — especially for required signature on check-in."
-
-**Q: Did you deploy it?**
-
-> *(Answer honestly)*  
-> "Developed and tested locally / [add if true: connected to cloud PostgreSQL]. Architecture is production-ready: env-based config, security middleware, separated client and server."
-
-**Q: What would you improve next?**
-
-> "Automated tests (API + critical flows), CI/CD pipeline, stronger E2E tests for booking and check-in, and role-based permissions if multiple staff levels are needed."
+- **Situation:** `EPERM` בהרצת `prisma generate`
+- **Task:** לעדכן את ה-client אחרי שינוי schema
+- **Action:** עצרתי את תהליך Node שנעל את ה-DLL, הרצתי generate, הפעלתי מחדש את השרת
+- **Result:** Schema מסונכרן; הבנתי file locking ב-Windows
 
 ---
 
-## 10. What NOT to Overclaim
+## 9. שאלות נפוצות בראיון — תשובות מוכנות
 
-| Say | Avoid |
+**ש: למה TypeScript?**
+
+> "דומיין גדול עם הרבה entities וחוזי API. TypeScript תופס שגיאות מוקדם ועושה refactoring בטוח יותר בין client ל-server."
+
+**ש: למה Prisma ולא raw SQL?**
+
+> "שאילתות type-safe, relations ברורים, ו-migrations כשה-schema מתפתח — למשל הוספת EventCheckIn או minimumGuestCount."
+
+**ש: איך עובד האימות?**
+
+> "המנהל מתחבר עם Google. השרת מאמת את ה-ID token, בודק את האימייל מול רשימת מורשים בבסיס הנתונים, ואז מנפיק JWT ל-routes מוגנים."
+
+**ש: איך מייצרים PDF?**
+
+> "השרת בונה HTML מנתוני ההזמנה, מרנדר עם Puppeteer, ומחזיר PDF buffer להורדה או אימייל."
+
+**ש: איך מיושם real-time?**
+
+> "Socket.io — כשהנתונים משתנים בשרת, clients מחוברים מרעננים את state של לוח השנה בלי reload מלא של הדף."
+
+**ש: איך טיפלת ב-validation?**
+
+> "Zod schemas בשכבת ה-API plus בדיקות בצד הלקוח לפני submit — במיוחד לחתימה חובה ב-check-in."
+
+**ש: פרסת את זה?**
+
+> *(ענה/י בכנות)*  
+> "פיתחתי ובדקתי locally / [הוסף/י אם נכון: מחובר ל-PostgreSQL בענן]. הארכיטקטורה production-ready: config מבוסס env, middleware אבטחה, client ו-server מופרדים."
+
+**ש: מה היית משפר/ה בהמשך?**
+
+> "בדיקות אוטומטיות (API + flows קריטיים), CI/CD pipeline, E2E tests חזקים יותר להזמנה ו-check-in, ו-role-based permissions אם צריך רמות צוות שונות."
+
+---
+
+## 10. מה לא להגזים
+
+| תגיד/י | תימנע/י |
 |-----|--------|
-| "Full-stack TypeScript project with real domain logic" | "I'm expert in everything listed" |
-| "I built features end-to-end with AI-assisted development" (if true) | "I wrote every line from scratch with no help" |
-| "Dev environment; ready for production hardening" | "Already serving thousands of users" (unless true) |
+| "פרויקט full-stack TypeScript עם לוגיקת דומיין אמיתית" | "אני expert בכל מה שרשום" |
+| "בניתי פיצ'רים end-to-end עם פיתוח מסייע AI" (אם נכון) | "כתבתי כל שורה מאפס בלי עזרה" |
+| "סביבת dev; מוכן ל-production hardening" | "כבר משרת אלפי משתמשים" (אלא אם זה נכון) |
 
 ---
 
-## 11. Closing Line
+## 11. משפט סיום
 
-> "This project shows I can take a real business problem, model it in a relational database, build a usable React frontend, secure REST APIs, and deliver features like PDFs, OAuth, and time-based workflows — which maps well to production CRUD and internal tools work."
+> "הפרויקט הזה מראה שאני יכול/ה לקחת בעיה עסקית אמיתית, לייצג אותה במודל relational בבסיס הנתונים, לבנות frontend React שמיש, לאבטח REST APIs, ולמסור פיצ'רים כמו PDF, OAuth ו-workflows מבוססי זמן — שמתאים היטב לעבודת CRUD ב-production וכלים פנימיים."
 
 ---
 
-## 12. One-Page Bullet List (Print This)
+## 12. רשימת bullets בעמוד אחד (להדפסה)
 
-**Project:** Event venue management — calendar, bookings, contracts, production, live check-in
+**פרויקט:** ניהול אולם אירועים — לוח שנה, הזמנות, חוזים, הפקה, check-in חי
 
 **Stack:** React · TypeScript · Vite · Node · Express · Prisma · PostgreSQL · Socket.io · Puppeteer · JWT · Google OAuth · Zod
 
-**Architecture:** SPA + REST API + relational DB
+**ארכיטקטורה:** SPA + REST API + relational DB
 
-**Highlights:** Digital contracts & PDF · Live hall form with signatures · OCR checks · Real-time calendar · Auth & rate limiting
+**Highlights:** חוזים דיגיטליים ו-PDF · טופס אולם חי עם חתימות · OCR לצ'קים · לוח שנה בזמן אמת · Auth ו-rate limiting
 
-**My contribution:** Full-stack features from UI → API → DB → PDF
+**התרומה שלי:** פיצ'רים full-stack מ-UI → API → DB → PDF
 
-**Challenge solved:** Time-based check-in logic + type-safe API/DB layer
-
----
-
-## 13. Mock Q&A Script (Practice Out Loud)
-
-**Interviewer:** "Walk me through your project."
-
-**You:** Use the 2-minute pitch from Section 2.
+**אתגר שפתרתי:** לוגיקת check-in מבוססת זמן + שכבת API/DB type-safe
 
 ---
 
-**Interviewer:** "What was the hardest part?"
+## 13. Mock Q&A — תרגל/י בקול
 
-**You:** "Implementing time-based access for the hall check-in form — showing it only after the event starts, allowing edits only during the event, and enforcing that on both the React UI and the Express API so it can't be bypassed."
+**מראיין/ת:** "ספר/י לי על הפרויקט שלך."
 
----
-
-**Interviewer:** "How did you structure the backend?"
-
-**You:** "Express with route modules per domain — bookings, calendar, event forms, check-in, auth. Controllers handle logic, Prisma handles data access, Zod validates input, and middleware handles auth and errors."
+**את/ה:** השתמש/י ב-pitch של 2 דקות מסעיף 2.
 
 ---
 
-**Interviewer:** "Why should we hire you based on this project?"
+**מראיין/ת:** "מה היה החלק הכי קשה?"
 
-**You:** "It proves I can own a feature from database schema to user interface, understand business rules, and ship something a real venue could actually use — not just a tutorial app."
+**את/ה:** "ליישם גישה מבוססת זמן לטופס check-in באולם — להציג אותו רק אחרי שהאירוע מתחיל, לאפשר עריכה רק במהלך האירוע, ולאכוף את זה גם ב-React UI וגם ב-Express API כדי שלא ניתן לעקוף."
 
 ---
 
-*Good luck with your interview!*
+**מראיין/ת:** "איך בנית את ה-backend?"
+
+**את/ה:** "Express עם route modules לפי דומיין — bookings, calendar, event forms, check-in, auth. Controllers מטפלים בלוגיקה, Prisma בגישה לנתונים, Zod ב-validation של input, ו-middleware ב-auth ושגיאות."
+
+---
+
+**מראיין/ת:** "למה כדאי לנו לגייס אותך על בסיס הפרויקט הזה?"
+
+**את/ה:** "זה מוכיח שאני יכול/ה להחזיק בפיצ'ר מ-schema של בסיס הנתונים ועד ממשק משתמש, להבין כללי עסק, ולספק משהו שאולם אמיתי באמת יכול להשתמש בו — לא רק אפליקציית tutorial."
+
+---
+
+*בהצלחה בראיון!*

@@ -261,6 +261,15 @@
   cursor: not-allowed;
 }
 
+.notify-option-btn {
+  background: #d97706;
+  color: #fff;
+}
+
+.notify-option-btn:hover:not(:disabled) {
+  background: #b45309;
+}
+
 .edit-blocked-msg {
   font-size: 0.78rem;
   color: var(--maple-text-muted);

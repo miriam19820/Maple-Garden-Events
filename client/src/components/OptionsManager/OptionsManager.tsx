@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styles from './OptionsManager.module.css';
 import OptionActionModal from '../OptionActionModal/OptionActionModal';
+import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
 import { socket } from '../../services/socketService';
 import { apiFetch } from '../../services/api';
 
@@ -32,6 +33,7 @@ const OptionsManager = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedOption, setSelectedOption] = useState<any>(null);
+  const [notifyOption, setNotifyOption] = useState<any>(null);
 
   const fetchOptions = async () => {
     try {
@@ -121,6 +123,12 @@ const OptionsManager = () => {
                     <p className={styles.expiryText}>פג תוקף ב: {expiresAtStr}</p>
                   </div>
                   <div className={styles.actions} onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => setNotifyOption(option)}
+                      className={`${styles.btn} ${styles.notifyBtn}`}
+                    >
+                      שלח הודעת עניין
+                    </button>
                     <button onClick={() => handleBump(option.calendarDateId)} className={`${styles.btn} ${styles.bumpBtn}`}>
                       הקפץ לקוח ⏱️
                     </button>
@@ -137,6 +145,18 @@ const OptionsManager = () => {
           option={selectedOption}
           onClose={() => setSelectedOption(null)}
           onSuccess={() => { setSelectedOption(null); fetchOptions(); }}
+        />
+      )}
+
+      {notifyOption && (
+        <NotifyOptionModal
+          booking={notifyOption}
+          eventDateStr={
+            notifyOption.eventDate?.date
+              ? new Date(notifyOption.eventDate.date).toISOString().split('T')[0]
+              : ''
+          }
+          onClose={() => setNotifyOption(null)}
         />
       )}
     </div>

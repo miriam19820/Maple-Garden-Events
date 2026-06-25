@@ -258,14 +258,14 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   <div className="cell-events-container">
                     {day.bookings.map((b: any, idx: number) => {
                       const baseColor = getSlotColor(b.timeOfDay);
-                      const isOption = hasOptionOnDay(day);
+                      const isOptionBooking = b.isOption === true;
                       const isLive =
-                        !isOption
+                        !isOptionBooking
                         && day.status === 'BOOKED'
                         && isEventLive(day.date, b, b.eventForm);
                       
                       // העיצוב המתוקן שיוצר קונטרסט ברור:
-                      const eventStyle = isOption
+                      const eventStyle = isOptionBooking
                         ? { 
                             backgroundColor: `${baseColor}18`,
                             border: `1.5px dashed ${baseColor}`,

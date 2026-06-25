@@ -1,4 +1,34 @@
+import fs from 'fs';
+import path from 'path';
 import nodemailer from 'nodemailer';
+
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.png');
+
+function optionalLogoAttachment(): NonNullable<nodemailer.SendMailOptions['attachments']> {
+  if (fs.existsSync(LOGO_PATH)) {
+    return [{ filename: 'logo.png', path: LOGO_PATH, cid: 'mapleLogo' }];
+  }
+  return [];
+}
+
+function logoHeaderHtml(): string {
+  if (fs.existsSync(LOGO_PATH)) {
+    return '<img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px;" />';
+  }
+  return '<div style="font-size: 1.5rem; font-weight: bold; color: #d97706;">🍁 גן אירועים מייפל</div>';
+}
+
+function sanitizeMailAttachments(
+  attachments: nodemailer.SendMailOptions['attachments'],
+): nodemailer.SendMailOptions['attachments'] {
+  if (!attachments?.length) return attachments;
+  return attachments.filter((attachment) => {
+    if ('path' in attachment && attachment.path && typeof attachment.path === 'string') {
+      return fs.existsSync(attachment.path);
+    }
+    return true;
+  });
+}
 
 // תשתית להתחברות ל-Gmail
 const transporter = nodemailer.createTransport({
@@ -17,9 +47,14 @@ async function deliverMail(
   mailOptions: nodemailer.SendMailOptions,
   simulationLabel: string
 ): Promise<boolean> {
+  const safeOptions: nodemailer.SendMailOptions = {
+    ...mailOptions,
+    attachments: sanitizeMailAttachments(mailOptions.attachments),
+  };
+
   try {
     if (canSendRealMail()) {
-      await transporter.sendMail(mailOptions);
+      await transporter.sendMail(safeOptions);
       console.log(`✅ ${simulationLabel} → ${mailOptions.to}`);
     } else {
       console.log(`[MAILER SIMULATION] ${simulationLabel} → ${mailOptions.to}`);
@@ -39,7 +74,7 @@ export const sendBumpEmail = async (clientEmail: string, clientName: string, eve
   const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
 
   const mailOptions = {
-    from: '"גן אירועים מייפל" <maple.events.il@gmail.com>',
+    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
     to: clientEmail,
     subject: `עדכון חשוב לגבי התאריך שלך במייפל (${dateStr}) ⏳`,
     html: `
@@ -88,7 +123,7 @@ export const sendBumpEmail = async (clientEmail: string, clientName: string, eve
 // ==========================================
 export const sendSelectionReminderEmail = async (clientEmail: string, clientName: string, missingItems: string[]) => {
   const mailOptions = {
-    from: '"גן אירועים מייפל" <maple.events.il@gmail.com>',
+    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
     to: clientEmail,
     subject: `תזכורת: השלמת פרטים לאירוע הקרוב שלכם במייפל 🍁`,
     html: `
@@ -136,7 +171,7 @@ export const sendSelectionReminderEmail = async (clientEmail: string, clientName
 // ==========================================
 export const sendSecurityCheckReminderEmail = async (clientEmail: string, clientName: string) => {
   const mailOptions = {
-    from: '"גן אירועים מייפל" <maple.events.il@gmail.com>',
+    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
     to: clientEmail,
     subject: `תזכורת: מסירת צ'ק ביטחון לאירוע שלכם במייפל 🍁`,
     html: `
@@ -221,7 +256,7 @@ export const sendFeedbackRequestEmail = async (clientEmail: string, clientName: 
   const name = clientName ? clientName.split(' ')[0] : 'לקוחות יקרים';
   
   const mailOptions = {
-    from: '"גן אירועים מייפל" <maple.events.il@gmail.com>',
+    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
     to: clientEmail,
     subject: `איך היה האירוע שלכם? נשמח לשמוע! 🌟`,
     html: `
@@ -264,4 +299,52 @@ export const sendFeedbackRequestEmail = async (clientEmail: string, clientName: 
     console.error('שגיאה בשליחת מייל משוב:', error);
     return false;
   }
+};
+
+// ==========================================
+// 6. הודעת עניין באופציה (מתענינים בתאריך שלך)
+// ==========================================
+function buildOptionInterestText(clientName: string, eventDate: string, customMessage?: string): string {
+  if (customMessage?.trim()) return customMessage.trim();
+  const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
+  return `שלום ${clientName}, מתענינים בתאריך שלך (${dateStr}) בגן האירועים מייפל. נשמח לשמוע ממך בהקדם.`;
+}
+
+export const sendOptionInterestEmail = async (
+  clientEmail: string,
+  clientName: string,
+  eventDate: string,
+  customMessage?: string,
+) => {
+  const bodyText = buildOptionInterestText(clientName, eventDate, customMessage);
+  const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
+  const escapedBody = bodyText.replace(/\n/g, '<br/>');
+
+  const mailOptions = {
+    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
+    to: clientEmail,
+    subject: `מתענינים בתאריך שלך במייפל (${dateStr}) 🍁`,
+    html: `
+      <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #d97706;">
+          ${logoHeaderHtml()}
+          <h2 style="color: #1f2937; margin: 15px 0 0 0;">מתענינים בתאריך שלך</h2>
+        </div>
+        <div style="padding: 25px;">
+          <p style="font-size: 1.05rem; line-height: 1.6;">${escapedBody}</p>
+          <p style="font-size: 1rem; margin-top: 30px;">
+            <strong>צוות מייפל - גן אירועים בעיר</strong><br/>
+            טלפון: 03-6777772
+          </p>
+        </div>
+        <div style="background-color: #f3f4f6; padding: 15px; text-align: center; color: #6b7280; font-size: 0.85rem;">
+          🤖 הודעה זו נשלחה ממערכת מייפל.<br/>
+          <strong>ניתן להשיב למייל זה בכל שאלה, ונציג יחזור אליכם בהקדם.</strong>
+        </div>
+      </div>
+    `,
+    attachments: optionalLogoAttachment(),
+  };
+
+  return deliverMail(mailOptions, `הודעת עניין באופציה ל-${clientEmail}`);
 };

@@ -14,6 +14,7 @@ import {
   updateBooking,
   releaseOptions,
   bumpOption,
+  notifyOptionInterest,
   finalizeBooking,
   getCancellationStats,
   addEventAddition,
@@ -77,6 +78,7 @@ router.get('/:id', getBookingById);
 router.put('/:id', updateBooking);
 router.post('/release', releaseOptions);
 router.post('/bump', bumpOption);
+router.post('/notify-option-interest', requireAuth, notifyOptionInterest);
 router.post('/finalize', finalizeBooking);
 router.post('/send-greeting', upload.single('attachment'), sendGreeting);
 
