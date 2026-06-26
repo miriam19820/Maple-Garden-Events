@@ -10,9 +10,11 @@ import {
   createBooking,
   getAllBookings,
   getBookingById,
+  getRelatedOptionBookings,
   updateBooking,
   releaseOptions,
   bumpOption,
+  notifyOptionInterest,
   finalizeBooking,
   getCancellationStats,
   addEventAddition,
@@ -74,10 +76,12 @@ router.get('/contract-template', getContractTemplate);
 // --- ראוטים של הזמנות ---
 router.post('/', requireAuth, validate(createBookingSchema), createBooking);
 router.get('/', getAllBookings);
+router.get('/:id/related-options', getRelatedOptionBookings);
 router.get('/:id', getBookingById);
 router.put('/:id', updateBooking);
 router.post('/release', releaseOptions);
 router.post('/bump', bumpOption);
+router.post('/notify-option-interest', requireAuth, notifyOptionInterest);
 router.post('/finalize', finalizeBooking);
 router.post('/send-greeting', upload.single('attachment'), sendGreeting);
 

@@ -62,8 +62,8 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption, s
             </div>
           </div>
           <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
-            <label>אימייל</label>
-            <input type="email" name="clientAEmail" value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} dir="ltr" style={{ textAlign: 'right' }} className={styles.input} autoComplete="off" />
+            <label>אימייל{isOption ? ' *' : ''}</label>
+            <input type="email" name="clientAEmail" required={isOption} value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} dir="ltr" style={{ textAlign: 'right' }} className={styles.input} autoComplete="off" />
             {activeEmailField === 'clientAEmail' && formData.clientAEmail.includes('@') && (
               <ul className={styles.emailSuggestions}>
                 {emailSuffixes.map(s => <li key={s} onClick={() => handleEmailSelect('clientAEmail', s)} dir="ltr">{formData.clientAEmail.split('@')[0]}{s}</li>)}

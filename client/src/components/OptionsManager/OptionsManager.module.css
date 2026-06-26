@@ -87,6 +87,11 @@
   background-color: var(--maple-green);
 }
 
+.notifyBtn {
+  background-color: #d97706;
+  color: #fff;
+}
+
 .releaseBtn {
   background-color: #ef4444;
 }

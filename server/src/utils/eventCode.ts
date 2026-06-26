@@ -1,4 +1,11 @@
+import type { PrismaClient } from '@prisma/client';
 import prisma from '../config/prisma';
+import { neonTransactionOptions } from './dbRetry';
+
+type TransactionClient = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;
 
 const SETTINGS_ID = 'global';
 const PAD_LENGTH = 5;
@@ -76,28 +83,41 @@ export async function initOrderSequence(): Promise<void> {
   });
 }
 
-export async function allocateEventCode(prefix: EventCodePrefix): Promise<string> {
-  const sequence = await prisma.$transaction(async (tx) => {
-    let settings = await tx.systemSettings.findUnique({
-      where: { id: SETTINGS_ID },
-    });
-
-    if (!settings) {
-      settings = await tx.systemSettings.create({
-        data: { id: SETTINGS_ID, nextEventNumber: 0 },
-      });
-    }
-
-    const next = settings.nextEventNumber + 1;
-    await tx.systemSettings.update({
-      where: { id: SETTINGS_ID },
-      data: { nextEventNumber: next },
-    });
-
-    return next;
+async function allocateEventCodeInTx(
+  tx: TransactionClient,
+  prefix: EventCodePrefix
+): Promise<string> {
+  let settings = await tx.systemSettings.findUnique({
+    where: { id: SETTINGS_ID },
   });
 
-  return formatEventCode(prefix, sequence);
+  if (!settings) {
+    settings = await tx.systemSettings.create({
+      data: { id: SETTINGS_ID, nextEventNumber: 0 },
+    });
+  }
+
+  const next = settings.nextEventNumber + 1;
+  await tx.systemSettings.update({
+    where: { id: SETTINGS_ID },
+    data: { nextEventNumber: next },
+  });
+
+  return formatEventCode(prefix, next);
+}
+
+export async function allocateEventCode(
+  prefix: EventCodePrefix,
+  tx?: TransactionClient
+): Promise<string> {
+  if (tx) {
+    return allocateEventCodeInTx(tx, prefix);
+  }
+
+  return prisma.$transaction(
+    (innerTx) => allocateEventCodeInTx(innerTx, prefix),
+    neonTransactionOptions
+  );
 }
 
 export async function peekNextEventCodes(

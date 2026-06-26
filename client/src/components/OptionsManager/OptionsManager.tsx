@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import styles from './OptionsManager.module.css';
 import OptionActionModal from '../OptionActionModal/OptionActionModal';
+import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
 import { socket } from '../../services/socketService';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookingsQuery } from '../../hooks/queries';
@@ -33,6 +34,7 @@ const getHebrewDateString = (dateObj: Date | null) => {
 const OptionsManager = () => {
   const [search, setSearch] = React.useState('');
   const [selectedOption, setSelectedOption] = React.useState<any>(null);
+  const [notifyOption, setNotifyOption] = React.useState<any>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading: loading, refetch } = useBookingsQuery({ status: 'OPTION', limit: 100, page: 1 });
@@ -110,6 +112,13 @@ const OptionsManager = () => {
                     <p className={styles.expiryText}>פג תוקף ב: {expiresAtStr}</p>
                   </div>
                   <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setNotifyOption(option)}
+                      className={`${styles.btn} ${styles.notifyBtn}`}
+                    >
+                      שלח הודעת עניין
+                    </button>
                     <button type="button" onClick={() => handleBump(option.calendarDateId)} className={`${styles.btn} ${styles.bumpBtn}`}>
                       הקפץ לקוח ⏱️
                     </button>
@@ -126,6 +135,18 @@ const OptionsManager = () => {
           option={selectedOption}
           onClose={() => setSelectedOption(null)}
           onSuccess={() => { setSelectedOption(null); refetch(); }}
+        />
+      )}
+
+      {notifyOption && (
+        <NotifyOptionModal
+          booking={notifyOption}
+          eventDateStr={
+            notifyOption.eventDate?.date
+              ? new Date(notifyOption.eventDate.date).toISOString().split('T')[0]
+              : ''
+          }
+          onClose={() => setNotifyOption(null)}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { sendBumpEmail } from '../utils/mailer';
-import { sendBumpWhatsApp } from '../utils/whatsapp';
+import { sendBumpEmail, sendOptionInterestEmail } from '../utils/mailer';
+import { sendBumpWhatsApp, sendOptionInterestWhatsApp } from '../utils/whatsapp';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
@@ -9,17 +9,15 @@ import { getContractText } from '../utils/getContractText';
 import { sendPDFToClient } from '../Services/emailService';
 import { io } from '../server';
 import {
+  normalizeTimeSlot,
   formatStoredTimeOfDay,
+  getTakenSlots,
   SLOT_LABELS,
+  validateSlotOnDate,
   parseDateLocal,
-  getLocalDayBounds,
-  isDateFullyBooked,
+  getBookableSlotsForDate,
   type TimeSlot,
 } from '../utils/timeSlot';
-import {
-  validateSlotAvailability,
-  resolveBookingSlot,
-} from '../utils/bookingDateValidation';
 import {
   allocateEventCode,
   convertOptionCodeToEventCode,
@@ -28,7 +26,6 @@ import {
 } from '../utils/eventCode';
 import { isHallOnlyBooking, HALL_ONLY_EVENT_TYPE } from '../validators/booking.validator';
 import { neonTransactionOptions, withDbRetry } from '../utils/dbRetry';
-import { paginationMeta, parsePagination } from '../utils/pagination';
 
 function canEditBookingDate(eventDate: Date): boolean {
   const today = new Date();
@@ -36,6 +33,40 @@ function canEditBookingDate(eventDate: Date): boolean {
   const eventDay = new Date(eventDate);
   eventDay.setHours(0, 0, 0, 0);
   return today < eventDay;
+}
+
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function releaseOptionDateInTx(tx: TxClient, dateId: string) {
+  await tx.booking.deleteMany({ where: { calendarDateId: dateId } });
+  await tx.eventDate.update({
+    where: { id: dateId },
+    data: {
+      status: 'AVAILABLE',
+      optionExpiresAt: null,
+      lockedBy: null,
+      clientName: null,
+      clientPhone: null,
+      clientEmail: null,
+    },
+  });
+}
+
+function hasOptionBookings(bookings: { isOption?: boolean }[]): boolean {
+  return bookings.some((b) => b.isOption === true);
+}
+
+function slotConflictMessage(
+  slot: TimeSlot,
+  bookings: { isOption?: boolean; timeOfDay?: string | null }[],
+): string {
+  const optionHeld = bookings.some(
+    (b) => b.isOption && normalizeTimeSlot(b.timeOfDay) === slot,
+  );
+  if (optionHeld) {
+    return `משבצת ${SLOT_LABELS[slot]} תפוסה על ידי אופציה. לחצי "סגירת אירוע במקום האופציה" בלוח השנה.`;
+  }
+  return `כבר קיים אירוע ב${SLOT_LABELS[slot]} בתאריך זה.`;
 }
 
 function validateHallRentalPriceInput(data: { eventType?: string; hallRentalPrice?: unknown }): string | null {
@@ -108,12 +139,14 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     return res.status(400).json({ success: false, message: 'לא נבחרו תאריכים לאירוע.' });
   }
 
-  const hallPriceError = validateHallRentalPriceInput(data);
-  if (hallPriceError) {
-    return res.status(400).json({ success: false, message: hallPriceError });
-  }
-
   const isOption = data.isOption === true || datesToProcess.length > 1;
+
+  if (!isOption) {
+    const hallPriceError = validateHallRentalPriceInput(data);
+    if (hallPriceError) {
+      return res.status(400).json({ success: false, message: hallPriceError });
+    }
+  }
   const newStatus = isOption ? 'OPTION' : 'BOOKED';
 
   let expiryDate: Date | null = null;
@@ -132,6 +165,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   const clientBAddressCombined = data.clientBCity ? `${data.clientBCity}, ${data.clientBAddress}` : data.clientBAddress;
 
   const resolvedContractText = data.contractText?.trim() || await getContractText();
+  const overrideOptionDateId: string | undefined = data.overrideOptionDateId;
 
   let createdBookings: any[] = [];
   let eventsToEmit: { dateId: string, status: string }[] = [];
@@ -143,40 +177,78 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
 
     for (const dateItem of datesToProcess) {
       const dateString = typeof dateItem === 'object' && dateItem !== null ? dateItem.date : dateItem;
-      const possibleDate = parseDateLocal(dateString);
+      const possibleDate = new Date(dateString);
       
       if (isNaN(possibleDate.getTime())) continue;
 
-      const { start: dayStart, end: dayEnd } = getLocalDayBounds(possibleDate);
-      const lockKey =
-        possibleDate.getFullYear() * 10000 +
-        (possibleDate.getMonth() + 1) * 100 +
-        possibleDate.getDate();
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
-
       let eventDate = await tx.eventDate.findFirst({
-        where: { date: { gte: dayStart, lte: dayEnd } },
+        where: { date: possibleDate },
         include: { bookings: true },
-        orderBy: { date: 'asc' },
       });
+
+      const optionBookingsOnDate = hasOptionBookings(eventDate?.bookings ?? []);
+      const isOverrideTarget =
+        !isOption
+        && !!overrideOptionDateId
+        && eventDate?.id === overrideOptionDateId
+        && (eventDate.status === 'OPTION' || optionBookingsOnDate);
+
+      if (
+        !isOption
+        && overrideOptionDateId
+        && eventDate?.id === overrideOptionDateId
+        && !optionBookingsOnDate
+        && eventDate.status !== 'OPTION'
+      ) {
+        const err: any = new Error('האופציה כבר שוחררה או הומרה — יש לרענן את הלוח שנה.');
+        err.statusCode = 409;
+        throw err;
+      }
+
+      if (isOverrideTarget && eventDate) {
+        await releaseOptionDateInTx(tx, eventDate.id);
+        eventDate = await tx.eventDate.findUnique({
+          where: { id: eventDate.id },
+          include: { bookings: true },
+        });
+        if (!eventDate) {
+          const err: any = new Error('תאריך האופציה לא נמצא.');
+          err.statusCode = 404;
+          throw err;
+        }
+      }
+
+      const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime)
+        || (isOption ? 'evening' as const : null);
+      if (!slot) {
+        const err: any = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const slotError = validateSlotOnDate(parseDateLocal(possibleDate), slot);
+      if (slotError) {
+        const err: any = new Error(slotError);
+        err.statusCode = 400;
+        throw err;
+      }
 
       if (!eventDate) {
         eventDate = await tx.eventDate.create({
           data: { date: possibleDate, status: newStatus, optionExpiresAt: expiryDate },
           include: { bookings: true },
         });
-      }
-
-      await tx.$executeRaw`SELECT id FROM "EventDate" WHERE id = ${eventDate.id} FOR UPDATE`;
-
-      if (eventDate.status !== 'BOOKED' || newStatus === 'BOOKED') {
+      } else if (!isOverrideTarget) {
+        const stillHasOptions = hasOptionBookings(eventDate.bookings ?? []);
         const updatePayload: Record<string, unknown> = {};
-        if (newStatus === 'BOOKED') {
+        if (newStatus === 'OPTION') {
+          if (eventDate.status !== 'BOOKED') {
+            updatePayload.status = newStatus;
+            updatePayload.optionExpiresAt = expiryDate;
+          }
+        } else if (newStatus === 'BOOKED' && !stillHasOptions) {
           updatePayload.status = 'BOOKED';
           updatePayload.optionExpiresAt = null;
-        } else if (eventDate.status !== 'BOOKED') {
-          updatePayload.status = newStatus;
-          updatePayload.optionExpiresAt = expiryDate;
         }
         if (Object.keys(updatePayload).length > 0) {
           eventDate = await tx.eventDate.update({
@@ -184,62 +256,33 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
             data: updatePayload,
             include: { bookings: true },
           });
-        } else {
-          eventDate = await tx.eventDate.findUniqueOrThrow({
-            where: { id: eventDate.id },
-            include: { bookings: true },
-          });
         }
       }
 
-      if (newStatus === 'BOOKED' && eventDate) {
-        await tx.booking.deleteMany({
-          where: { calendarDateId: eventDate.id, isOption: true },
-        });
-        eventDate = await tx.eventDate.findUniqueOrThrow({
+      const existingBookings = eventDate.bookings || [];
+      const bookableSlots = getBookableSlotsForDate(parseDateLocal(possibleDate), existingBookings);
+      if (!bookableSlots.includes(slot)) {
+        const taken = getTakenSlots(existingBookings);
+        const message = taken.has(slot)
+          ? slotConflictMessage(slot, existingBookings)
+          : (validateSlotOnDate(parseDateLocal(possibleDate), slot) || 'התאריך מלא — אין משבצות זמן פנויות.');
+        const err: any = new Error(message);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (newStatus === 'BOOKED' && eventDate.status !== 'BOOKED') {
+        eventDate = await tx.eventDate.update({
           where: { id: eventDate.id },
+          data: { status: 'BOOKED', optionExpiresAt: null },
           include: { bookings: true },
         });
       }
 
-      const existingBookings = eventDate.bookings || [];
-      if (isDateFullyBooked(possibleDate, existingBookings)) {
-        const err: any = new Error('התאריך מלא — אין משבצות זמן פנויות.');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const slot = resolveBookingSlot(
-        data.timeOfDay,
-        data.startTime,
-        data.endTime,
-        newStatus === 'OPTION'
-      );
-      if (!slot) {
-        const err: any = new Error('יש לבחור משבצת זמן: בוקר, צהריים או ערב.');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const slotAvailabilityError = validateSlotAvailability(
-        parseDateLocal(possibleDate),
-        slot,
-        existingBookings,
-        data.eventType || 'חתונה',
-        { blockShabbatEntirely: newStatus === 'OPTION' }
-      );
-      if (slotAvailabilityError) {
-        const err: any = new Error(slotAvailabilityError);
-        err.statusCode = 400;
-        throw err;
-      }
-
       const timeString = formatStoredTimeOfDay(slot, data.startTime, data.endTime);
-      const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT');
+      const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT', tx);
 
-      let newBooking;
-      try {
-        newBooking = await tx.booking.create({
+      const newBooking = await tx.booking.create({
         data: {
           clientAFullName: data.clientAFullName,
           clientAIdNumber: data.clientAIdNumber,
@@ -256,7 +299,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
             connect: { id: eventDate.id } 
           },
           
-          eventType: data.eventType || 'לא צוין',
+          eventType: data.eventType,
           timeOfDay: timeString,
           timeSlot: slot,
           guestCount: Number(data.guestCount) || 0,
@@ -278,21 +321,13 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           isOption: newStatus === 'OPTION',
           managerComments: data.managerComments || null,
           clientComments: data.clientComments || null,
-          createdBy: data.createdBy || 'לא צוין',
+          createdBy: data.createdBy || (isManager ? "מנהל מערכת" : "נציג מכירות"),
           eventCode,
           depositCheckUrl: data.depositCheckUrl || null,
           depositCheckDetails: data.depositCheckDetails || null,
           contractText: resolvedContractText,
         }
       });
-      } catch (createErr: any) {
-        if (createErr?.code === 'P2002') {
-          const err: any = new Error(`כבר קיים אירוע ב${SLOT_LABELS[slot as TimeSlot]} בתאריך זה.`);
-          err.statusCode = 409;
-          throw err;
-        }
-        throw createErr;
-      }
       createdBookings.push(newBooking);
       
       eventsToEmit.push({ dateId: eventDate.id, status: newStatus });
@@ -324,7 +359,6 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         eventType: savedBooking.eventType,
         timeOfDay: savedBooking.timeOfDay || undefined,
         clientSignatureUrl: data.clientSignature,
-        contractText: savedBooking.contractText,
         eventForm: {} 
       };
 
@@ -365,6 +399,36 @@ export const getBookingById = catchAsync(async (req: Request, res: Response) => 
   res.status(200).json({ success: true, data: booking });
 });
 
+export const getRelatedOptionBookings = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const booking = await prisma.booking.findUnique({
+    where: { id },
+    include: { eventDate: true },
+  });
+
+  if (!booking || !booking.isOption || booking.eventDate?.status !== 'OPTION') {
+    return res.status(404).json({ success: false, message: 'אופציה לא נמצאה.' });
+  }
+
+  const createdAtStart = new Date(booking.createdAt.getTime() - 120_000);
+  const createdAtEnd = new Date(booking.createdAt.getTime() + 120_000);
+
+  const related = await prisma.booking.findMany({
+    where: {
+      clientAFullName: booking.clientAFullName,
+      clientAPhone: booking.clientAPhone,
+      createdBy: booking.createdBy,
+      isOption: true,
+      createdAt: { gte: createdAtStart, lte: createdAtEnd },
+      eventDate: { status: 'OPTION' },
+    },
+    include: { eventDate: true },
+    orderBy: { eventDate: { date: 'asc' } },
+  });
+
+  res.status(200).json({ success: true, data: related });
+});
+
 export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const data = req.body;
@@ -382,12 +446,32 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     return res.status(403).json({ success: false, message: 'לא ניתן לערוך ביום האירוע או לאחריו.' });
   }
 
-  const hallPriceError = validateHallRentalPriceInput({
-    eventType: data.eventType ?? booking.eventType,
-    hallRentalPrice: data.hallRentalPrice ?? (booking as { hallRentalPrice?: number | null }).hallRentalPrice,
-  });
-  if (hallPriceError) {
-    return res.status(400).json({ success: false, message: hallPriceError });
+  if (!booking.isOption && !data.convertFromOption) {
+    const hallPriceError = validateHallRentalPriceInput({
+      eventType: data.eventType ?? booking.eventType,
+      hallRentalPrice: data.hallRentalPrice ?? (booking as { hallRentalPrice?: number | null }).hallRentalPrice,
+    });
+    if (hallPriceError) {
+      return res.status(400).json({ success: false, message: hallPriceError });
+    }
+  }
+
+  if (
+    data.convertFromOption
+    && !booking.isOption
+    && booking.eventDate.status !== 'OPTION'
+  ) {
+    return res.status(400).json({ success: false, message: 'ההזמנה כבר אינה אופציה.' });
+  }
+
+  if (data.convertFromOption) {
+    const hallPriceError = validateHallRentalPriceInput({
+      eventType: data.eventType ?? booking.eventType,
+      hallRentalPrice: data.hallRentalPrice ?? (booking as { hallRentalPrice?: number | null }).hallRentalPrice,
+    });
+    if (hallPriceError) {
+      return res.status(400).json({ success: false, message: hallPriceError });
+    }
   }
 
   const clientAPhoneCombined = data.clientAPhone2
@@ -403,20 +487,22 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     ? `${data.clientBCity}, ${data.clientBAddress}`
     : data.clientBAddress;
 
-  const slot = resolveBookingSlot(data.timeOfDay, data.startTime, data.endTime, booking.isOption);
+  const slot = normalizeTimeSlot(data.timeOfDay, data.startTime, data.endTime);
   if (slot) {
+    const slotError = validateSlotOnDate(parseDateLocal(booking.eventDate.date), slot);
+    if (slotError) {
+      return res.status(400).json({ success: false, message: slotError });
+    }
+
     const siblings = await prisma.booking.findMany({
       where: { calendarDateId: booking.eventDate.id, id: { not: id } },
     });
-    const slotAvailabilityError = validateSlotAvailability(
-      parseDateLocal(booking.eventDate.date),
-      slot,
-      siblings,
-      data.eventType ?? booking.eventType,
-      { blockShabbatEntirely: booking.isOption }
-    );
-    if (slotAvailabilityError) {
-      return res.status(400).json({ success: false, message: slotAvailabilityError });
+    const taken = getTakenSlots(siblings);
+    if (taken.has(slot)) {
+      return res.status(400).json({
+        success: false,
+        message: slotConflictMessage(slot, siblings),
+      });
     }
   }
 
@@ -428,51 +514,91 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
 
   const liveTotal = Number(booking.liveAdditionsTotal) || 0;
   const prices = extractPriceBreakdown(data, liveTotal);
+  const isConverting = data.convertFromOption === true;
+  const finalSignature = data.clientSignature ?? booking.clientSignatureUrl;
+  let convertedEventCode: string | null = null;
+
+  if (isConverting) {
+    convertedEventCode = convertOptionCodeToEventCode(booking.eventCode);
+    if (!convertedEventCode) {
+      convertedEventCode = await allocateEventCode('EVT');
+    }
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
+    const updateData: Record<string, unknown> = {
+      clientAFullName: data.clientAFullName,
+      clientAIdNumber: data.clientAIdNumber,
+      clientAPhone: clientAPhoneCombined,
+      clientAEmail: data.clientAEmail || null,
+      clientAAddress: clientAAddressCombined || null,
+      clientBFullName: data.clientBFullName || null,
+      clientBIdNumber: data.clientBIdNumber || null,
+      clientBPhone: clientBPhoneCombined || null,
+      clientBEmail: data.clientBEmail || null,
+      clientBAddress: clientBAddressCombined || null,
+      eventType: data.eventType,
+      timeOfDay: timeString,
+      ...(slot ? { timeSlot: slot } : {}),
+      guestCount: Number(data.guestCount) || 0,
+      minimumGuestCount: Number(data.minimumGuestCount) || Number(data.guestCount) || 0,
+      finalPricePortion: Number(data.finalPricePortion) || 0,
+      basePrice: prices.basePrice,
+      extrasPrice: prices.extrasPrice,
+      externalExtrasPrice: prices.externalExtrasPrice,
+      liveAdditionsTotal: prices.liveAdditionsTotal,
+      totalPrice: prices.totalPrice,
+      hallRentalPrice: data.hallRentalPrice !== undefined ? Number(data.hallRentalPrice) : (booking as any).hallRentalPrice,
+      hasMusic: data.hasMusic !== undefined ? data.hasMusic : booking.hasMusic,
+      akumApprovalCode: data.akumApprovalCode || null,
+      managerComments: data.managerComments || null,
+      clientComments: data.clientComments || null,
+      createdBy: data.createdBy || booking.createdBy,
+      isContractSigned: data.clientSignature !== undefined
+        ? !!(data.contractSigned && data.clientSignature)
+        : isConverting ? !!finalSignature : booking.isContractSigned,
+      clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
+      depositCheckUrl: data.depositCheckUrl !== undefined ? data.depositCheckUrl || null : (booking as { depositCheckUrl?: string | null }).depositCheckUrl,
+      depositCheckDetails: data.depositCheckDetails !== undefined ? data.depositCheckDetails || null : (booking as { depositCheckDetails?: unknown }).depositCheckDetails,
+      contractText: data.contractText !== undefined ? (data.contractText?.trim() || null) : (booking as { contractText?: string | null }).contractText,
+      updatedBy: 'מערכת',
+    };
+
+    if (isConverting) {
+      updateData.isOption = false;
+      updateData.eventCode = convertedEventCode;
+      updateData.clientSignatureUrl = finalSignature;
+      if (data.advancePaid !== undefined) {
+        const paid = Number(data.advancePaid) || 0;
+        updateData.advancePaid = paid;
+        updateData.paidAmount = paid;
+        updateData.paymentStatus = paid > 0 ? 'PARTIAL' : 'pending';
+      }
+    }
+
     const updatedBooking = await tx.booking.update({
       where: { id },
-      data: {
-        clientAFullName: data.clientAFullName,
-        clientAIdNumber: data.clientAIdNumber,
-        clientAPhone: clientAPhoneCombined,
-        clientAEmail: data.clientAEmail || null,
-        clientAAddress: clientAAddressCombined || null,
-        clientBFullName: data.clientBFullName || null,
-        clientBIdNumber: data.clientBIdNumber || null,
-        clientBPhone: clientBPhoneCombined || null,
-        clientBEmail: data.clientBEmail || null,
-        clientBAddress: clientBAddressCombined || null,
-        eventType: data.eventType,
-        timeOfDay: timeString,
-        ...(slot ? { timeSlot: slot } : {}),
-        guestCount: Number(data.guestCount) || 0,
-        minimumGuestCount: Number(data.minimumGuestCount) || Number(data.guestCount) || 0,
-        finalPricePortion: Number(data.finalPricePortion) || 0,
-        basePrice: prices.basePrice,
-        extrasPrice: prices.extrasPrice,
-        externalExtrasPrice: prices.externalExtrasPrice,
-        liveAdditionsTotal: prices.liveAdditionsTotal,
-        totalPrice: prices.totalPrice,
-        hallRentalPrice: data.hallRentalPrice !== undefined ? Number(data.hallRentalPrice) : (booking as any).hallRentalPrice, // 🔥 התיקון
-        hasMusic: data.hasMusic !== undefined ? data.hasMusic : booking.hasMusic,
-        akumApprovalCode: data.akumApprovalCode || null,
-        managerComments: data.managerComments || null,
-        clientComments: data.clientComments || null,
-        createdBy: data.createdBy || booking.createdBy,
-        isContractSigned: data.clientSignature !== undefined
-          ? !!(data.contractSigned && data.clientSignature)
-          : booking.isContractSigned,
-        clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
-        depositCheckUrl: data.depositCheckUrl !== undefined ? data.depositCheckUrl || null : (booking as { depositCheckUrl?: string | null }).depositCheckUrl,
-        depositCheckDetails: data.depositCheckDetails !== undefined ? data.depositCheckDetails || null : (booking as { depositCheckDetails?: unknown }).depositCheckDetails,
-        contractText: data.contractText !== undefined ? (data.contractText?.trim() || null) : (booking as { contractText?: string | null }).contractText,
-        updatedBy: 'מערכת',
-      },
+      data: updateData,
       include: { eventDate: true },
     });
 
-    if (booking.eventDate.status === 'OPTION' && data.optionDurationHours) {
+    if (isConverting) {
+      await tx.eventDate.update({
+        where: { id: booking.eventDate.id },
+        data: { status: 'BOOKED', optionExpiresAt: null },
+      });
+
+      const releaseDateIds: string[] = Array.isArray(data.releaseDateIds) ? data.releaseDateIds : [];
+      if (releaseDateIds.length > 0) {
+        await tx.eventDate.updateMany({
+          where: { id: { in: releaseDateIds } },
+          data: { status: 'AVAILABLE', optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null },
+        });
+        await tx.booking.deleteMany({
+          where: { calendarDateId: { in: releaseDateIds } },
+        });
+      }
+    } else if (booking.eventDate.status === 'OPTION' && data.optionDurationHours) {
       const expiryDate = new Date();
       expiryDate.setHours(expiryDate.getHours() + Number(data.optionDurationHours));
       await tx.eventDate.update({
@@ -483,6 +609,56 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     
     return updatedBooking;
   });
+
+  if (isConverting) {
+    io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
+    const releaseDateIds: string[] = Array.isArray(data.releaseDateIds) ? data.releaseDateIds : [];
+    releaseDateIds.forEach((dateId: string) => {
+      io.emit('date-updated', { dateId, status: 'AVAILABLE' });
+    });
+
+    if (finalSignature && data.contractSigned) {
+      try {
+        const pdfData = {
+          eventCode: updated.eventCode,
+          isOption: false,
+          clientAFullName: updated.clientAFullName,
+          clientAIdNumber: updated.clientAIdNumber,
+          clientAPhone: updated.clientAPhone || undefined,
+          clientAEmail: updated.clientAEmail || undefined,
+          clientBFullName: updated.clientBFullName || undefined,
+          clientBIdNumber: updated.clientBIdNumber || undefined,
+          clientBPhone: updated.clientBPhone || undefined,
+          clientBEmail: updated.clientBEmail || undefined,
+          eventDate: booking.eventDate.date.toString(),
+          guestCount: updated.guestCount,
+          minimumGuestCount: updated.minimumGuestCount ?? updated.guestCount,
+          eventType: updated.eventType,
+          timeOfDay: updated.timeOfDay || undefined,
+          clientSignatureUrl: finalSignature,
+          eventForm: {},
+        };
+        const contractPdfBuffer = await generateEventFormPDF(pdfData);
+        const clientEmail = updated.clientAEmail || updated.clientBEmail;
+        if (clientEmail) {
+          await sendPDFToClient(
+            clientEmail,
+            updated.clientAFullName,
+            booking.eventDate.date.toString(),
+            contractPdfBuffer,
+          );
+        }
+      } catch (pdfError) {
+        console.error('שגיאה בהפקת או שליחת חוזה ה-PDF:', pdfError);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'האירוע נסגר ונשמר בהצלחה!',
+      data: updated,
+    });
+  }
 
   io.emit('date-updated', { dateId: booking.eventDate.id, status: booking.eventDate.status });
   res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
@@ -684,7 +860,6 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
         eventType: updated.eventType,
         timeOfDay: updated.timeOfDay || undefined,
         clientSignatureUrl: finalSignature,
-        contractText: updated.contractText,
         eventForm: booking.eventForm || {} 
       };
 
@@ -708,46 +883,12 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
   res.status(200).json({ success: true, message: 'האירוע נסגר והחוזה נחתם בהצלחה!', data: updated });
 });
 
-export const getContractTemplate = catchAsync(async (_req: Request, res: Response) => {
-  const contractText = await getContractText();
-  res.status(200).json({ success: true, data: { contractText } });
-});
-
 export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
-  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
-
-  const where: Record<string, unknown> = {};
-  if (status) {
-    where.eventDate = { status };
-  }
-  if (search) {
-    where.OR = [
-      { clientAFullName: { contains: search, mode: 'insensitive' } },
-      { clientAIdNumber: { contains: search } },
-      { clientBFullName: { contains: search, mode: 'insensitive' } },
-      { clientBIdNumber: { contains: search } },
-    ];
-  }
-
-  const [bookings, total] = await Promise.all([
-    prisma.booking.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-      include: { eventDate: true, eventForm: true, additions: true },
-    }),
-    prisma.booking.count({ where }),
-  ]);
-
-  res.status(200).json({
-    success: true,
-    count: bookings.length,
-    data: bookings,
-    pagination: paginationMeta(page, limit, total),
+  const bookings = await prisma.booking.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { eventDate: true, eventForm: true, additions: true } 
   });
+  res.status(200).json({ success: true, count: bookings.length, data: bookings });
 });
 
 export const releaseOptions = catchAsync(async (req: Request, res: Response) => {
@@ -799,4 +940,84 @@ export const bumpOption = catchAsync(async (req: Request, res: Response) => {
   }
 
   res.status(200).json({ success: true, message: 'הדד-ליין קוצר.', newDeadline });
+});
+
+export const notifyOptionInterest = catchAsync(async (req: Request, res: Response) => {
+  const { bookingId, message } = req.body as { bookingId?: string; message?: string };
+
+  if (!bookingId) {
+    return res.status(400).json({ success: false, message: 'חסר מזהה הזמנה.' });
+  }
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { eventDate: true },
+  });
+
+  if (!booking || !booking.isOption) {
+    return res.status(400).json({ success: false, message: 'ההזמנה אינה אופציה פעילה.' });
+  }
+
+  if (!booking.eventDate) {
+    return res.status(400).json({ success: false, message: 'לא נמצא תאריך מקושר להזמנה.' });
+  }
+
+  const eventDateStr = booking.eventDate.date.toString();
+  const skippedReasons: string[] = [];
+  let emailSent = false;
+  let whatsappSent = false;
+  let whatsappSimulated = false;
+
+  if (booking.clientAEmail) {
+    emailSent = await sendOptionInterestEmail(
+      booking.clientAEmail,
+      booking.clientAFullName,
+      eventDateStr,
+      message,
+    );
+    if (!emailSent) {
+      skippedReasons.push('שליחת המייל נכשלה');
+    }
+  } else {
+    skippedReasons.push('לא הוזן אימייל ללקוח');
+  }
+
+  if (booking.clientAPhone) {
+    const phone = booking.clientAPhone.split(' | ')[0].trim();
+    const waResult = await sendOptionInterestWhatsApp(
+      phone,
+      booking.clientAFullName,
+      eventDateStr,
+      message,
+    );
+    whatsappSent = waResult.sent;
+    whatsappSimulated = waResult.simulated;
+
+    if (waResult.hasWhatsApp === false) {
+      skippedReasons.push('למספר הטלפון אין וואטסאפ');
+    } else if (waResult.simulated) {
+      skippedReasons.push('וואטסאפ: לא מוגדר (לא נשלח בפועל)');
+    } else if (!waResult.sent) {
+      skippedReasons.push('שליחת הוואטסאפ נכשלה');
+    }
+  } else {
+    skippedReasons.push('לא הוזן טלפון ללקוח');
+  }
+
+  if (!emailSent && !whatsappSent) {
+    return res.status(400).json({
+      success: false,
+      message: 'לא ניתן לשלוח — חסרים פרטי קשר או השליחה נכשלה.',
+      skippedReasons,
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'ההודעה נשלחה בהצלחה.',
+    emailSent,
+    whatsappSent,
+    whatsappSimulated,
+    skippedReasons,
+  });
 });

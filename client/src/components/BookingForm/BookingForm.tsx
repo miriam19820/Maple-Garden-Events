@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
-import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
+import { type TimeSlot, TIME_SLOTS, SLOT_LABELS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
 import { promptPrintAfterClose } from '../../utils/contractPrint';
@@ -15,6 +15,7 @@ import PaymentAndUpgradesSection from './sections/PaymentAndUpgradesSection';
 import ContractModal from './sections/ContractModal';
 import MetaBar from './sections/MetaBar';
 import OptionDatesBar, { normalizeOptionDate } from './sections/OptionDatesBar';
+import FinalizeOptionDatesBar from './sections/FinalizeOptionDatesBar';
 import { verifyAllOptionDates } from '../../utils/optionDateApi';
 import { NotesList } from '../NotesList/NotesList';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
@@ -144,9 +145,23 @@ function splitFullName(fullName: string): { first: string; last: string } {
 const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id: editId } = useParams<{ id: string }>();
-  const isEditMode = !!editId;
-  const takenSlots: TimeSlot[] = (location.state?.takenSlots as TimeSlot[]) || [];
+  const { id: editId, optionId } = useParams<{ id?: string; optionId?: string }>();
+  const convertFromOption = !!optionId;
+  const activeEditId = optionId || editId;
+  const isEditMode = !!activeEditId;
+  const [overrideCtx] = useState(() => ({
+    dateId: location.state?.overrideOptionDateId as string | undefined,
+    clientName: location.state?.overrideOptionClientName as string | undefined,
+    optionSlots: (location.state?.overrideOptionSlots as TimeSlot[]) || [],
+    rawTakenSlots: (location.state?.takenSlots as TimeSlot[]) || [],
+  }));
+  const overrideOptionDateId = overrideCtx.dateId;
+  const overrideOptionClientName = overrideCtx.clientName;
+  const overrideOptionSlots = overrideCtx.optionSlots;
+  const rawTakenSlots = overrideCtx.rawTakenSlots;
+  const takenSlots: TimeSlot[] = overrideOptionDateId
+    ? rawTakenSlots.filter((slot) => !overrideOptionSlots.includes(slot))
+    : rawTakenSlots;
   const stateBlockedSlots: TimeSlot[] = (location.state?.blockedSlots as TimeSlot[]) || [];
   const primaryDateStr = (() => {
     if (initialDates?.length) {
@@ -163,13 +178,21 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const availableSlots = isEditMode
     ? TIME_SLOTS
     : TIME_SLOTS.filter((slot) => !unavailableSlots.includes(slot));
-  const initialTimeSlot = (isEditMode ? 'evening' : getDefaultTimeSlot(availableSlots) || 'evening') as TimeSlot;
+  const initialTimeSlot = (() => {
+    if (isEditMode) return 'evening';
+    if (overrideOptionDateId && overrideOptionSlots.length > 0) {
+      return getDefaultTimeSlot(overrideOptionSlots) || overrideOptionSlots[0];
+    }
+    return getDefaultTimeSlot(availableSlots) || 'evening';
+  })() as TimeSlot;
   const initialSlotHours = getSlotHours(initialTimeSlot);
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingBooking, setLoadingBooking] = useState(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [relatedOptions, setRelatedOptions] = useState<any[]>([]);
+  const [activeBookingId, setActiveBookingId] = useState(activeEditId || '');
 
   let datesToProcess: any[] = [];
   if (initialDates && initialDates.length > 0) datesToProcess = initialDates;
@@ -180,18 +203,15 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<any[]>(
     datesToProcess.map(normalizeOptionDate)
   );
-  const isOptionMode = forcedIsOption || location.state?.isOption;
+  const isOptionMode = !convertFromOption && (forcedIsOption || location.state?.isOption);
   const [isOption, setIsOption] = useState(isOptionMode);
   const [optionDurationHours, setOptionDurationHours] = useState(48);
   const [orderNumber, setOrderNumber] = useState('');
 
   const [formData, setFormData] = useState({
-    createdBy: '',
-    clientAFirstName: '',
-    clientALastName: '',
-    clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
+    createdBy: '', clientAFirstName: '', clientALastName: '', clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
-    calendarDateId: '', eventType: '', timeOfDay: isOptionMode ? '' : initialTimeSlot, startTime: isOptionMode ? '' : initialSlotHours.start, endTime: isOptionMode ? '' : initialSlotHours.end,
+    calendarDateId: '', eventType: '', timeOfDay: initialTimeSlot, startTime: initialSlotHours.start, endTime: initialSlotHours.end,
     guestCount: '', minimumGuestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: DEFAULT_VAT_TYPE, paymentTerms: '', leadSource: '', clientSignatureUrl: '',
    
     akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
@@ -208,10 +228,10 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [depositMethod, setDepositMethod] = useState('');
   const [checkScanning, setCheckScanning] = useState(false);
   const [contractSigned, setContractSigned] = useState(false);
-  const [contractText, setContractText] = useState('');
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [contractText, setContractText] = useState('');
   const [vatRate, setVatRate] = useState(17);
 
   useEffect(() => {
@@ -224,22 +244,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   }, []);
 
   useEffect(() => {
-    if (isEditMode) return;
-    const loadTemplate = async () => {
-      try {
-        const res = await apiFetch('http://localhost:5000/api/bookings/contract-template');
-        const json = await res.json();
-        if (res.ok && json.success) {
-          setContractText(json.data?.contractText || '');
-        }
-      } catch {
-        // fallback silently
-      }
-    };
-    loadTemplate();
-  }, [isEditMode]);
-
-  useEffect(() => {
     if (selectedDatesDisplay.length > 0) {
       const firstDate = typeof selectedDatesDisplay[0] === 'object' ? selectedDatesDisplay[0].date : selectedDatesDisplay[0];
       setFormData(prev => ({ ...prev, calendarDateId: firstDate || '' }));
@@ -247,7 +251,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   }, [selectedDatesDisplay]);
 
   useEffect(() => {
-    if (isEditMode) return;
+    if (isEditMode && convertFromOption) return;
     const dateCount = Math.max(selectedDatesDisplay.length, 1);
     const prefix = isOption ? 'OPT' : 'EVT';
 
@@ -263,13 +267,68 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       } catch {}
     };
     loadNextCode();
-  }, [isEditMode, isOption, selectedDatesDisplay.length]);
+  }, [isEditMode, convertFromOption, isOption, selectedDatesDisplay.length]);
 
   useEffect(() => {
-    if (!editId) return;
+    if (convertFromOption && activeEditId) {
+      apiFetch('http://localhost:5000/api/bookings/next-code?prefix=EVT&count=1')
+        .then(r => r.json())
+        .then(json => {
+          if (json.success && json.data?.code) setOrderNumber(json.data.code);
+        })
+        .catch(() => {});
+    }
+  }, [convertFromOption, activeEditId]);
+
+  const applyBookingToForm = (b: any) => {
+    const phoneA = parseCombinedPhone(b.clientAPhone);
+    const phoneB = parseCombinedPhone(b.clientBPhone);
+    const addrA = parseAddress(b.clientAAddress);
+    const addrB = parseAddress(b.clientBAddress);
+    const eventDateStr = b.eventDate?.date ? new Date(b.eventDate.date).toISOString().split('T')[0] : '';
+    if (!convertFromOption) {
+      setIsOption(b.eventDate?.status === 'OPTION');
+      setOrderNumber(b.eventCode || b.id.slice(0, 8));
+    }
+    if (eventDateStr) setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: '' }]);
+    const parsedTime = parseStoredTimeOfDay(b.timeOfDay);
+    const loadedSlot = parsedTime.timeOfDay as TimeSlot;
+    const defaultHours = loadedSlot && SLOT_HOURS[loadedSlot] ? getSlotHours(loadedSlot) : null;
+
+    const nameParts = splitFullName(b.clientAFullName || '');
+
+    setFormData({
+      createdBy: b.createdBy || '',
+      clientAFirstName: nameParts.first,
+      clientALastName: nameParts.last,
+      clientAFullName: b.clientAFullName || '', clientAIdNumber: b.clientAIdNumber || '', clientAPhone: phoneA.phone, clientAPhone2: phoneA.phone2, clientAEmail: b.clientAEmail || '', clientACity: addrA.city, clientAAddress: addrA.address,
+      clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
+      calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime || defaultHours?.start || '', endTime: parsedTime.endTime || defaultHours?.end || '',
+      guestCount: String(b.guestCount ?? ''), minimumGuestCount: String(b.minimumGuestCount ?? b.guestCount ?? ''), optionalGuestCount: calcOptionalGuestCount(b.guestCount ?? ''), finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: DEFAULT_VAT_TYPE, paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
+      akumApprovalCode: b.akumApprovalCode || '', hasMusic: !!b.hasMusic,
+      hallRentalPrice: b.hallRentalPrice ? String(b.hallRentalPrice) : '',
+      depositCheckUrl: b.depositCheckUrl || '',
+      depositCheckDetails: (b.depositCheckDetails as DepositCheckDetails | null) || null,
+    });
+    if (b.depositCheckUrl) {
+      setDepositMethod(b.depositCheckUrl.startsWith('data:') ? 'check_capture' : 'check_upload');
+    }
+    const notesBundle = parseNotesBundle(b.clientComments || '');
+    setMenuNotesList(notesBundle.menu);
+    setInternalNotesList(notesBundle.internal);
+    setContractSigned(!!b.isContractSigned);
+    if (b.clientSignatureUrl) setSavedSignature(b.clientSignatureUrl);
+    if (b.contractText) {
+      setContractText(b.contractText);
+    }
+    if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
+  };
+
+  useEffect(() => {
+    if (!activeEditId) return;
     const loadBooking = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/bookings/${editId}`);
+        const res = await apiFetch(`http://localhost:5000/api/bookings/${activeEditId}`);
         const json = await res.json();
         if (!res.ok || !json.success) {
           alert(json.message || 'שגיאה בטעינת ההזמנה');
@@ -277,55 +336,33 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           return;
         }
         const b = json.data;
-        const phoneA = parseCombinedPhone(b.clientAPhone);
-        const phoneB = parseCombinedPhone(b.clientBPhone);
-        const addrA = parseAddress(b.clientAAddress);
-        const addrB = parseAddress(b.clientBAddress);
-        const eventDateStr = b.eventDate?.date ? new Date(b.eventDate.date).toISOString().split('T')[0] : '';
-        const loadedIsOption = b.eventDate?.status === 'OPTION';
-        const nameParts = splitFullName(b.clientAFullName || '');
-        setIsOption(loadedIsOption);
-        setOrderNumber(b.eventCode || b.id.slice(0, 8));
-        if (eventDateStr) setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: '' }]);
-        const parsedTime = parseStoredTimeOfDay(b.timeOfDay);
-        const loadedSlot = parsedTime.timeOfDay as TimeSlot;
-        const defaultHours = loadedSlot && SLOT_HOURS[loadedSlot] ? getSlotHours(loadedSlot) : null;
-        
-     setFormData({
-          createdBy: b.createdBy || '',
-          clientAFirstName: nameParts.first,
-          clientALastName: nameParts.last,
-          clientAFullName: b.clientAFullName || '', clientAIdNumber: b.clientAIdNumber || '', clientAPhone: phoneA.phone, clientAPhone2: phoneA.phone2, clientAEmail: b.clientAEmail || '', clientACity: addrA.city, clientAAddress: addrA.address,
-          clientBFullName: b.clientBFullName || '', clientBIdNumber: b.clientBIdNumber || '', clientBPhone: phoneB.phone, clientBPhone2: phoneB.phone2, clientBEmail: b.clientBEmail || '', clientBCity: addrB.city, clientBAddress: addrB.address,
-          calendarDateId: eventDateStr, eventType: b.eventType || '', timeOfDay: parsedTime.timeOfDay, startTime: parsedTime.startTime || defaultHours?.start || '', endTime: parsedTime.endTime || defaultHours?.end || '',
-          guestCount: String(b.guestCount ?? ''), minimumGuestCount: String(b.minimumGuestCount ?? b.guestCount ?? ''), optionalGuestCount: calcOptionalGuestCount(b.guestCount ?? ''), finalPricePortion: String(b.finalPricePortion ?? '200'), discountPercent: '', discountAmount: '', vatType: DEFAULT_VAT_TYPE, paymentTerms: '', leadSource: b.leadSource || '', clientSignatureUrl: b.clientSignatureUrl || '',
-          akumApprovalCode: b.akumApprovalCode || '', hasMusic: !!b.hasMusic,
-          hallRentalPrice: b.hallRentalPrice ? String(b.hallRentalPrice) : '',
-          depositCheckUrl: b.depositCheckUrl || '',
-          depositCheckDetails: (b.depositCheckDetails as DepositCheckDetails | null) || null,
-        });
-        if (b.depositCheckUrl) {
-          setDepositMethod(b.depositCheckUrl.startsWith('data:') ? 'check_capture' : 'check_upload');
+        const isStillOption = b.isOption || b.eventDate?.status === 'OPTION';
+        if (convertFromOption && !isStillOption) {
+          alert('האופציה כבר הומרה להזמנה.');
+          navigate('/');
+          return;
         }
-        const notesBundle = parseNotesBundle(b.clientComments || '');
-        setMenuNotesList(notesBundle.menu);
-        setInternalNotesList(notesBundle.internal);
-        setContractSigned(!!b.isContractSigned);
-        if (b.clientSignatureUrl) setSavedSignature(b.clientSignatureUrl);
-        if (b.contractText) {
-          setContractText(b.contractText);
-        } else {
+        applyBookingToForm(b);
+        setActiveBookingId(b.id);
+        setIsOption(false);
+
+        if (convertFromOption) {
           try {
-            const templateRes = await apiFetch('http://localhost:5000/api/bookings/contract-template');
-            const templateJson = await templateRes.json();
-            if (templateRes.ok && templateJson.success) {
-              setContractText(templateJson.data?.contractText || '');
+            const relatedRes = await apiFetch(`http://localhost:5000/api/bookings/${b.id}/related-options`);
+            if (relatedRes.ok) {
+              const relatedJson = await relatedRes.json();
+              if (relatedJson.success && Array.isArray(relatedJson.data)) {
+                setRelatedOptions(relatedJson.data.length > 0 ? relatedJson.data : [b]);
+              } else {
+                setRelatedOptions([b]);
+              }
+            } else {
+              setRelatedOptions([b]);
             }
           } catch {
-            // fallback silently
+            setRelatedOptions([b]);
           }
         }
-        if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
       } catch {
         alert('שגיאה בטעינת ההזמנה');
         navigate('/');
@@ -334,10 +371,23 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       }
     };
     loadBooking();
-  }, [editId, navigate]);
+  }, [activeEditId, convertFromOption, navigate]);
+
+  const handleSelectFinalizeDate = (bookingId: string) => {
+    const selected = relatedOptions.find((o) => o.id === bookingId);
+    if (!selected) return;
+    setActiveBookingId(bookingId);
+    const eventDateStr = selected.eventDate?.date
+      ? new Date(selected.eventDate.date).toISOString().split('T')[0]
+      : '';
+    if (eventDateStr) {
+      setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: selected.eventDate?.hebrewDate || '' }]);
+      setFormData((prev) => ({ ...prev, calendarDateId: eventDateStr }));
+    }
+  };
 
   useEffect(() => {
-    if (isEditMode || isOption) return;
+    if (isEditMode) return;
     const free = availableSlots;
     const current = formData.timeOfDay as TimeSlot;
 
@@ -352,14 +402,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       );
     } else if (!current && free.length > 0) {
       const next = getDefaultTimeSlot(free);
-      if (!next) return;
       const hours = getSlotHours(next);
       setFormData((prev) => ({ ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }));
     }
-  }, [isEditMode, isOption, unavailableSlots.join(','), availableSlots.join(','), formData.timeOfDay]);
+  }, [isEditMode, unavailableSlots.join(','), availableSlots.join(','), formData.timeOfDay]);
 
   useEffect(() => {
-    if (isEditMode || isOption) return;
+    if (isEditMode) return;
     if (formData.eventType === 'חתונה') {
       const eveningOk = availableSlots.includes('evening') && !unavailableSlots.includes('evening');
       if (eveningOk && formData.timeOfDay !== 'evening') {
@@ -375,7 +424,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       if (prev.startTime === start && prev.endTime === end) return prev;
       return { ...prev, startTime: start, endTime: end };
     });
-  }, [formData.timeOfDay, formData.eventType, isEditMode, isOption, unavailableSlots.join(','), availableSlots.join(',')]);
+  }, [formData.timeOfDay, formData.eventType, isEditMode, unavailableSlots.join(','), availableSlots.join(',')]);
 
   useEffect(() => {
     if (formData.eventType !== HALL_ONLY_EVENT_TYPE) {
@@ -538,6 +587,8 @@ const calculateTotals = () => {
       signatureData = formData.clientSignatureUrl;
     }
 
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (isOption) {
       if (!formData.clientAFirstName?.trim()) {
         alert('חובה להזין שם פרטי.');
@@ -555,8 +606,16 @@ const calculateTotals = () => {
         alert('חובה לבחור נציג מהרשימה.');
         return;
       }
+      if (formData.clientAEmail?.trim() && !emailPattern.test(formData.clientAEmail.trim())) {
+        alert('כתובת האימייל של בעל/ת השמחה אינה תקינה.');
+        return;
+      }
+      if (formData.clientBEmail?.trim() && !emailPattern.test(formData.clientBEmail.trim())) {
+        alert('כתובת האימייל של צד ב\' אינה תקינה.');
+        return;
+      }
     } else {
-      if (!isEditMode && !contractSigned) {
+      if ((!isEditMode || convertFromOption) && !contractSigned) {
         alert('יש לחתום על החוזה בחלונית החתימה טרם השמירה.');
         return;
       }
@@ -592,6 +651,18 @@ const calculateTotals = () => {
         alert('חובה לבחור זמן ביום (בוקר / צהריים / ערב).');
         return;
       }
+      if (selectedDatesDisplay.length === 0 && !formData.calendarDateId) {
+        alert('חובה לבחור תאריך לאירוע.');
+        return;
+      }
+      if (formData.clientAEmail?.trim() && !emailPattern.test(formData.clientAEmail.trim())) {
+        alert('כתובת האימייל של בעל/ת השמחה אינה תקינה.');
+        return;
+      }
+      if (formData.clientBEmail?.trim() && !emailPattern.test(formData.clientBEmail.trim())) {
+        alert('כתובת האימייל של צד ב\' אינה תקינה.');
+        return;
+      }
     }
 
     if (selectedDatesDisplay.length === 0 && !formData.calendarDateId) {
@@ -619,13 +690,20 @@ const calculateTotals = () => {
       setSelectedDatesDisplay(verify.dates);
     }
 
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.clientAEmail?.trim() && !emailPattern.test(formData.clientAEmail.trim())) {
-      alert('כתובת האימייל של בעל/ת השמחה אינה תקינה.');
-      return;
-    }
-    if (formData.clientBEmail?.trim() && !emailPattern.test(formData.clientBEmail.trim())) {
-      alert('כתובת האימייל של צד ב\' אינה תקינה.');
+    const selectedSlot = normalizeTimeSlot(formData.timeOfDay, formData.startTime, formData.endTime);
+    if (
+      !isOption
+      && !convertFromOption
+      && selectedSlot
+      && !overrideOptionDateId
+      && rawTakenSlots.includes(selectedSlot)
+    ) {
+      const freeSlots = TIME_SLOTS.filter((s) => !unavailableSlots.includes(s));
+      if (freeSlots.length > 0) {
+        alert(`משבצת ${SLOT_LABELS[selectedSlot] || selectedSlot} תפוסה. בחרי משבצת פנויה: ${freeSlots.map((s) => SLOT_LABELS[s]).join(', ')}.`);
+      } else {
+        alert('משבצת זו תפוסה על ידי אופציה. חזרי ללוח השנה ולחצי "סגירת אירוע במקום האופציה".');
+      }
       return;
     }
 
@@ -657,6 +735,17 @@ const calculateTotals = () => {
         contractText,
       };
 
+      if (convertFromOption) {
+        payload.convertFromOption = true;
+        payload.releaseDateIds = relatedOptions
+          .filter((o) => o.id !== activeBookingId)
+          .map((o) => o.calendarDateId);
+      }
+
+      if (overrideOptionDateId) {
+        payload.overrideOptionDateId = overrideOptionDateId;
+      }
+
       if (isHallOnly) {
         payload.guestCount = 0;
         payload.finalPricePortion = 0;
@@ -667,7 +756,8 @@ const calculateTotals = () => {
         delete payload.hallRentalPrice;
       }
 
-      const url = isEditMode ? `http://localhost:5000/api/bookings/${editId}` : 'http://localhost:5000/api/bookings';
+      const submitId = convertFromOption ? activeBookingId : editId;
+      const url = isEditMode ? `http://localhost:5000/api/bookings/${submitId}` : 'http://localhost:5000/api/bookings';
       const method = isEditMode ? 'PUT' : 'POST';
 
       const response = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -676,9 +766,16 @@ const calculateTotals = () => {
       if (response.ok) {
         const savedBooking = Array.isArray(resData.data) ? resData.data[0] : resData.data;
         const savedCode = savedBooking?.eventCode;
-        const savedId = savedBooking?.id || editId;
-        alert(isEditMode ? 'ההזמנה עודכנה בהצלחה!' : isOption ? `האופציה נשמרה בהצלחה!${savedCode ? `\nמספר אופציה: ${savedCode}` : ''}` : `האירוע נסגר ונשמר בהצלחה!${savedCode ? `\nמספר הזמנה: ${savedCode}` : ''}`);
-        if (!isOption && contractSigned && savedId) {
+        const savedId = savedBooking?.id || submitId;
+        const successMsg = convertFromOption
+          ? `האירוע נסגר ונשמר בהצלחה!${savedCode ? `\nמספר הזמנה: ${savedCode}` : ''}`
+          : isEditMode
+            ? (isOption ? 'האופציה עודכנה בהצלחה!' : 'ההזמנה עודכנה בהצלחה!')
+            : isOption
+              ? `האופציה נשמרה בהצלחה!${savedCode ? `\nמספר אופציה: ${savedCode}` : ''}`
+              : `האירוע נסגר ונשמר בהצלחה!${savedCode ? `\nמספר הזמנה: ${savedCode}` : ''}`;
+        alert(successMsg);
+        if ((!isOption || convertFromOption) && contractSigned && savedId) {
           await promptPrintAfterClose(savedId);
         }
         navigate('/');
@@ -703,18 +800,38 @@ const calculateTotals = () => {
         <div className={styles.header}>
           <img src="/logo.png" alt="מיפל" className={styles.headerLogo} />
           <div className={styles.headerText}>
-            <h2 className={styles.title}>{isEditMode ? (isOption ? 'עריכת אופציה' : 'עריכת הזמנה') : (isOption ? 'שמירת אופציה לאירוע' : 'סגירת הזמנת אירוע')}</h2>
+            <h2 className={styles.title}>
+              {convertFromOption
+                ? 'סגירת הזמנה מאופציה'
+                : overrideOptionDateId
+                  ? 'סגירת אירוע במקום אופציה'
+                : isEditMode
+                  ? (isOption ? 'עריכת אופציה' : 'עריכת הזמנה')
+                  : (isOption ? 'שמירת אופציה לאירוע' : 'סגירת הזמנת אירוע')}
+            </h2>
           </div>
         </div>
 
+        {overrideOptionDateId && (
+          <div className={styles.overrideOptionBanner}>
+            האופציה{overrideOptionClientName ? ` של ${overrideOptionClientName}` : ''} תשוחרר ותוחלף באירוע החדש בעת השמירה.
+          </div>
+        )}
+
         <form className={styles.formWrapper} onSubmit={handleSubmit} style={{ direction: 'rtl' }}>
           <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} selectedDatesDisplay={selectedDatesDisplay} />
+          {convertFromOption && relatedOptions.length > 1 && (
+            <FinalizeOptionDatesBar
+              relatedOptions={relatedOptions}
+              selectedBookingId={activeBookingId}
+              onSelect={handleSelectFinalizeDate}
+            />
+          )}
           {isOption && (
             <OptionDatesBar
               selectedDates={selectedDatesDisplay}
               onChange={setSelectedDatesDisplay}
               eventType={formData.eventType || 'חתונה'}
-              timeSlot={formData.timeOfDay || 'evening'}
             />
           )}
 
@@ -734,32 +851,9 @@ const calculateTotals = () => {
             </div>
 
             <div className={styles.formColumn}>
-              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange as (key: string) => void} isHallOnly={isHallOnly} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} />
+              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} isOption={isOption} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} />
             </div>
           </div>
-
-          {isEditMode && !isOption && (
-            <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'right' }}>
-              <p style={{ margin: '0 0 10px', color: '#1e40af', fontWeight: '500' }}>
-                מלל החוזה שמור ספציפית לאירוע זה. ניתן לערוך אותו לפני שמירת ההזמנה.
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsContractModalOpen(true)}
-                style={{
-                  background: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                }}
-              >
-                ✏️ עריכת / צפייה במלל החוזה
-              </button>
-            </div>
-          )}
 
           <div className={`${styles.formBottomRow} ${isOption ? styles.formBottomRowCompact : ''}`}>
             <div className={`${styles.sectionCard} ${styles.compactNotesWrap}`}>
@@ -767,7 +861,7 @@ const calculateTotals = () => {
               <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder="הוסף הערה פנימית..." />
             </div>
 
-            {!isEditMode && (
+            {((!isEditMode && !isOption) || convertFromOption) && (
               <div className={styles.contractBox}>
                 <label className={styles.contractCheckLabel}>
                   <input
@@ -840,24 +934,21 @@ const calculateTotals = () => {
             <button
               type="submit"
               className={styles.submitBtn}
-              disabled={isSubmitting || (!isEditMode && !isOption && !contractSigned)}
+              disabled={isSubmitting || ((convertFromOption || (!isOption && !isEditMode)) && !contractSigned)}
             >
-              {isSubmitting ? 'שומר נתונים...' : isEditMode ? 'שמירת שינויים' : (isOption ? 'שמירת אופציה' : 'שמירת וסגירת אירוע')}
+              {isSubmitting
+                ? 'שומר נתונים...'
+                : convertFromOption
+                  ? 'שמירת וסגירת אירוע'
+                  : isEditMode
+                    ? 'שמירת שינויים'
+                    : (isOption ? 'שמירת אופציה' : 'שמירת וסגירת אירוע')}
             </button>
           </div>
         </form>
       </div>
 
-      <ContractModal
-        isOpen={isContractModalOpen}
-        onClose={() => setIsContractModalOpen(false)}
-        isOption={isOption}
-        sigCanvas={sigCanvas}
-        setContractSigned={setContractSigned}
-        onSignatureSaved={setSavedSignature}
-        contractText={contractText}
-        onContractTextChange={setContractText}
-      />
+      <ContractModal isOpen={isContractModalOpen} onClose={() => setIsContractModalOpen(false)} isOption={isOption && !convertFromOption} sigCanvas={sigCanvas} setContractSigned={setContractSigned} onSignatureSaved={setSavedSignature} contractText={contractText} onContractTextChange={setContractText} />
 
       {isMenuViewOpen && (
          <div className={styles.menuOverlay}><div className={styles.menuModal}><button type="button" className={styles.menuCloseBtn} onClick={() => setIsMenuViewOpen(false)}>✕ סגור</button><div className={styles.menuModalContent}><MenuDisplay /></div></div></div>

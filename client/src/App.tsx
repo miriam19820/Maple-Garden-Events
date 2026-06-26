@@ -84,6 +84,7 @@ function App() {
 
         <Route path="/" element={<ProtectedRoute><CalendarWrapper /></ProtectedRoute>} />
         <Route path="/booking" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/booking/close-option/:optionId" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
         <Route path="/booking/edit/:id" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
         <Route path="/options-manager" element={<ProtectedRoute><Lazy><PageShell><OptionsManager /></PageShell></Lazy></ProtectedRoute>} />
         <Route path="/bookings-manager" element={<ProtectedRoute><Lazy><PageShell><BookingsManager /></PageShell></Lazy></ProtectedRoute>} />

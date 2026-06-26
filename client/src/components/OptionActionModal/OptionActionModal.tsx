@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../../services/api';
 import styles from './OptionActionModal.module.css';
-import { promptPrintAfterClose } from '../../utils/contractPrint';
 
 interface Props {
   option: any;
@@ -18,18 +19,19 @@ const cancelReasonsList = [
 ];
 
 const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
-  const [step, setStep] = useState<'choose' | 'finalize' | 'cancelReason'>('choose');
-  
-  const [advancePaid, setAdvancePaid] = useState('');
-  const [hasMusic, setHasMusic] = useState(true);
-  const [akumCode, setAkumCode] = useState('');
-  
+  const navigate = useNavigate();
+  const [step, setStep] = useState<'choose' | 'cancelReason'>('choose');
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const eventDateStr = option.eventDate?.date
     ? new Date(option.eventDate.date).toLocaleDateString('he-IL')
     : '';
+
+  const handleConvertToBooking = () => {
+    onClose();
+    navigate(`/booking/close-option/${option.id}`);
+  };
 
   const handleConfirmCancel = async () => {
     if (!cancelReason) {
@@ -39,46 +41,17 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
     
     setIsSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/bookings/release', {
+      const res = await apiFetch('http://localhost:5000/api/bookings/release', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           dateIds: [option.calendarDateId],
           cancelReason: cancelReason,
-          clientName: option.clientAFullName
+          clientName: option.clientAFullName,
         }),
       });
       const result = await res.json();
       if (result.success) { alert('האופציה בוטלה והסטטיסטיקה עודכנה.'); onSuccess(); }
       else alert(result.message);
-    } catch { alert('שגיאת תקשורת.'); }
-    finally { setIsSubmitting(false); }
-  };
-
-  const handleFinalize = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('http://localhost:5000/api/bookings/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: option.id,
-          advancePaid,
-          hasMusic,
-          akumApprovalCode: akumCode,
-        }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        const code = result.data?.eventCode;
-        alert(code ? `האירוע נסגר בהצלחה!\nמספר הזמנה: ${code}` : 'האירוע נסגר בהצלחה.');
-        if (option.id) {
-          await promptPrintAfterClose(option.id);
-        }
-        onSuccess();
-      }
-      else alert(result.message || 'שגיאה בסגירת האירוע');
     } catch { alert('שגיאת תקשורת.'); }
     finally { setIsSubmitting(false); }
   };
@@ -110,8 +83,8 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
             </div>
             <p className={styles.question}>בחר פעולה להמשך:</p>
             <div className={styles.actionButtons}>
-              <button className={styles.finalizeBtn} onClick={() => setStep('finalize')}>
-                הפוך להזמנה סגורה (אירוע סופי)
+              <button className={styles.finalizeBtn} onClick={handleConvertToBooking}>
+                הפוך להזמנה סגורה (סגירת אירוע)
               </button>
               <button className={styles.cancelOptionBtn} onClick={() => setStep('cancelReason')}>
                 בטל אופציה ושחרר תאריך
@@ -151,91 +124,6 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
               </button>
             </div>
           </div>
-        )}
-
-        {step === 'finalize' && (
-          <form onSubmit={handleFinalize}>
-            <div className={styles.body}>
-              <div className={styles.infoBox}>
-                <div className={styles.infoRow}><label>תאריך:</label><span style={{ fontWeight: 'bold' }}>{eventDateStr}</span></div>
-                <div className={styles.infoRow}><label>לקוח:</label><span>{option.clientAFullName}</span></div>
-                <div className={styles.infoRow}><label>תשלום בסיסי:</label><span>₪{(option.basePrice ?? option.totalPrice)?.toLocaleString()}</span></div>
-                {(option.extrasPrice ?? 0) > 0 && (
-                  <div className={styles.infoRow}><label>תוספות לאולם:</label><span>₪{option.extrasPrice?.toLocaleString()}</span></div>
-                )}
-                {(option.externalExtrasPrice ?? 0) > 0 && (
-                  <div className={styles.infoRow}><label>ספקים חיצוניים:</label><span>₪{option.externalExtrasPrice?.toLocaleString()}</span></div>
-                )}
-                <div className={styles.infoRow}><label>סה"כ לתשלום:</label><span style={{ fontWeight: 'bold', color: '#1e293b' }}>₪{option.totalPrice?.toLocaleString()}</span></div>
-              </div>
-              
-              <div className={styles.inputGroup}>
-                <label className={styles.inputLabel}>מקדמה ששולמה (₪) *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  className={styles.input}
-                  value={advancePaid}
-                  onChange={e => setAdvancePaid(e.target.value)}
-                  placeholder="לדוגמה: 5000"
-                />
-              </div>
-
-              <div className={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  id="musicCheck"
-                  checked={hasMusic}
-                  onChange={e => setHasMusic(e.target.checked)}
-                  style={{ width: '18px', height: '18px' }}
-                />
-                <label htmlFor="musicCheck" className={styles.inputLabel}>יש מוזיקה באירוע (דורש אישור אקו"ם)</label>
-              </div>
-
-              {/* קופסת אקו"ם עם עיצוב נקי המיובא מה-CSS */}
-              {(hasMusic || option.eventType === 'חתונה') && (
-                <div className={styles.akumAlertBox}>
-                  <span className={styles.akumAlertTitle}>
-                     הסדרת רישיון אקו"ם
-                  </span>
-                  <span className={styles.akumAlertText}>
-                    {option.eventType === 'חתונה' 
-                      ? 'חובה להסדיר רישיון השמעת מוזיקה מול אקו"ם עבור אירועי חתונה.' 
-                      : 'מכיוון שציינת שיש מוזיקה באירוע, יש להסדיר רישיון מול אקו"ם.'}
-                  </span>
-                  <a 
-                    href="https://apps.acum.org.il/licenses/family-event/register-payment?action=payFamilyEvent" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className={styles.akumAlertLink}
-                  >
-                    לתשלום והפקת הרישיון לאקו"ם לחצו כאן
-                  </a>
-                </div>
-              )}
-
-              {hasMusic && (
-                <div className={styles.inputGroup}>
-                  <label className={styles.inputLabel}>קוד אישור אקו"ם</label>
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={akumCode}
-                    onChange={e => setAkumCode(e.target.value)}
-                    placeholder="הזן מספר אישור שקיבלת לאחר התשלום"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className={styles.footer}>
-              <button type="button" className={styles.backBtn} onClick={() => setStep('choose')}>חזור</button>
-              <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
-                {isSubmitting ? 'מעדכן...' : 'סגור אירוע סופית'}
-              </button>
-            </div>
-          </form>
         )}
       </div>
     </div>

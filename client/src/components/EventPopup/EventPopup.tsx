@@ -8,11 +8,13 @@ import {
   formatAvailableSlotsLabelForDate,
   formatTimeOfDayDisplay,
   getSlotColor,
+  hasOptionOnDay,
 } from '../../utils/timeSlot';
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
 import { printContract, openContractPdf } from '../../utils/contractPrint';
 import { NotesList } from '../NotesList/NotesList';
 import EventCheckInModal from '../LiveEvent/EventCheckInModal';
+import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
 import liveEventStyles from '../LiveEvent/LiveEvent.module.css';
 import './EventPopup.css';
 
@@ -20,29 +22,39 @@ interface EventPopupProps {
   day: any;
   onClose: () => void;
   onAddEvent?: () => void;
+  onAddOption?: () => void;
+  onOverrideOptionBook?: () => void;
 }
 
-export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
+export const EventPopup = ({ day, onClose, onAddEvent, onAddOption, onOverrideOptionBook }: EventPopupProps) => {
   const navigate = useNavigate();
   const [checkInState, setCheckInState] = useState<{ bookingId: string; readOnly: boolean } | null>(null);
+  const [notifyBooking, setNotifyBooking] = useState<any | null>(null);
   const [, setTick] = useState(0);
   const bookings = day.bookings || [];
-  const isOptionDay = day.status === 'OPTION';
+  const isOptionDay = hasOptionOnDay(day);
   const dateDisplay = day.date.split('-').reverse().join('/');
   const hebrewDate = day.hebrewDate || '';
   const todayStr = new Date().toISOString().split('T')[0];
   const isPast = day.date < todayStr;
   const availableSlotsLabel = formatAvailableSlotsLabelForDate(day.date, bookings);
-  const showAddEvent =
+  const hasFreeSlots =
     !isPast
     && day.status !== 'BLOCKED'
     && day.status !== 'FORBIDDEN'
-    && canAddMoreEventsForDate(day.date, bookings)
-    && !!onAddEvent;
+    && canAddMoreEventsForDate(day.date, bookings);
+  const showAddEvent = hasFreeSlots && !!onAddEvent;
+  const showAddOption = hasFreeSlots && !!onAddOption;
+  const showOverrideOption = isOptionDay && !!onOverrideOptionBook && !hasFreeSlots;
 
   const handleEdit = (bookingId: string) => {
     onClose();
     navigate(`/booking/edit/${bookingId}`);
+  };
+
+  const handleCloseOption = (bookingId: string) => {
+    onClose();
+    navigate(`/booking/close-option/${bookingId}`);
   };
 
   const handleClose = (e: React.MouseEvent) => {
@@ -106,7 +118,8 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
 
               const editable = canEditBooking(day.date);
               const clientNotes = parseNotesBundle(booking.clientComments);
-              const isBooked = !isOptionDay && day.status === 'BOOKED';
+              const isOptionBooking = booking.isOption === true;
+              const isBooked = !isOptionBooking;
               const showCheckIn = isBooked && canViewCheckIn(day.date, booking, booking.eventForm);
               const checkInEditable = showCheckIn && canEditCheckIn(day.date, booking, booking.eventForm);
 
@@ -122,11 +135,29 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
                         {booking.eventCode && <span className="event-code-badge">#{booking.eventCode} · </span>}
                         {booking.eventType} — {formatTimeOfDayDisplay(booking.timeOfDay)}
                       </h3>
-                      <span className={`status-badge ${isOptionDay ? 'option' : 'booked'}`}>
-                        {isOptionDay ? 'אופציה' : 'הזמנה סגורה'}
+                      <span className={`status-badge ${isOptionBooking ? 'option' : 'booked'}`}>
+                        {isOptionBooking ? 'אופציה' : 'הזמנה סגורה'}
                       </span>
                     </div>
                     <div className="event-actions">
+                      {isOptionBooking && booking.id && (
+                        <button
+                          type="button"
+                          className="edit-btn notify-option-btn"
+                          onClick={() => setNotifyBooking(booking)}
+                        >
+                          הקפץ הודעה ללקוח
+                        </button>
+                      )}
+                      {isOptionBooking && booking.id && (
+                        <button
+                          type="button"
+                          className="edit-btn finalize-option-btn"
+                          onClick={() => handleCloseOption(booking.id)}
+                        >
+                          סגור כהזמנה
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="edit-btn"
@@ -252,6 +283,15 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
         </div>
 
         <div className="popup-footer">
+          {showOverrideOption && (
+            <button
+              type="button"
+              className="popup-override-btn"
+              onClick={() => { onClose(); onOverrideOptionBook?.(); }}
+            >
+              סגירת אירוע במקום האופציה
+            </button>
+          )}
           {showAddEvent && (
             <button
               type="button"
@@ -259,6 +299,15 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
               onClick={() => { onClose(); onAddEvent?.(); }}
             >
               + אירוע נוסף ({availableSlotsLabel})
+            </button>
+          )}
+          {showAddOption && (
+            <button
+              type="button"
+              className="popup-option-btn"
+              onClick={() => { onClose(); onAddOption?.(); }}
+            >
+              + אופציה ({availableSlotsLabel})
             </button>
           )}
           <button type="button" className="popup-close-btn" onClick={handleClose}>
@@ -273,6 +322,13 @@ export const EventPopup = ({ day, onClose, onAddEvent }: EventPopupProps) => {
         dateDisplay={dateDisplayHe}
         readOnly={checkInState.readOnly}
         onClose={() => setCheckInState(null)}
+      />
+    )}
+    {notifyBooking && (
+      <NotifyOptionModal
+        booking={notifyBooking}
+        eventDateStr={day.date}
+        onClose={() => setNotifyBooking(null)}
       />
     )}
     </>,

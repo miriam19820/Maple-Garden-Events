@@ -32,6 +32,7 @@ function getDayOfWeek(dateStr: string): string {
   return days[new Date(dateStr + 'T12:00:00').getDay()];
 }
 
+
 export function normalizeOptionDate(d: string | OptionDateItem): OptionDateItem {
   if (typeof d === 'object' && d?.date) return d;
   return { date: String(d), hebrewDate: '' };

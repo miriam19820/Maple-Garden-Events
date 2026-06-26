@@ -17,6 +17,7 @@ interface PaymentAndUpgradesSectionProps {
   upgrades: Record<string, boolean>;
   handleUpgradeChange: (key: string) => void;
   isHallOnly: boolean;
+  isOption?: boolean;
   depositMethod: string;
   setDepositMethod: (method: string) => void;
   checkScanning: boolean;
@@ -59,6 +60,7 @@ const PaymentAndUpgradesSection = ({
   upgrades,
   handleUpgradeChange,
   isHallOnly,
+  isOption = false,
   depositMethod,
   setDepositMethod,
   checkScanning,
@@ -127,7 +129,7 @@ const PaymentAndUpgradesSection = ({
 
         {isHallOnly && (
           <div className={styles.inputGroup} style={{ backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px solid #bbf7d0', marginBottom: '20px' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#166534' }}>מחיר השכרת אולם (₪) *</label>
+            <label style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#166534' }}>מחיר השכרת אולם (₪){!isOption ? ' *' : ''}</label>
             <input
               type="number"
               name="hallRentalPrice"
@@ -135,7 +137,7 @@ const PaymentAndUpgradesSection = ({
               onChange={handleChange}
               className={`${styles.input} ${errors?.hallRentalPrice ? styles.inputError : ''}`}
               placeholder="הזן סכום לשכירות האולם (ללא אוכל)..."
-              required={isHallOnly}
+              required={isHallOnly && !isOption}
               min={1}
               step="any"
               style={{ fontSize: '1.1rem', fontWeight: 'bold' }}

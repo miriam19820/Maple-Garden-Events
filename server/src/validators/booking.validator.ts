@@ -34,10 +34,6 @@ export const createBookingSchema = z.object({
     allSelectedDates: z.array(z.any()).optional(),
     calendarDateId: z.string().optional(),
   })
-    .refine((data) => data.allSelectedDates?.length || data.calendarDateId, {
-      message: "חובה לבחור לפחות תאריך אחד לאירוע",
-      path: ["allSelectedDates"],
-    })
     .superRefine((data, ctx) => {
       if (data.isOption) {
         const name = (data.clientAFullName || '').trim();
@@ -93,6 +89,14 @@ export const createBookingSchema = z.object({
           code: z.ZodIssueCode.custom,
           message: "חובה לבחור סוג אירוע",
           path: ["eventType"],
+        });
+      }
+
+      if (!data.allSelectedDates?.length && !data.calendarDateId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "חובה לבחור לפחות תאריך אחד לאירוע",
+          path: ["allSelectedDates"],
         });
       }
 

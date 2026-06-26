@@ -1,5 +1,106 @@
 // src/utils/whatsapp.ts
 
+export type WhatsAppSendResult = {
+  sent: boolean;
+  simulated: boolean;
+  hasWhatsApp: boolean | null;
+};
+
+function isGreenApiConfigured(): boolean {
+  return !!(process.env.GREEN_API_INSTANCE_ID && process.env.GREEN_API_TOKEN);
+}
+
+/** ממיר מספר ישראלי לפורמט בינלאומי ל-Green API (972...) */
+export function formatPhoneForWhatsApp(rawPhone: string): string {
+  const digits = rawPhone.replace(/\D/g, '');
+  if (digits.startsWith('972')) return digits;
+  if (digits.startsWith('0')) return `972${digits.slice(1)}`;
+  return digits;
+}
+
+/** בודק אם למספר יש WhatsApp (Green API). null = API לא מוגדר. */
+export async function checkHasWhatsApp(rawPhone: string): Promise<boolean | null> {
+  if (!isGreenApiConfigured()) return null;
+
+  const instanceId = process.env.GREEN_API_INSTANCE_ID!;
+  const token = process.env.GREEN_API_TOKEN!;
+  const phoneNumber = formatPhoneForWhatsApp(rawPhone);
+
+  try {
+    const res = await fetch(
+      `https://api.green-api.com/waInstance${instanceId}/checkWhatsapp/${token}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber }),
+      },
+    );
+
+    if (!res.ok) {
+      console.error(`Green API checkWhatsapp failed (${res.status})`);
+      return null;
+    }
+
+    const data = (await res.json()) as { existsWhatsapp?: boolean };
+    return !!data.existsWhatsapp;
+  } catch (error) {
+    console.error('Green API checkWhatsapp error:', error);
+    return null;
+  }
+}
+
+async function sendGreenApiMessage(rawPhone: string, message: string): Promise<boolean> {
+  if (!isGreenApiConfigured()) return false;
+
+  const instanceId = process.env.GREEN_API_INSTANCE_ID!;
+  const token = process.env.GREEN_API_TOKEN!;
+  const chatId = `${formatPhoneForWhatsApp(rawPhone)}@c.us`;
+
+  try {
+    const res = await fetch(
+      `https://api.green-api.com/waInstance${instanceId}/sendMessage/${token}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, message }),
+      },
+    );
+
+    if (!res.ok) {
+      console.error(`Green API sendMessage failed (${res.status})`);
+      return false;
+    }
+
+    console.log(`✅ WhatsApp sent to ${rawPhone}`);
+    return true;
+  } catch (error) {
+    console.error('Green API sendMessage error:', error);
+    return false;
+  }
+}
+
+async function deliverWhatsApp(
+  phone: string,
+  message: string,
+  type: string,
+): Promise<WhatsAppSendResult> {
+  if (isGreenApiConfigured()) {
+    const hasWhatsApp = await checkHasWhatsApp(phone);
+    if (hasWhatsApp === false) {
+      console.log(`[WHATSAPP] ${phone} — אין וואטסאפ, דילוג על שליחה (${type})`);
+      return { sent: false, simulated: false, hasWhatsApp: false };
+    }
+
+    const sent = await sendGreenApiMessage(phone, message);
+    return { sent, simulated: false, hasWhatsApp: hasWhatsApp ?? true };
+  }
+
+  console.log(`\n[WHATSAPP SIMULATION - ${type}] מכין שליחה לטלפון: ${phone}...`);
+  console.log(`------------ תוכן ההודעה ------------\n${message}\n-------------------------------------`);
+  console.log('[WHATSAPP SIMULATION] (API לא מוגדר — לא נשלח בפועל)');
+  return { sent: false, simulated: true, hasWhatsApp: null };
+}
+
 // ==========================================
 // 1. הקפצת אופציה (Bump Option)
 // ==========================================
@@ -22,6 +123,11 @@ export const sendBumpWhatsApp = async (clientPhone: string, clientName: string, 
     `_ניתן להשיב להודעה זו בכל שאלה ונציג יחזור אליכם._`;
 
   return simulateWhatsApp(clientPhone, message, 'אופציה');
+};
+
+const simulateWhatsApp = async (phone: string, message: string, type: string): Promise<boolean> => {
+  const result = await deliverWhatsApp(phone, message, type);
+  return result.sent;
 };
 
 // ==========================================
@@ -91,15 +197,23 @@ export const sendFeedbackRequestWhatsApp = async (clientPhone: string, clientNam
 // ==========================================
 // פונקציית עזר להדפסת הלוגים (סימולציה של שליחה)
 // ==========================================
-const simulateWhatsApp = async (phone: string, message: string, type: string) => {
-  try {
-    // 💡 בעתיד, כאן תיכנס קריאת ה-API האמיתית לוואטסאפ
-    console.log(`\n[WHATSAPP SIMULATION - ${type}] מכין שליחה לטלפון: ${phone}...`);
-    console.log(`------------ תוכן ההודעה ------------\n${message}\n-------------------------------------`);
-    console.log(`[WHATSAPP SIMULATION] ✅ הודעת הוואטסאפ נשלחה בהצלחה!`);
-    return true;
-  } catch (error) {
-    console.error(`שגיאה בשליחת וואטסאפ (${type}):`, error);
-    return false;
-  }
+function buildOptionInterestText(clientName: string, eventDate: string, customMessage?: string): string {
+  if (customMessage?.trim()) return customMessage.trim();
+  const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
+  return `שלום ${clientName}, מתענינים בתאריך שלך (${dateStr}) בגן האירועים מייפל. נשמח לשמוע ממך בהקדם.`;
+}
+
+// ==========================================
+// 6. הודעת עניין באופציה (מתענינים בתאריך שלך)
+// ==========================================
+export const sendOptionInterestWhatsApp = async (
+  clientPhone: string,
+  clientName: string,
+  eventDate: string,
+  customMessage?: string,
+): Promise<WhatsAppSendResult> => {
+  const bodyText = buildOptionInterestText(clientName, eventDate, customMessage);
+  const message = `${bodyText}\n\n*צוות מייפל - גן אירועים בעיר*\nטלפון: 03-6777772\n--------------------------\n🤖 _הודעה זו נשלחה מהמערכת._\n_ניתן להשיב להודעה זו בכל שאלה ונציג יחזור אליכם._`;
+
+  return deliverWhatsApp(clientPhone, message, 'עניין באופציה');
 };

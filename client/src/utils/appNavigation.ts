@@ -12,12 +12,14 @@ export const ROUTE_TITLES: Record<string, string> = {
 };
 
 export function resolveRouteTitle(pathname: string): string {
+  if (pathname.startsWith('/booking/close-option/')) return 'סגירת הזמנה מאופציה';
   if (pathname.startsWith('/booking/edit/')) return 'עריכת הזמנה';
   if (pathname.startsWith('/feedback/')) return 'משוב לקוח';
   return ROUTE_TITLES[pathname] || '';
 }
 
 export function resolveDefaultBackPath(pathname: string): string {
+  if (pathname.startsWith('/booking/close-option/')) return '/options-manager';
   if (pathname.startsWith('/booking/edit/')) return '/bookings-manager';
   if (pathname === '/gallery') return '/event-form-manager';
   if (pathname.startsWith('/feedback/')) return '/';
