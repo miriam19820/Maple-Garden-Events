@@ -185,7 +185,7 @@ const ContractModal = ({
                 zIndex: 1,
                 whiteSpace: 'pre-wrap'
               }}>
-                {contractText || 'טוען מלל חוזה...'}
+                {contractText || 'לא ניתן לטעון את מלל החוזה — ודאי שהשרת פועל (פורט 5000)'}
               </div>
             )}
           </div>

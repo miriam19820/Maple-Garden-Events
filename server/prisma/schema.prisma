@@ -60,6 +60,8 @@ model Booking {
   depositCheckUrl     String?
   depositCheckDetails Json?
   contractText        String?         @db.Text
+  paymentTemplateId   String?
+  paymentTermsText    String?         @db.Text
 
   @@unique([calendarDateId, timeSlot])
 }
@@ -196,6 +198,8 @@ model SystemSettings {
   separateReceptionPrice Float    @default(3000.0)
   contractText           String?  @db.Text
   barPortionPrice        Float    @default(60.0)
+  paymentTemplates       Json?
+  defaultPaymentTemplateId String?
 }
 
 model ExtraService {

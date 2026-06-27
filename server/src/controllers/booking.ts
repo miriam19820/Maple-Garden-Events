@@ -5,7 +5,8 @@ import { sendBumpWhatsApp, sendOptionInterestWhatsApp } from '../utils/whatsapp'
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
-import { getContractText } from '../utils/getContractText';
+import { getContractText, resolveContractWithPaymentTerms, resolveDefaultPaymentTermsText } from '../utils/getContractText';
+import { getPaymentTemplatesFromSettings } from '../utils/paymentTerms';
 import { sendPDFToClient } from '../Services/emailService';
 import {
   emitBookingUpdated,
@@ -168,7 +169,17 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   const clientBPhoneCombined = data.clientBPhone2 ? `${data.clientBPhone} | נוסף: ${data.clientBPhone2}` : data.clientBPhone;
   const clientBAddressCombined = data.clientBCity ? `${data.clientBCity}, ${data.clientBAddress}` : data.clientBAddress;
 
-  const resolvedContractText = data.contractText?.trim() || await getContractText();
+  const resolvedContractText = data.contractText?.trim()
+    || await resolveContractWithPaymentTerms({
+      paymentTermsText: data.paymentTermsText,
+      total: prices.totalPrice,
+      eventDate: typeof datesToProcess[0] === 'object' ? datesToProcess[0]?.date : datesToProcess[0],
+    });
+  const paymentTermsText = data.paymentTermsText?.trim()
+    || await resolveDefaultPaymentTermsText(
+      prices.totalPrice,
+      typeof datesToProcess[0] === 'object' ? datesToProcess[0]?.date : datesToProcess[0],
+    );
   const overrideOptionDateId: string | undefined = data.overrideOptionDateId;
 
   let createdBookings: any[] = [];
@@ -330,6 +341,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           depositCheckUrl: data.depositCheckUrl || null,
           depositCheckDetails: data.depositCheckDetails || null,
           contractText: resolvedContractText,
+          paymentTemplateId: data.paymentTemplateId || null,
+          paymentTermsText: paymentTermsText || null,
         }
       });
       createdBookings.push(newBooking);
@@ -567,7 +580,15 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
       clientSignatureUrl: data.clientSignature !== undefined ? data.clientSignature : booking.clientSignatureUrl,
       depositCheckUrl: data.depositCheckUrl !== undefined ? data.depositCheckUrl || null : (booking as { depositCheckUrl?: string | null }).depositCheckUrl,
       depositCheckDetails: data.depositCheckDetails !== undefined ? data.depositCheckDetails || null : (booking as { depositCheckDetails?: unknown }).depositCheckDetails,
-      contractText: data.contractText !== undefined ? (data.contractText?.trim() || null) : (booking as { contractText?: string | null }).contractText,
+      contractText: data.contractText !== undefined
+        ? (data.contractText?.trim() || null)
+        : (booking as { contractText?: string | null }).contractText,
+      paymentTemplateId: data.paymentTemplateId !== undefined
+        ? (data.paymentTemplateId || null)
+        : (booking as { paymentTemplateId?: string | null }).paymentTemplateId,
+      paymentTermsText: data.paymentTermsText !== undefined
+        ? (data.paymentTermsText?.trim() || null)
+        : (booking as { paymentTermsText?: string | null }).paymentTermsText,
       updatedBy: 'מערכת',
     };
 
@@ -673,8 +694,23 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getContractTemplate = catchAsync(async (_req: Request, res: Response) => {
-  const contractText = await getContractText();
-  res.status(200).json({ success: true, data: { contractText } });
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'global' } });
+  const paymentMeta = getPaymentTemplatesFromSettings(settings);
+  const paymentTermsText = await resolveDefaultPaymentTermsText();
+  const contractBaseText = await getContractText();
+  const contractText = await resolveContractWithPaymentTerms({ paymentTermsText });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      contractText,
+      contractBaseText,
+      paymentTermsText,
+      paymentTemplateId: paymentMeta.defaultTemplateId,
+      paymentTemplates: paymentMeta.templates,
+      defaultPaymentTemplateId: paymentMeta.defaultTemplateId,
+    },
+  });
 });
 
 export const getNextEventCode = catchAsync(async (req: Request, res: Response) => {

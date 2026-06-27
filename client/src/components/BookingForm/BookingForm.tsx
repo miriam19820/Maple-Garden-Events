@@ -5,6 +5,14 @@ import { type TimeSlot, TIME_SLOTS, SLOT_LABELS, normalizeTimeSlot, getBlockedSl
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
 import { useGlobalSettingsQuery } from '../../hooks/queries';
+import {
+  DEFAULT_PAYMENT_TEMPLATES,
+  findPaymentTemplate,
+  getPaymentTemplatesFromSettings,
+  mergePaymentTermsIntoContract,
+  renderPaymentTermsText,
+  type PaymentTermsTemplate,
+} from '../../utils/paymentTerms';
 import { promptPrintAfterClose } from '../../utils/contractPrint';
 import { getSignatureDataUrl } from '../../utils/signature';
 import { scanCheckImage, fileToDataUrl, type DepositCheckDetails } from '../../utils/checkOcr';
@@ -234,11 +242,47 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [isMenuViewOpen, setIsMenuViewOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [contractText, setContractText] = useState('');
+  const [contractBaseText, setContractBaseText] = useState('');
+  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTermsTemplate[]>(DEFAULT_PAYMENT_TEMPLATES);
+  const [paymentTemplateId, setPaymentTemplateId] = useState('50-50');
+  const [paymentTermsCustom, setPaymentTermsCustom] = useState(false);
+  const [paymentTermsText, setPaymentTermsText] = useState('');
   const [vatRate, setVatRate] = useState(17);
   const { data: globalSettings } = useGlobalSettingsQuery();
 
   useEffect(() => {
     if (globalSettings?.vatRate) setVatRate(Number(globalSettings.vatRate));
+  }, [globalSettings]);
+
+  useEffect(() => {
+    apiFetch(`${API_URL}/bookings/contract-template`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.success || !json.data) return;
+        if (json.data.contractBaseText) {
+          setContractBaseText(json.data.contractBaseText);
+        }
+        if (json.data.contractText) {
+          setContractText((prev) => prev || json.data.contractText);
+        }
+        if (json.data.paymentTermsText) {
+          setPaymentTermsText((prev) => prev || json.data.paymentTermsText);
+        }
+        if (json.data.paymentTemplateId) {
+          setPaymentTemplateId(json.data.paymentTemplateId);
+        }
+        if (Array.isArray(json.data.paymentTemplates) && json.data.paymentTemplates.length > 0) {
+          setPaymentTemplates(json.data.paymentTemplates);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (globalSettings?.paymentTemplates) {
+      const meta = getPaymentTemplatesFromSettings(globalSettings);
+      setPaymentTemplates(meta.templates);
+    }
   }, [globalSettings]);
 
   useEffect(() => {
@@ -318,6 +362,15 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     if (b.clientSignatureUrl) setSavedSignature(b.clientSignatureUrl);
     if (b.contractText) {
       setContractText(b.contractText);
+    }
+    if (b.paymentTermsText) {
+      setPaymentTermsText(b.paymentTermsText);
+    }
+    if (b.paymentTemplateId) {
+      setPaymentTemplateId(b.paymentTemplateId);
+      setPaymentTermsCustom(b.paymentTemplateId === 'custom');
+    } else if (b.paymentTermsText) {
+      setPaymentTermsCustom(true);
     }
     if (b.hasMusic !== undefined) setUpgrades(prev => ({ ...prev, amplification: b.hasMusic }));
   };
@@ -508,7 +561,16 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const isHallOnly = formData.eventType === HALL_ONLY_EVENT_TYPE;
   const isFoodRelevant = !isHallOnly;
   const isWedding = formData.eventType === 'חתונה';
-const calculateTotals = () => {
+
+  const getEventDateStr = (): string | null => {
+    if (selectedDatesDisplay.length > 0) {
+      const first = selectedDatesDisplay[0];
+      return typeof first === 'object' ? first.date : String(first);
+    }
+    return formData.calendarDateId || null;
+  };
+
+  const calculateTotals = () => {
   let mainBase = 0;
 
   if (isHallOnly) {
@@ -572,8 +634,37 @@ const calculateTotals = () => {
     subtotal: mainSubtotal + hallExtrasSubtotal + externalExtrasSubtotal,
     vatAmount: mainVat + hallExtrasVat + externalExtrasVat,
   };
-};
+  };
+
   const totals = calculateTotals();
+
+  const handlePaymentTermsTextChange = (text: string) => {
+    setPaymentTermsText(text);
+    const base = contractBaseText || contractText;
+    if (base) {
+      setContractText(mergePaymentTermsIntoContract(base, text));
+    }
+  };
+
+  useEffect(() => {
+    if (paymentTermsCustom || !contractBaseText) return;
+    const template = findPaymentTemplate(paymentTemplates, paymentTemplateId);
+    if (!template) return;
+    const paragraph = renderPaymentTermsText(template, {
+      total: totals.finalTotal,
+      eventDate: getEventDateStr(),
+    });
+    setPaymentTermsText(paragraph);
+    setContractText(mergePaymentTermsIntoContract(contractBaseText, paragraph));
+  }, [
+    paymentTemplateId,
+    paymentTermsCustom,
+    contractBaseText,
+    paymentTemplates,
+    totals.finalTotal,
+    selectedDatesDisplay,
+    formData.calendarDateId,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -731,6 +822,8 @@ const calculateTotals = () => {
         calculatedTotals: totals,
         clientSignature: signatureData,
         contractText,
+        paymentTemplateId: paymentTermsCustom ? 'custom' : paymentTemplateId,
+        paymentTermsText,
       };
 
       if (convertFromOption) {
@@ -849,7 +942,7 @@ const calculateTotals = () => {
             </div>
 
             <div className={styles.formColumn}>
-              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} isOption={isOption} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} />
+              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} isOption={isOption} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} paymentTemplates={paymentTemplates} paymentTemplateId={paymentTemplateId} onPaymentTemplateChange={setPaymentTemplateId} paymentTermsCustom={paymentTermsCustom} onPaymentTermsCustomChange={setPaymentTermsCustom} paymentTermsText={paymentTermsText} onPaymentTermsTextChange={handlePaymentTermsTextChange} eventDate={getEventDateStr()} />
             </div>
           </div>
 

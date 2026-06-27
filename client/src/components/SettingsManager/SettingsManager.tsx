@@ -9,6 +9,8 @@ import {
   useKashrutQuery,
 } from '../../hooks/queries';
 import { AuthorizedUsers } from './AuthorizedUsers';
+import PaymentTemplatesSettings from './PaymentTemplatesSettings';
+import { getPaymentTemplatesFromSettings } from '../../utils/paymentTerms';
 
 
 export const SettingsManager = () => {
@@ -368,7 +370,18 @@ export const SettingsManager = () => {
           )}
         </div>
 
-        {/* הוספנו את רכיב ניהול המשתמשים כאן למטה - פורס על כל הרוחב */}
+        <PaymentTemplatesSettings
+          templates={getPaymentTemplatesFromSettings(globalSettingsData).templates}
+          defaultTemplateId={getPaymentTemplatesFromSettings(globalSettingsData).defaultTemplateId}
+          onSave={async (paymentTemplates, defaultPaymentTemplateId) => {
+            await apiFetch(`${API_URL}/settings/global`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ paymentTemplates, defaultPaymentTemplateId }),
+            });
+          }}
+        />
+
         <div style={{gridColumn: '1 / -1'}}>
           <AuthorizedUsers />
         </div>

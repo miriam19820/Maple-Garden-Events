@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 import { catchAsync } from '../middlewares/errorHandler';
 import { DEFAULT_CONTRACT_TEXT } from '../utils/defaultContractText';
 import { emitSettingsUpdated } from '../utils/realtime';
+import { getPaymentTemplatesFromSettings } from '../utils/paymentTerms';
 
 export const settingsController = {
   // =========================================
@@ -18,9 +19,13 @@ export const settingsController = {
       settings = await prisma.systemSettings.create({ data: { contractText: DEFAULT_CONTRACT_TEXT } });
     }
 
+    const paymentMeta = getPaymentTemplatesFromSettings(settings);
+
     res.json({
       ...settings,
       contractText: settings.contractText?.trim() || DEFAULT_CONTRACT_TEXT,
+      paymentTemplates: paymentMeta.templates,
+      defaultPaymentTemplateId: paymentMeta.defaultTemplateId,
     });
   }),
 

@@ -24,6 +24,16 @@ export const updateSettingsSchema = z.object({
       separateReceptionPrice: optionalFloat,
       barPortionPrice: optionalFloat,
       contractText: z.string().nullable().optional(),
+      paymentTemplates: z.array(z.object({
+        id: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+        bodyTemplate: z.string().trim().min(1),
+        installments: z.array(z.object({
+          percent: z.coerce.number().finite().min(0).max(100),
+          dueType: z.enum(['WEEK_BEFORE_EVENT', 'HOURS_24_AFTER_EVENT']),
+        })).min(1),
+      })).optional(),
+      defaultPaymentTemplateId: z.string().trim().min(1).optional(),
     })
     .strict(),
 });

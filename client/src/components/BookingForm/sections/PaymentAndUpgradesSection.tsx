@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   UPGRADES_PRICING,
   UPGRADE_DISPLAY_ORDER,
@@ -10,6 +10,8 @@ import CheckCamera from '../../CheckCamera/CheckCamera';
 import CheckDetailsForm from '../../CheckDetailsForm/CheckDetailsForm';
 import type { DepositCheckDetails } from '../../../utils/checkOcr';
 import { openContractPdf, printContract } from '../../../utils/contractPrint';
+
+import type { PaymentTermsTemplate } from '../../../utils/paymentTerms';
 
 interface PaymentAndUpgradesSectionProps {
   formData: any;
@@ -45,6 +47,14 @@ interface PaymentAndUpgradesSectionProps {
   errors?: Record<string, string>;
   vatRate?: number;
   styles: Record<string, string>;
+  paymentTemplates: PaymentTermsTemplate[];
+  paymentTemplateId: string;
+  onPaymentTemplateChange: (templateId: string) => void;
+  paymentTermsCustom: boolean;
+  onPaymentTermsCustomChange: (custom: boolean) => void;
+  paymentTermsText: string;
+  onPaymentTermsTextChange: (text: string) => void;
+  eventDate?: string | null;
 }
 
 const externalLinkStyle: React.CSSProperties = {
@@ -76,7 +86,39 @@ const PaymentAndUpgradesSection = ({
   errors,
   vatRate = 17,
   styles,
+  paymentTemplates,
+  paymentTemplateId,
+  onPaymentTemplateChange,
+  paymentTermsCustom,
+  onPaymentTermsCustomChange,
+  paymentTermsText,
+  onPaymentTermsTextChange,
+  eventDate,
 }: PaymentAndUpgradesSectionProps) => {
+  const [editingCustomPayment, setEditingCustomPayment] = useState(false);
+  const [customDraft, setCustomDraft] = useState('');
+
+  const openCustomEditor = () => {
+    setCustomDraft(paymentTermsCustom ? paymentTermsText : '');
+    setEditingCustomPayment(true);
+  };
+
+  const saveCustomPayment = () => {
+    const text = customDraft.trim();
+    if (!text) {
+      alert('יש להזין נוסח תשלום');
+      return;
+    }
+    onPaymentTermsCustomChange(true);
+    onPaymentTermsTextChange(text);
+    setEditingCustomPayment(false);
+  };
+
+  const cancelCustomEditor = () => {
+    setEditingCustomPayment(false);
+    setCustomDraft('');
+  };
+
   const isCheckDeposit = depositMethod === 'check_upload' || depositMethod === 'check_capture';
   const hasCheckImage = !!formData.depositCheckUrl;
   const isHallUpgrade = (key: string) => (HALL_UPGRADE_KEYS as readonly string[]).includes(key);
@@ -227,9 +269,139 @@ const PaymentAndUpgradesSection = ({
           </div>
         )}
 
-        <div className={styles.inputGroup}>
-          <label>תנאי תשלום והסדרים מול הלקוח</label>
-          <textarea name="paymentTerms" value={formData.paymentTerms} onChange={handleChange} className={styles.input} rows={2} placeholder="פירוט תנאי התשלום שסוכמו..."></textarea>
+        <div className={styles.inputGroup} style={{ marginTop: '16px' }}>
+          <label style={{ fontWeight: 700 }}>תנאי תשלום לחוזה</label>
+          <select
+            className={styles.input}
+            value={paymentTemplateId}
+            onChange={(e) => {
+              onPaymentTermsCustomChange(false);
+              setEditingCustomPayment(false);
+              onPaymentTemplateChange(e.target.value);
+            }}
+          >
+            {paymentTemplates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              marginTop: '10px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontSize: '0.95rem', color: '#334155' }}>
+              נוסח מותאם אישית לאירוע זה
+            </span>
+            <button
+              type="button"
+              onClick={openCustomEditor}
+              title="עריכת נוסח מותאם לאירוע זה"
+              aria-label="עריכת נוסח מותאם לאירוע זה"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                border: '1px solid #bfdbfe',
+                borderRadius: '8px',
+                background: paymentTermsCustom ? '#dbeafe' : '#eff6ff',
+                color: '#1d4ed8',
+                cursor: 'pointer',
+                fontSize: '1rem',
+              }}
+            >
+              ✏️
+            </button>
+            {paymentTermsCustom && (
+              <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                נוסח מותאם שמור לאירוע זה
+              </span>
+            )}
+          </div>
+
+          {editingCustomPayment && (
+            <div
+              style={{
+                marginTop: '10px',
+                padding: '12px',
+                border: '2px solid #2563eb',
+                borderRadius: '8px',
+                background: '#fff',
+              }}
+            >
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>
+                הקלידי נוסח תשלום ייחודי — יישמר רק לאירוע זה
+              </label>
+              <textarea
+                className={styles.input}
+                rows={4}
+                value={customDraft}
+                onChange={(e) => setCustomDraft(e.target.value)}
+                placeholder="לדוגמה: 70% עד שבוע לפני האירוע, 30% בצ'ק לאחר האירוע..."
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={saveCustomPayment}
+                  style={{
+                    background: '#059669',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  שמירה לאירוע זה
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelCustomEditor}
+                  style={{
+                    background: '#fff',
+                    color: '#64748b',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              marginTop: '10px',
+              padding: '12px 14px',
+              background: paymentTermsCustom ? '#ecfdf5' : '#f0f9ff',
+              border: paymentTermsCustom ? '1px solid #86efac' : '1px solid #bae6fd',
+              borderRadius: '8px',
+              fontSize: '0.95rem',
+              lineHeight: 1.7,
+              color: paymentTermsCustom ? '#065f46' : '#0c4a6e',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '6px' }}>
+              {paymentTermsCustom ? 'נוסח שיופיע בחוזה (מותאם):' : 'תצוגה מקדימה — יופיע בחוזה:'}
+            </strong>
+            {paymentTermsText || 'בחרי תבנית או לחצי על העיפרון לנוסח מותאם'}
+            {eventDate && !paymentTermsCustom && (
+              <div style={{ fontSize: '12px', color: '#0369a1', marginTop: '6px' }}>
+                מחושב לפי תאריך האירוע: {eventDate}
+              </div>
+            )}
+          </div>
         </div>
 
         {isEditMode && formData.clientSignatureUrl && editId && (

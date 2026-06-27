@@ -1,6 +1,12 @@
 import prisma from '../config/prisma';
 import { DEFAULT_CONTRACT_TEXT } from './defaultContractText';
 import { buildPortionMinimumClause } from './portionBilling';
+import {
+  findPaymentTemplate,
+  getPaymentTemplatesFromSettings,
+  mergePaymentTermsIntoContract,
+  renderPaymentTermsText,
+} from './paymentTerms';
 
 const DEFAULT_BAR_PORTION_PRICE = 60;
 
@@ -25,4 +31,27 @@ export async function getContractText(): Promise<string> {
   const barPortionPrice = settings?.barPortionPrice ?? DEFAULT_BAR_PORTION_PRICE;
   const baseText = settings?.contractText?.trim() || DEFAULT_CONTRACT_TEXT;
   return applyBarPortionPrice(baseText, barPortionPrice);
+}
+
+export async function resolveDefaultPaymentTermsText(
+  total = 0,
+  eventDate?: Date | string | null,
+): Promise<string> {
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 'global' } });
+  const { templates, defaultTemplateId } = getPaymentTemplatesFromSettings(settings);
+  const template = findPaymentTemplate(templates, defaultTemplateId) ?? templates[0];
+  if (!template) return '';
+  return renderPaymentTermsText(template, { total, eventDate });
+}
+
+export async function resolveContractWithPaymentTerms(options?: {
+  paymentTermsText?: string | null;
+  total?: number;
+  eventDate?: Date | string | null;
+}): Promise<string> {
+  const base = await getContractText();
+  const paymentParagraph =
+    options?.paymentTermsText?.trim()
+    || (await resolveDefaultPaymentTermsText(options?.total, options?.eventDate));
+  return mergePaymentTermsIntoContract(base, paymentParagraph);
 }

@@ -169,6 +169,8 @@ export const updateBookingSchema = z.object({
       depositCheckUrl: z.string().nullable().optional(),
       depositCheckDetails: z.unknown().optional(),
       contractText: z.string().nullable().optional(),
+      paymentTemplateId: z.string().nullable().optional(),
+      paymentTermsText: z.string().nullable().optional(),
       advancePaid: optionalNumber,
       releaseDateIds: z.array(z.string().uuid()).optional(),
       optionDurationHours: optionalNumber,
