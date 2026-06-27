@@ -30,7 +30,7 @@ export const eventFormController = {
       const q = typeof req.query.q === 'string' ? req.query.q : '';
       const bookings = await prisma.booking.findMany({
         where: {
-          status: 'BOOKED',
+          eventDate: { status: 'BOOKED' },
           OR: [
             { clientAFullName: { contains: q, mode: 'insensitive' } },
             { clientAIdNumber: { contains: q } },
@@ -148,7 +148,7 @@ export const eventFormController = {
   async saveTables(req: Request, res: Response) {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const { tables } = req.body;
+      const { tables, tableLayoutImageUrl } = req.body;
 
       if (!Array.isArray(tables)) {
         return res.status(400).json({ error: 'נדרש מערך tables' });
@@ -157,6 +157,7 @@ export const eventFormController = {
       const form = await prisma.eventForm.upsert({
         where: { bookingId },
         update: {
+          ...(typeof tableLayoutImageUrl === 'string' ? { tableLayoutImageUrl } : {}),
           tables: {
             deleteMany: {},
             create: tables.map(mapTableCreate),
@@ -164,6 +165,7 @@ export const eventFormController = {
         },
         create: {
           bookingId,
+          ...(typeof tableLayoutImageUrl === 'string' ? { tableLayoutImageUrl } : {}),
           tables: {
             create: tables.map(mapTableCreate),
           },

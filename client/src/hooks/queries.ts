@@ -45,7 +45,13 @@ export function useCalendarDatesQuery(start: string, end: string, eventType: str
     queryFn: async () => {
       const qs = new URLSearchParams({ start, end, eventType });
       const res = await apiFetch(`${API_URL}/calendar/dates?${qs}`);
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'שגיאה בטעינת לוח שנה');
+      }
+      if (Array.isArray(json)) return json;
+      if (Array.isArray(json?.data)) return json.data;
+      return [];
     },
     enabled: Boolean(start && end),
   });

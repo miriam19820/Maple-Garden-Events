@@ -1385,6 +1385,18 @@
   min-height: 0;
 }
 
+.tableLayoutPreviewBlock {
+  margin-top: 14px;
+}
+
+.tableLayoutPreviewImg {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: var(--maple-radius-sm);
+  border: 1px solid var(--maple-border);
+}
+
 /* פוטר */
 .formFooter {
   flex-shrink: 0;

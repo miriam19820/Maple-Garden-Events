@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigationOverride } from '../../context/NavigationContext';
 import styles from './EventFormManager.module.css';
 import CheckCamera from '../CheckCamera/CheckCamera';
@@ -13,6 +12,8 @@ import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
 import { calculatePortionBilling, MIN_PORTIONS_MIXED, MIN_PORTIONS_PER_UNIT } from '../../utils/portionBilling';
+
+const EventFormPieChart = lazy(() => import('./EventFormPieChart'));
 
 interface Booking {
   id: string;
@@ -118,6 +119,7 @@ const EventFormManager = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTableLayoutOpen, setIsTableLayoutOpen] = useState(false);
   const [savedTables, setSavedTables] = useState<TableData[] | undefined>(undefined);
+  const [tableLayoutImageUrl, setTableLayoutImageUrl] = useState<string | null>(null);
   const [tableLayoutSaving, setTableLayoutSaving] = useState(false);
   const [hasHonorTable, setHasHonorTable] = useState<boolean | null>(null);
   const [hasEntertainers, setHasEntertainers] = useState<boolean | null>(null);
@@ -243,12 +245,14 @@ const EventFormManager = () => {
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
           setSelectedMenu(form.menuSelections || null);
           setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
+          setTableLayoutImageUrl(form.tableLayoutImageUrl || null);
         } else {
           setFormData({});
           setHasHonorTable(null);
           setHasEntertainers(null);
           setNotesList([]);
           setSavedTables(undefined);
+          setTableLayoutImageUrl(null);
         }
       })
       .catch(() => {
@@ -257,23 +261,28 @@ const EventFormManager = () => {
         setHasEntertainers(null);
         setNotesList([]);
         setSavedTables(undefined);
+        setTableLayoutImageUrl(null);
       });
   }, [selected]);
 
-  const handleTableLayoutSave = async (tables: TableData[]) => {
+  const handleTableLayoutSave = async (tables: TableData[], imageDataUrl: string) => {
     if (!selected) return;
     setTableLayoutSaving(true);
     try {
       const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/tables`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tables: clientTablesToServer(tables) }),
+        body: JSON.stringify({
+          tables: clientTablesToServer(tables),
+          tableLayoutImageUrl: imageDataUrl,
+        }),
       });
       const result = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'שגיאה בשמירה');
       }
       setSavedTables(tables);
+      setTableLayoutImageUrl(imageDataUrl);
       alert('סידור השולחנות נשמר בהצלחה!');
       setIsTableLayoutOpen(false);
     } catch (error) {
@@ -283,6 +292,8 @@ const EventFormManager = () => {
       setTableLayoutSaving(false);
     }
   };
+
+  const layoutGuestCount = Number(formData.finalGuestCount) || 0;
 
   const filtered = bookings.filter(b =>
     b.clientAFullName?.includes(search) ||
@@ -713,6 +724,17 @@ const EventFormManager = () => {
                   </div>
                 </div>
               )}
+
+              {tableLayoutImageUrl && (
+                <div className={styles.tableLayoutPreviewBlock}>
+                  <img
+                    src={tableLayoutImageUrl}
+                    alt="סקיצת סידור שולחנות"
+                    className={styles.tableLayoutPreviewImg}
+                  />
+                </div>
+              )}
+
               {formData.seatingType === 'separate' && (
                 <div className={`${styles.row} ${styles.rowThree}`}>
                   <div className={styles.field}>
@@ -765,28 +787,15 @@ const EventFormManager = () => {
                             <span>נשים: {formData.womenPercent}% ({womenCount} אנשים)</span>
                           </div>
                         </div>
-                        <ResponsiveContainer width="100%" height={300}>
-                          <PieChart>
-                            <Pie
-                              data={[
-                                { name: `גברים (${menCount})`, value: formData.menPercent },
-                                { name: `נשים (${womenCount})`, value: formData.womenPercent }
-                              ]}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={false}
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              <Cell fill="#2196F3" />
-                              <Cell fill="#F44336" />
-                            </Pie>
-                            <Tooltip formatter={(value) => `${value}%`} />
-                            <Legend />
-                          </PieChart>
-                        </ResponsiveContainer>
+                        <Suspense fallback={<div style={{ height: 300, display: 'grid', placeItems: 'center' }}>טוען גרף...</div>}>
+                          <EventFormPieChart
+                            data={[
+                              { name: `גברים (${menCount})`, value: formData.menPercent, color: '#2196F3' },
+                              { name: `נשים (${womenCount})`, value: formData.womenPercent, color: '#F44336' },
+                            ]}
+                            formatTooltip={(value) => `${value}%`}
+                          />
+                        </Suspense>
                       </>
                     );
                   })()}
@@ -1053,26 +1062,17 @@ const EventFormManager = () => {
                                   <span>נשים: {entWomenPercent}% ({entWomen} אישה)</span>
                                 </div>
                               </div>
-                              <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                  <Pie
-                                    data={[
-                                      { name: 'גברים', value: entMen },
-                                      { name: 'נשים', value: entWomen }
-                                    ]}
-                                    cx="50%"
-                                    cy="50%"
-                                    labelLine={false}
-                                    outerRadius={80}
-                                    dataKey="value"
-                                  >
-                                    <Cell fill="#2196F3" />
-                                    <Cell fill="#F44336" />
-                                  </Pie>
-                                  <Tooltip formatter={(value) => [`${value} משתתפים (${((Number(value) / currentTotal) * 100).toFixed(0)}%)`, '']} />
-                                  <Legend />
-                                </PieChart>
-                              </ResponsiveContainer>
+                              <Suspense fallback={<div style={{ height: 300, display: 'grid', placeItems: 'center' }}>טוען גרף...</div>}>
+                                <EventFormPieChart
+                                  data={[
+                                    { name: 'גברים', value: entMen, color: '#2196F3' },
+                                    { name: 'נשים', value: entWomen, color: '#F44336' },
+                                  ]}
+                                  formatTooltip={(value) =>
+                                    `${value} משתתפים (${((Number(value) / currentTotal) * 100).toFixed(0)}%)`
+                                  }
+                                />
+                              </Suspense>
                             </>
                           );
                         })()}
@@ -1267,8 +1267,13 @@ const EventFormManager = () => {
                   </div>
                   <div className={styles.tableLayoutBuilder}>
                     <FloorPlanBuilder
-                      key={selected.id}
+                      key={`${selected.id}-${savedTables?.length ?? 0}-${layoutGuestCount}`}
                       initialTables={savedTables}
+                      guestCount={layoutGuestCount}
+                      seatingType={formData.seatingType || 'separate'}
+                      menPercent={formData.menPercent}
+                      womenPercent={formData.womenPercent}
+                      includeHonorTables={hasHonorTable !== false}
                       onSave={handleTableLayoutSave}
                       onClose={() => setIsTableLayoutOpen(false)}
                       downloadFileName={`sidur-shulchanot-${selected.clientAFullName}-${dateStr(selected).replace(/\./g, '-')}.png`}

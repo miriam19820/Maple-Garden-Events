@@ -15,6 +15,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1073.0",
     "@hebcal/core": "^6.5.2",
     "@prisma/client": "^6.19.3",
     "@react-oauth/google": "^0.13.5",

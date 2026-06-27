@@ -664,6 +664,11 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
 });
 
+export const getContractTemplate = catchAsync(async (_req: Request, res: Response) => {
+  const contractText = await getContractText();
+  res.status(200).json({ success: true, data: { contractText } });
+});
+
 export const getNextEventCode = catchAsync(async (req: Request, res: Response) => {
   const prefix: EventCodePrefix = req.query.prefix === 'EVT' ? 'EVT' : 'OPT';
   const count = Math.min(Math.max(Number(req.query.count) || 1, 1), 10);

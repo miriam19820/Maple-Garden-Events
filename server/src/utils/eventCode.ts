@@ -1,11 +1,7 @@
-import type { PrismaClient } from '@prisma/client';
 import prisma from '../config/prisma';
 import { neonTransactionOptions } from './dbRetry';
 
-type TransactionClient = Omit<
-  PrismaClient,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
->;
+type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 const SETTINGS_ID = 'global';
 const PAD_LENGTH = 5;

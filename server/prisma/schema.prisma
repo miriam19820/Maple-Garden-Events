@@ -19,7 +19,6 @@ model Booking {
   clientBEmail        String?
   clientBAddress      String?
   calendarDateId      String
-  timeSlot            String?
   eventType           String
   timeOfDay           String
   timeSlot            String          @default("evening")
@@ -149,6 +148,7 @@ model EventForm {
   tables              TablePosition[]
   menuSelections Json?
   akumPaid Boolean?
+  tableLayoutImageUrl String?
 }
 
 model CancellationLog {

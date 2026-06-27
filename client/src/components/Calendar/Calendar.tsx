@@ -93,7 +93,8 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
   const todayStr = formatDateLocal(new Date());
 
-  const { data: datesData = [], isLoading: loading } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
+  const { data: datesData = [], isLoading: loading, isError } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
+  const datesList = Array.isArray(datesData) ? datesData : [];
 
   useEffect(() => {
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ['calendar'] });
@@ -102,7 +103,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
   }, [queryClient]);
 
   const buildGrid = () => {
-    const serverMap = new Map<string, any>(datesData.map((d: any) => [d.date, d]));
+    const serverMap = new Map<string, any>(datesList.map((d: any) => [d.date, d]));
     const days: (DayData & { col: number; row: number })[] = [];
     const loop = new Date(startDate);
     let row = 2;
@@ -131,6 +132,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
   };
 
   const grid = buildGrid();
+  const weekRowCount = grid.length > 0 ? Math.max(...grid.map((d) => d.row)) - 1 : 5;
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const prevYear  = () => setCurrentDate(new Date(year - 1, month, 1));
@@ -207,9 +209,14 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
       <div className="year-display">{year}</div>
 
-      {loading ? <div className="calendar-loading">טוען נתונים...</div> : (
+      {loading ? <div className="calendar-loading">טוען נתונים...</div> : isError ? (
+        <div className="calendar-loading">שגיאה בטעינת לוח השנה — ודאי שהשרת רץ על פורט 5000</div>
+      ) : (
         <div className="calendar-grid-wrapper">
-          <div className="calendar-grid">
+          <div
+            className="calendar-grid"
+            style={{ gridTemplateRows: `auto repeat(${weekRowCount}, minmax(0, 1fr))` }}
+          >
             {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
             {grid.map(day => {
               const isToday = day.date === todayStr;
@@ -330,7 +337,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                 className="option-btn"
                 onClick={() => {
                   if (!selectedDateForAction) return;
-                  const dayData = datesData.find((d: any) => d.date === selectedDateForAction);
+                  const dayData = datesList.find((d: any) => d.date === selectedDateForAction);
                   setIsActionModalOpen(false);
                   navigate('/option', {
                     state: {

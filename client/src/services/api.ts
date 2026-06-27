@@ -24,7 +24,15 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
 
     return response;
   } catch (error) {
-    Sentry.captureException(error, { extra: { url, method: options.method || 'GET' } });
+    const isNetworkError =
+      error instanceof TypeError &&
+      (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'));
+    if (!isNetworkError || !import.meta.env.DEV) {
+      Sentry.captureException(error, { extra: { url, method: options.method || 'GET' } });
+    }
+    if (isNetworkError) {
+      throw new Error('לא ניתן להתחבר לשרver — ודאי שהשרver רץ על פורט 5000');
+    }
     throw error;
   }
 };
