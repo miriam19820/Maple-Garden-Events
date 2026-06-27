@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import styles from './FeedbackPage.module.css';
+import { API_URL } from '../../config/api';
 
 // --- הגדרות טיפוסים (TypeScript Interfaces) ---
 
@@ -60,7 +61,7 @@ const FeedbackPage: React.FC = () => {
   const [comments, setComments] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const feedbackApiBase = `${API_URL}/feedback`;
 
   // 1. קריאת GET: בדיקת תקינות הקישור בטעינה הראשונית
   useEffect(() => {
@@ -72,7 +73,7 @@ const FeedbackPage: React.FC = () => {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/feedback/${token}`);
+        const response = await fetch(`${feedbackApiBase}/${token}`);
         const data = await response.json();
 
         if (response.ok && data.success) {
@@ -93,7 +94,7 @@ const FeedbackPage: React.FC = () => {
     };
 
     verifyToken();
-  }, [token, API_BASE_URL]);
+  }, [token, feedbackApiBase]);
 
   // 2. קריאת POST: שליחת המשוב לשרת
   const handleSubmit = async () => {
@@ -106,7 +107,7 @@ const FeedbackPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/feedback/${token}`, {
+      const response = await fetch(`${feedbackApiBase}/${token}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

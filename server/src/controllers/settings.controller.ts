@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { catchAsync } from '../middlewares/errorHandler';
 import { DEFAULT_CONTRACT_TEXT } from '../utils/defaultContractText';
+import { emitSettingsUpdated } from '../utils/realtime';
 
 export const settingsController = {
   // =========================================
@@ -24,12 +25,12 @@ export const settingsController = {
   }),
 
   updateSettings: catchAsync(async (req: Request, res: Response) => {
-    const data = req.body;
     const settings = await prisma.systemSettings.update({
       where: { id: 'global' },
-      data
+      data: req.body,
     });
     res.json(settings);
+    emitSettingsUpdated();
   }),
 
   // =========================================
@@ -49,19 +50,18 @@ export const settingsController = {
       data: { name, category, price: Number(price) }
     });
     res.json(extra);
+    emitSettingsUpdated();
   }),
 
   updateExtra: catchAsync(async (req: Request, res: Response) => {
-    const data = req.body;
-    
-    // המרה למספר במידה והגיע כטקסט מהטופס
-    if (data.price !== undefined) data.price = Number(data.price);
-    
+    const data = req.body as { name?: string; category?: string; price?: number; isActive?: boolean };
+
     const extra = await prisma.extraService.update({
-      where: { id: req.params.id as string }, // התיקון שהורג את השגיאה של TypeScript
-      data
+      where: { id: req.params.id as string },
+      data,
     });
     res.json(extra);
+    emitSettingsUpdated();
   }),
 
   getStaff: catchAsync(async (_req: Request, res: Response) => {
@@ -98,18 +98,21 @@ export const settingsController = {
           where: { id: existing.id },
           data: { isActive: true },
         });
+        emitSettingsUpdated();
         return res.json(restored);
       }
       return res.status(409).json({ success: false, message: 'עובד בשם זה כבר קיים.' });
     }
 
     const member = await prisma.staffMember.create({ data: { name } });
+    emitSettingsUpdated();
     res.status(201).json(member);
   }),
 
   deleteStaff: catchAsync(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     await prisma.staffMember.delete({ where: { id } });
+    emitSettingsUpdated();
     res.json({ success: true });
   }),
 };

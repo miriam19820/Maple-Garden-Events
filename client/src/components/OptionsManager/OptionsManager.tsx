@@ -1,9 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import styles from './OptionsManager.module.css';
 import OptionActionModal from '../OptionActionModal/OptionActionModal';
 import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
-import { socket } from '../../services/socketService';
-import { useQueryClient } from '@tanstack/react-query';
 import { useBookingsQuery } from '../../hooks/queries';
 import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
@@ -35,7 +33,6 @@ const OptionsManager = () => {
   const [search, setSearch] = React.useState('');
   const [selectedOption, setSelectedOption] = React.useState<any>(null);
   const [notifyOption, setNotifyOption] = React.useState<any>(null);
-  const queryClient = useQueryClient();
 
   const { data, isLoading: loading, refetch } = useBookingsQuery({ status: 'OPTION', limit: 100, page: 1 });
 
@@ -48,12 +45,6 @@ const OptionsManager = () => {
       b.clientBIdNumber?.includes(search)
     );
   });
-
-  useEffect(() => {
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    socket.on('date-updated', invalidate);
-    return () => { socket.off('date-updated', invalidate); };
-  }, [queryClient]);
 
   const handleBump = async (dateId: string) => {
     if (!window.confirm('האם לשלוח ללקוח התראת דחיפות ולקצר את הדד-ליין ל-3 שעות?')) return;

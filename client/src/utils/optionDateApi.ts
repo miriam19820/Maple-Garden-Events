@@ -1,4 +1,5 @@
 import { apiFetch } from '../services/api';
+import { API_URL } from '../config/api';
 import { type TimeSlot } from './timeSlot';
 import { validateOptionDateSelection } from './optionDateValidation';
 
@@ -15,7 +16,7 @@ export async function fetchCalendarDays(
 ): Promise<any[]> {
   const filter = getEventTypeFilter(eventType);
   const res = await apiFetch(
-    `http://localhost:5000/api/calendar/dates?start=${start}&end=${end}&eventType=${filter}`
+    `${API_URL}/calendar/dates?start=${start}&end=${end}&eventType=${filter}`
   );
   if (!res.ok) throw new Error('fetch failed');
   return res.json();
@@ -43,7 +44,7 @@ export async function resolveOptionDate(
   try {
     const filter = getEventTypeFilter(eventType);
     const res = await apiFetch(
-      `http://localhost:5000/api/calendar/dates?start=${date}&end=${date}&eventType=${filter}`
+      `${API_URL}/calendar/dates?start=${date}&end=${date}&eventType=${filter}`
     );
     if (!res.ok) {
       return { ok: false, error: 'לא ניתן לוודא את התאריך — נסי שוב.' };

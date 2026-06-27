@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { apiFetch } from '../../services/api';
+import { API_URL } from '../../config/api';
 import styles from './NotifyOptionModal.module.css';
 
 interface Props {
@@ -46,7 +47,7 @@ const NotifyOptionModal = ({ booking, eventDateStr, onClose, onSuccess }: Props)
     setResult(null);
 
     try {
-      const res = await apiFetch('http://localhost:5000/api/bookings/notify-option-interest', {
+      const res = await apiFetch(`${API_URL}/bookings/notify-option-interest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: booking.id, message }),

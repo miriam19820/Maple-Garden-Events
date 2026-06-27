@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useCalendarDatesQuery } from '../../hooks/queries';
 import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
-import { socket } from '../../services/socketService';
 import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS, getTakenSlots, getBookableSlotsForDate, hasOptionOnDay, type TimeSlot } from '../../utils/timeSlot';
 import { isEventLive } from '../../utils/eventStart';
 import liveStyles from '../LiveEvent/LiveEvent.module.css';
@@ -73,7 +71,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [selectedDateForAction, setSelectedDateForAction] = useState<string | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState('חתונה');
-  const queryClient = useQueryClient();
   const [, setLiveTick] = useState(0);
 
   useEffect(() => {
@@ -95,12 +92,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
   const { data: datesData = [], isLoading: loading, isError } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
   const datesList = Array.isArray(datesData) ? datesData : [];
-
-  useEffect(() => {
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['calendar'] });
-    socket.on('date-updated', invalidate);
-    return () => { socket.off('date-updated', invalidate); };
-  }, [queryClient]);
 
   const buildGrid = () => {
     const serverMap = new Map<string, any>(datesList.map((d: any) => [d.date, d]));

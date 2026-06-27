@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../services/api';
+import { API_URL } from '../../config/api';
 
 export const AuthorizedUsers = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [email, setEmail] = useState('');
 
-  // ✅ הכתובת תוקנה - הוספנו את הקידומת auth
-  const API_URL = 'http://localhost:5000/api/auth/authorized-users';
+  const AUTH_USERS_URL = `${API_URL}/auth/authorized-users`;
 
   useEffect(() => {
-    apiFetch(API_URL)
+    apiFetch(AUTH_USERS_URL)
       .then(res => {
         if (!res.ok) throw new Error(`שגיאת שרת: ${res.status}`);
         return res.json();
@@ -24,7 +24,7 @@ export const AuthorizedUsers = () => {
     if (!emailToSave) return;
     
     try {
-      const res = await apiFetch(API_URL, {
+      const res = await apiFetch(AUTH_USERS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: emailToSave })
@@ -39,7 +39,7 @@ export const AuthorizedUsers = () => {
   const handleDelete = async (id: string) => {
     if(!window.confirm('האם את בטוחה שברצונך למחוק מנהל זה?')) return;
     try {
-      const res = await apiFetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`${AUTH_USERS_URL}/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('שגיאה במחיקה');
       window.location.reload();
     } catch (e) {

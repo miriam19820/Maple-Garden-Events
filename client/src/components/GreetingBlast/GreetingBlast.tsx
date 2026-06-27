@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../../config/api';
+import { secureFetch } from '../../services/api';
 import styles from './GreetingBlast.module.css';
 
 const GreetingBlast = () => {
@@ -24,8 +26,9 @@ const GreetingBlast = () => {
       formData.append('scheduledTime', scheduledTime);
       if (file) formData.append('attachment', file);
 
-      const res = await fetch('http://localhost:5000/api/bookings/send-greeting', {
+      const res = await secureFetch(`${API_URL}/bookings/send-greeting`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
 

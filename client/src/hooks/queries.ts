@@ -69,3 +69,101 @@ export function useFeedbackAdminQuery(page: number, limit = 20) {
     },
   });
 }
+
+export function useGlobalSettingsQuery() {
+  return useQuery({
+    queryKey: ['settings', 'global'],
+    queryFn: async () => {
+      const res = await apiFetch(`${API_URL}/settings/global`);
+      return res.json();
+    },
+  });
+}
+
+export function useExtrasQuery() {
+  return useQuery({
+    queryKey: ['settings', 'extras'],
+    queryFn: async () => {
+      const res = await apiFetch(`${API_URL}/settings/extras`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useStaffQuery() {
+  return useQuery({
+    queryKey: ['settings', 'staff'],
+    queryFn: async () => {
+      const res = await apiFetch(`${API_URL}/settings/staff`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useKashrutQuery() {
+  return useQuery({
+    queryKey: ['kashrut'],
+    queryFn: async () => {
+      const res = await apiFetch(`${API_URL}/kashrut`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useEventFormsQuery() {
+  return useQuery({
+    queryKey: ['event-forms'],
+    queryFn: async () => {
+      const res = await apiFetch(`${API_URL}/event-forms`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useCancellationStatsQuery(year: string, month: string) {
+  return useQuery({
+    queryKey: ['cancellation-stats', year, month],
+    queryFn: async () => {
+      let url = `${API_URL}/bookings/stats/cancellations?year=${year}`;
+      if (month) url += `&month=${month}`;
+      const res = await apiFetch(url);
+      const data = await res.json();
+      if (!data.success) throw new Error('שגיאה בטעינת סטטיסטיקה');
+      return data.data as { reason: string; count: number }[];
+    },
+  });
+}
+
+export function useMenuQuery() {
+  return useQuery({
+    queryKey: ['menu'],
+    queryFn: async () => {
+      const res = await apiFetch(`${API_URL}/menu`);
+      const json = await res.json();
+      return json?.data ?? json;
+    },
+  });
+}
+
+export interface CheckInQueryData {
+  checkIn: Record<string, unknown>;
+  booking: Record<string, unknown>;
+  eventForm: Record<string, unknown> | null;
+}
+
+export function useCheckInQuery(bookingId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['check-in', bookingId],
+    queryFn: async (): Promise<CheckInQueryData> => {
+      const res = await apiFetch(`${API_URL}/check-in/${bookingId}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'שגיאה בטעינת הטופס');
+      return json.data;
+    },
+    enabled: Boolean(bookingId),
+  });
+}

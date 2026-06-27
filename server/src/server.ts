@@ -1,6 +1,7 @@
 import './instrument';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { socketAuthMiddleware } from './middlewares/socketAuth';
 import { startCronJobs } from './utils/cronJobs';
 import { initOrderSequence } from './utils/eventCode';
 import { logger } from './utils/logger';
@@ -15,6 +16,8 @@ export const io = new Server(httpServer, {
   },
   maxHttpBufferSize: 5e6,
 });
+
+io.use(socketAuthMiddleware);
 
 export const broadcastUpdate = (action: string, data: unknown) => {
   io.emit(action, data);

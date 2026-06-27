@@ -1,54 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import './SettingsManager.css';
 import { apiFetch } from '../../services/api';
-// הוספנו את הייבוא של הקומפוננטה החדשה:
+import { API_URL } from '../../config/api';
+import {
+  useGlobalSettingsQuery,
+  useExtrasQuery,
+  useStaffQuery,
+  useKashrutQuery,
+} from '../../hooks/queries';
 import { AuthorizedUsers } from './AuthorizedUsers';
 
 
 export const SettingsManager = () => {
+  const { data: globalSettingsData, isLoading: settingsLoading } = useGlobalSettingsQuery();
+  const { data: extras = [], isLoading: extrasLoading } = useExtrasQuery();
+  const { data: kashrutsData = [], isLoading: kashrutLoading } = useKashrutQuery();
+  const { data: staffMembers = [], isLoading: staffLoading } = useStaffQuery();
+
   const [globalSettings, setGlobalSettings] = useState<any>({});
-  const [extras, setExtras] = useState<any[]>([]);
   const [kashruts, setKashruts] = useState<any[]>([]);
-  
   const [newExtra, setNewExtra] = useState({ name: '', category: 'עיצוב', price: '' });
-  const [staffMembers, setStaffMembers] = useState<{ id: string; name: string }[]>([]);
   const [newStaffName, setNewStaffName] = useState('');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (globalSettingsData) setGlobalSettings(globalSettingsData);
+  }, [globalSettingsData]);
 
- const fetchData = async () => {
-    try {
-      const [settingsRes, extrasRes, kashrutRes, staffRes] = await Promise.all([
-        apiFetch('http://localhost:5000/api/settings/global'),
-        apiFetch('http://localhost:5000/api/settings/extras'),
-        apiFetch('http://localhost:5000/api/kashrut'),
-        apiFetch('http://localhost:5000/api/settings/staff'),
-      ]);
-      
-      const settingsData = await settingsRes.json();
-      const extrasData = await extrasRes.json();
-      const kashrutData = await kashrutRes.json();
-      const staffData = await staffRes.json();
-      
-      setGlobalSettings(settingsData);
-      
-      // התיקון שלנו: מוודאים שקיבלנו באמת מערך לפני ששומרים בסטייט
-      setExtras(Array.isArray(extrasData) ? extrasData : []);
-      setKashruts(Array.isArray(kashrutData) ? kashrutData : []);
-      setStaffMembers(Array.isArray(staffData) ? staffData : []);
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      alert('שגיאה בטעינת נתונים');
-    }
-  };
+  useEffect(() => {
+    setKashruts(Array.isArray(kashrutsData) ? kashrutsData : []);
+  }, [kashrutsData]);
+
+  const loading = settingsLoading || extrasLoading || kashrutLoading || staffLoading;
   const saveGlobalSettings = async () => {
     try {
-      await apiFetch('http://localhost:5000/api/settings/global', {
+      await apiFetch(`${API_URL}/settings/global`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(globalSettings)
@@ -61,7 +46,7 @@ export const SettingsManager = () => {
 
   const updateKashrut = async (id: string, data: any) => {
     try {
-      const response = await apiFetch(`http://localhost:5000/api/kashrut/${id}`, {
+      const response = await apiFetch(`${API_URL}/kashrut/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -71,8 +56,6 @@ export const SettingsManager = () => {
         alert(`השרת סירב לשמור! קוד שגיאה: ${response.status}. תבדקי את החלון השחור של השרת.`);
         return;
       }
-
-      fetchData();
     } catch (error) {
       alert('שגיאה בתקשורת מול השרת');
     }
@@ -93,13 +76,12 @@ export const SettingsManager = () => {
     if (!newExtra.name || !newExtra.price) return alert('נא למלא שם ומחיר');
 
     try {
-      await apiFetch('http://localhost:5000/api/settings/extras', {
+      await apiFetch(`${API_URL}/settings/extras`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newExtra)
       });
       setNewExtra({ name: '', category: 'עיצוב', price: '' });
-      fetchData(); 
     } catch (error) {
       alert('שגיאה בהוספת תוספת');
     }
@@ -107,12 +89,11 @@ export const SettingsManager = () => {
 
   const toggleExtraStatus = async (id: string, currentStatus: boolean) => {
     try {
-      await apiFetch(`http://localhost:5000/api/settings/extras/${id}`, {
+      await apiFetch(`${API_URL}/settings/extras/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus })
       });
-      fetchData();
     } catch (error) {
       alert('שגיאה בעדכון סטטוס');
     }
@@ -124,7 +105,7 @@ export const SettingsManager = () => {
     if (!name) return alert('נא להזין שם עובד');
 
     try {
-      const res = await apiFetch('http://localhost:5000/api/settings/staff', {
+      const res = await apiFetch(`${API_URL}/settings/staff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -135,7 +116,6 @@ export const SettingsManager = () => {
         return;
       }
       setNewStaffName('');
-      fetchData();
     } catch {
       alert('שגיאה בהוספת עובד');
     }
@@ -144,8 +124,7 @@ export const SettingsManager = () => {
   const handleDeleteStaff = async (id: string, name: string) => {
     if (!window.confirm(`להסיר את ${name} מרשימת הנציגים?`)) return;
     try {
-      await apiFetch(`http://localhost:5000/api/settings/staff/${id}`, { method: 'DELETE' });
-      fetchData();
+      await apiFetch(`${API_URL}/settings/staff/${id}`, { method: 'DELETE' });
     } catch {
       alert('שגיאה במחיקת עובד');
     }

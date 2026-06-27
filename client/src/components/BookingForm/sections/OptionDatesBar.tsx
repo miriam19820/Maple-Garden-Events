@@ -7,7 +7,7 @@ import {
   fetchCalendarDays,
   resolveOptionDate,
 } from '../../../utils/optionDateApi';
-import { socket } from '../../../services/socketService';
+import { REALTIME_DATE_UPDATED_EVENT } from '../../../services/realtimeSync';
 
 export type { OptionDateItem };
 
@@ -94,8 +94,8 @@ export const OptionDatePickerModal = ({
   useEffect(() => {
     if (!isOpen) return;
     const refresh = () => { loadMonthDays(); };
-    socket.on('date-updated', refresh);
-    return () => { socket.off('date-updated', refresh); };
+    window.addEventListener(REALTIME_DATE_UPDATED_EVENT, refresh);
+    return () => { window.removeEventListener(REALTIME_DATE_UPDATED_EVENT, refresh); };
   }, [isOpen, loadMonthDays]);
 
   if (!isOpen) return null;

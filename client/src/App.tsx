@@ -6,6 +6,9 @@ import { AppLayout } from './components/AppLayout/AppLayout';
 import { Login } from './components/Login/Login';
 import { PageLoader } from './components/PageLoader/PageLoader';
 import { checkAuthSession } from './services/api';
+import { connectSocket, disconnectSocket } from './services/socketService';
+import { setupRealtimeSync, teardownRealtimeSync } from './services/realtimeSync';
+import { queryClient } from './lib/queryClient';
 
 const BookingForm = lazy(() => import('./components/BookingForm/BookingForm'));
 const OptionsManager = lazy(() => import('./components/OptionsManager/OptionsManager'));
@@ -58,6 +61,16 @@ function App() {
     checkAuthSession().then(setIsAuthenticated);
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      connectSocket();
+      setupRealtimeSync(queryClient);
+    } else if (isAuthenticated === false) {
+      teardownRealtimeSync();
+      disconnectSocket();
+    }
+  }, [isAuthenticated]);
+
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
   };
@@ -94,7 +107,7 @@ function App() {
         <Route path="/menu" element={<ProtectedRoute><Lazy><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></Lazy></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Lazy><PageShell><SettingsManager /></PageShell></Lazy></ProtectedRoute>} />
         <Route path="/feedback-manager" element={<ProtectedRoute><Lazy><PageShell><FeedbackManager /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/gallery" element={<Lazy><AppLayout><Gallery /></AppLayout></Lazy>} />
+        <Route path="/gallery" element={<ProtectedRoute><Lazy><AppLayout><Gallery /></AppLayout></Lazy></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );

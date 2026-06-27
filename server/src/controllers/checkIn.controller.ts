@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { Prisma } from '@prisma/client';
 import { canEditCheckIn } from '../utils/eventStart';
+import { emitBookingUpdated, emitCheckInUpdated } from '../utils/realtime';
 
 export interface ReserveTableRow {
   number: number;
@@ -196,6 +197,8 @@ export const checkInController = {
         });
       }
 
+      emitBookingUpdated(bookingId);
+      emitCheckInUpdated(bookingId);
       res.json({ success: true, data: checkIn });
     } catch (e) {
       console.error('updateCheckIn error:', e);

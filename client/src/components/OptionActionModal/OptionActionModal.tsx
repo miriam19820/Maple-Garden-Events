@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../services/api';
+import { API_URL } from '../../config/api';
 import styles from './OptionActionModal.module.css';
 
 interface Props {
@@ -41,7 +42,7 @@ const OptionActionModal = ({ option, onClose, onSuccess }: Props) => {
     
     setIsSubmitting(true);
     try {
-      const res = await apiFetch('http://localhost:5000/api/bookings/release', {
+      const res = await apiFetch(`${API_URL}/bookings/release`, {
         method: 'POST',
         body: JSON.stringify({
           dateIds: [option.calendarDateId],

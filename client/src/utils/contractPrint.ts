@@ -1,11 +1,12 @@
 import { API_BASE } from '../config/api';
+import { secureFetch } from '../services/api';
 
 export function getContractPdfUrl(bookingId: string | number): string {
   return `${API_BASE}/api/bookings/${bookingId}/contract-pdf`;
 }
 
 export async function fetchContractPdf(bookingId: string | number): Promise<Blob> {
-  const response = await fetch(getContractPdfUrl(bookingId), { credentials: 'include' });
+  const response = await secureFetch(getContractPdfUrl(bookingId));
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error((err as { message?: string }).message || 'לא ניתן לטעון את החוזה');

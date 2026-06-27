@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import EventCheckInBoard, {
   type CheckInFormData,
   type ReserveTableRow,
 } from './EventCheckInBoard';
+import { API_URL } from '../../config/api';
+import { secureFetch } from '../../services/api';
+import { useCheckInQuery } from '../../hooks/queries';
 import styles from './LiveEvent.module.css';
 
 interface EventCheckInModalProps {
@@ -61,9 +65,15 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   onClose,
   onSaved,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [formData, setFormData] = useState<CheckInFormData | null>(null);
+  const queryClient = useQueryClient();
+  const { data, isLoading, error: queryError } = useCheckInQuery(bookingId);
+
+  const formData = useMemo(() => {
+    if (!data?.checkIn) return null;
+    return toFormData(data.checkIn);
+  }, [data]);
+
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'שגיאה בטעינת הטופס' : '';
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -72,56 +82,31 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError('');
-
-    fetch(`http://localhost:5000/api/check-in/${bookingId}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (cancelled) return;
-        if (res.success && res.data?.checkIn) {
-          setFormData(toFormData(res.data.checkIn));
-        } else {
-          setError(res.error || 'שגיאה בטעינת הטופס');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setError('שגיאת תקשורת');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [bookingId]);
-
-  const handleSave = async (data: CheckInFormData) => {
-    const specialAdditions = [data.specialAdditionLine1, data.specialAdditionLine2]
+  const handleSave = async (form: CheckInFormData) => {
+    const specialAdditions = [form.specialAdditionLine1, form.specialAdditionLine2]
       .filter(Boolean)
       .join('\n');
 
     const payload = {
-      familiesLabel: data.familiesLabel,
-      orderedPortions: data.orderedPortions === '' ? null : data.orderedPortions,
-      entertainerPortions: data.entertainerPortions === '' ? null : data.entertainerPortions,
-      reservePortions: data.reservePortions === '' ? null : data.reservePortions,
-      reserveTables: data.reserveTables,
+      familiesLabel: form.familiesLabel,
+      orderedPortions: form.orderedPortions === '' ? null : form.orderedPortions,
+      entertainerPortions: form.entertainerPortions === '' ? null : form.entertainerPortions,
+      reservePortions: form.reservePortions === '' ? null : form.reservePortions,
+      reserveTables: form.reserveTables,
       specialAdditions,
-      customerSignature: data.customerSignature,
+      customerSignature: form.customerSignature,
     };
 
-    const response = await fetch(`http://localhost:5000/api/check-in/${bookingId}`, {
+    const response = await secureFetch(`${API_URL}/check-in/${bookingId}`, {
       method: 'PUT',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
     const res = await response.json();
     if (response.ok && res.success) {
+      await queryClient.invalidateQueries({ queryKey: ['check-in', bookingId] });
       alert('טופס קבלת האולם נשמר בהצלחה');
       onSaved?.();
       onClose();
@@ -140,9 +125,9 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
           </button>
         </div>
 
-        {loading && <div className={styles.checkInLoading}>טוען טופס...</div>}
+        {isLoading && <div className={styles.checkInLoading}>טוען טופס...</div>}
         {error && <div className={styles.checkInError}>{error}</div>}
-        {!loading && !error && formData && (
+        {!isLoading && !error && formData && (
           <EventCheckInBoard
             dateDisplay={dateDisplay}
             initialData={formData}

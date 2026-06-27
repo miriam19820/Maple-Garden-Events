@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
 import { sendPDFToClient, sendWhatsAppMessage } from '../Services/emailService';
+import { emitEventFormsUpdated } from '../utils/realtime';
 
 function mapTableCreate(table: {
   id: number;
@@ -21,6 +22,52 @@ function mapTableCreate(table: {
     width: table.width ?? null,
     height: table.height ?? null,
   };
+}
+
+const EVENT_FORM_DB_FIELDS = [
+  'eventTime',
+  'receptionType',
+  'finalGuestCount',
+  'seatingType',
+  'menPercent',
+  'womenPercent',
+  'honorTableCount',
+  'tableclothId',
+  'napkinId',
+  'centerpiece',
+  'bridgeChair',
+  'hasLighting',
+  'hasSoundSystem',
+  'hasScreens',
+  'hasFireworks',
+  'entertainersBar',
+  'entertainersSitting',
+  'entertainersMen',
+  'entertainersWomen',
+  'depositCheckUrl',
+  'depositCheckStatus',
+  'depositCheckDetails',
+  'akumCode',
+  'kashrut',
+  'guestPortionCount',
+  'pricePerPortion',
+  'kashrutSurcharge',
+  'designPrice',
+  'extrasJson',
+  'totalPrice',
+  'contractSigned',
+  'contractSentAt',
+  'notes',
+  'menuSelections',
+  'tableLayoutImageUrl',
+] as const;
+
+function pickEventFormDbFields(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    EVENT_FORM_DB_FIELDS
+      .filter((key) => body[key] !== undefined)
+      .map((key) => [key, body[key]]),
+  );
 }
 
 export const eventFormController = {
@@ -49,22 +96,24 @@ export const eventFormController = {
   async upsertForm(req: Request, res: Response) {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const { id, createdAt, updatedAt, booking: _booking, bookingId: _bid, tables, ...formData } = req.body;
+      const { tables, ...rawBody } = req.body as { tables?: Parameters<typeof mapTableCreate>[0][] } & Record<string, unknown>;
+      const formData = pickEventFormDbFields(rawBody);
+      const tableRows = Array.isArray(tables) ? tables : undefined;
 
       const form = await prisma.eventForm.upsert({
         where: { bookingId },
         update: { 
           ...formData,
-          tables: tables ? {
+          tables: tableRows ? {
             deleteMany: {},
-            create: tables.map(mapTableCreate)
+            create: tableRows.map(mapTableCreate)
           } : undefined
         },
         create: { 
           bookingId, 
           ...formData,
-          tables: tables ? {
-            create: tables.map(mapTableCreate)
+          tables: tableRows ? {
+            create: tableRows.map(mapTableCreate)
           } : undefined
         }
       });
@@ -123,6 +172,7 @@ export const eventFormController = {
       }
 
       res.json({ success: true, data: form });
+      emitEventFormsUpdated();
     } catch (e) {
       console.error('Form upsert error:', e);
       res.status(500).json({ error: 'שגיאה בשמירת הטופס' });
@@ -174,6 +224,7 @@ export const eventFormController = {
       });
 
       res.json({ success: true, data: form });
+      emitEventFormsUpdated();
     } catch (e) {
       console.error('Save tables error:', e);
       res.status(500).json({ error: 'שגיאה בשמירת סידור שולחנות' });

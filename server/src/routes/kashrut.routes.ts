@@ -1,38 +1,83 @@
 import { Router } from 'express';
+
 import prisma from '../config/prisma';
+
+import { requireAuth } from '../middlewares/auth';
+
+import { validate } from '../middlewares/validate';
+
+import { updateKashrutSchema } from '../validators/kashrut.validator';
+import { emitSettingsUpdated } from '../utils/realtime';
+
+
 
 const router = Router();
 
-router.get('/', async (req, res) => {
+router.use(requireAuth);
+
+
+
+router.get('/', async (_req, res) => {
+
   try {
+
     const kashruts = await prisma.kashrutCertificate.findMany();
+
     res.json(kashruts);
-  } catch (error) {
+
+  } catch {
+
     res.status(500).json({ error: 'שגיאה בשליפת כשרויות' });
+
   }
+
 });
 
-router.put('/:id', async (req, res) => {
+
+
+router.put('/:id', validate(updateKashrutSchema), async (req, res) => {
+
   const { id } = req.params;
-  const { imageUrl, validUntil } = req.body;
-  
-  console.log('--- ניסיון שמירת כשרות ---');
-  console.log('ID שהתקבל:', id);
-  console.log('נתונים שהתקבלו:', { imageUrl: imageUrl ? 'יש תמונה!' : 'אין', validUntil });
+
+  const { imageUrl, validUntil } = req.body as { imageUrl?: string; validUntil?: string };
+
+
 
   try {
+
     const updated = await prisma.kashrutCertificate.update({
-      where: { id: id }, // ודאי שזה תואם לשם השדה ב-Prisma
+
+      where: { id: id as string },
+
       data: {
-        imageUrl: imageUrl,
-        validUntil: validUntil ? new Date(validUntil) : undefined
-      }
+
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+
+        ...(validUntil !== undefined && validUntil !== ''
+
+          ? { validUntil: new Date(validUntil) }
+
+          : validUntil === ''
+
+            ? { validUntil: null }
+
+            : {}),
+
+      },
+
     });
+
     res.json({ success: true, data: updated });
-  } catch (error: any) {
-    console.error('שגיאת פריזמה:', error);
-    res.status(500).json({ error: 'שגיאה בשמירה', details: error.message });
+    emitSettingsUpdated();
+  } catch {
+
+    res.status(500).json({ error: 'שגיאה בשמירה' });
+
   }
+
 });
+
+
 
 export default router;
+

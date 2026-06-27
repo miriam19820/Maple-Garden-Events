@@ -1,7 +1,7 @@
 // @ts-ignore
 import hebcal from 'hebcal';
 import prisma from "../config/prisma";
-import { io } from "../server";
+import { emitDateUpdated } from "../utils/realtime";
 import { normalizeTimeSlot, getTakenSlots, SLOT_LABELS, formatStoredTimeOfDay, getBlockedSlotsForDate, isDateFullyBooked, validateSlotOnDate, parseDateLocal, toLocalDateKey } from '../utils/timeSlot';
 import { validateSlotAvailability, resolveBookingSlot } from '../utils/bookingDateValidation';
 import { allocateEventCode } from '../utils/eventCode';
@@ -276,19 +276,59 @@ export const calendarService = {
 
       const storedTime = formatStoredTimeOfDay(slot, bookingDetails.startTime, bookingDetails.endTime);
       const eventCode = await allocateEventCode('EVT');
+      const totals = bookingDetails.calculatedTotals;
+      const basePrice = Number(totals?.baseTotal ?? bookingDetails.basePrice) || 0;
+      const extrasPrice = Number(totals?.hallExtrasTotal ?? totals?.extrasTotal ?? bookingDetails.extrasPrice) || 0;
+      const externalExtrasPrice = Number(totals?.externalExtrasTotal ?? bookingDetails.externalExtrasPrice) || 0;
+      const totalPrice = totals?.finalTotal !== undefined
+        ? Number(totals.finalTotal)
+        : Number(bookingDetails.totalPrice) || basePrice + extrasPrice + externalExtrasPrice;
 
       try {
         const booking = await tx.booking.create({
           data: {
-            ...bookingDetails,
+            clientAFullName: bookingDetails.clientAFullName,
+            clientAIdNumber: bookingDetails.clientAIdNumber || '',
+            clientAPhone: bookingDetails.clientAPhone,
+            clientAEmail: bookingDetails.clientAEmail || null,
+            clientAAddress: bookingDetails.clientAAddress || null,
+            clientBFullName: bookingDetails.clientBFullName || null,
+            clientBIdNumber: bookingDetails.clientBIdNumber || null,
+            clientBPhone: bookingDetails.clientBPhone || null,
+            clientBEmail: bookingDetails.clientBEmail || null,
+            clientBAddress: bookingDetails.clientBAddress || null,
+            eventType: bookingDetails.eventType,
             timeOfDay: storedTime,
             timeSlot: slot,
+            guestCount: Number(bookingDetails.guestCount) || 0,
+            minimumGuestCount: Number(bookingDetails.minimumGuestCount) || Number(bookingDetails.guestCount) || 0,
+            finalPricePortion: Number(bookingDetails.finalPricePortion) || 0,
+            basePrice,
+            extrasPrice,
+            externalExtrasPrice,
+            liveAdditionsTotal: 0,
+            totalPrice,
+            hallRentalPrice: bookingDetails.hallRentalPrice != null ? Number(bookingDetails.hallRentalPrice) : null,
+            hasMusic: bookingDetails.hasMusic !== undefined ? bookingDetails.hasMusic : true,
+            akumApprovalCode: bookingDetails.akumApprovalCode || null,
+            managerComments: bookingDetails.managerComments || null,
+            clientComments: bookingDetails.clientComments || null,
+            createdBy: bookingDetails.createdBy,
+            advancePaid: 0,
+            totalPaid: 0,
+            securityCheckStatus: 'PENDING',
+            isContractSigned: !!(bookingDetails.contractSigned && bookingDetails.clientSignature),
+            clientSignatureUrl: bookingDetails.clientSignature || null,
+            depositCheckUrl: bookingDetails.depositCheckUrl || null,
+            depositCheckDetails: bookingDetails.depositCheckDetails || null,
+            contractText: bookingDetails.contractText?.trim() || null,
+            isOption: false,
             eventDate: { connect: { id: dateId } },
             eventCode,
           },
         });
 
-        io.emit('date-updated', { dateId, status: 'BOOKED' });
+        emitDateUpdated({ dateId, status: 'BOOKED' });
         return booking;
       } catch (createErr: any) {
         if (createErr?.code === 'P2002') {

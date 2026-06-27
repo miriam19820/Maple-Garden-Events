@@ -1,20 +1,26 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import prisma from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth';
-import { clearAuthCookie, setAuthCookie } from '../utils/authCookie';
+import {
+  clearSessionCookies,
+  extractRefreshToken,
+  generateCsrfToken,
+  setSessionCookies,
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from '../utils/authCookie';
 import { catchAsync } from '../middlewares/errorHandler';
 import { logger } from '../utils/logger';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-function signManagerToken(email: string, name: string): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET is not configured');
-  }
-  return jwt.sign({ email, role: 'manager', name }, secret, { expiresIn: '30d' });
+function issueSession(res: Response, email: string, name: string) {
+  const accessToken = signAccessToken(email, name);
+  const refreshToken = signRefreshToken(email, name);
+  const csrfToken = generateCsrfToken();
+  setSessionCookies(res, accessToken, refreshToken, csrfToken);
 }
 
 export const login = async (req: Request, res: Response) => {
@@ -49,8 +55,7 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const managerToken = signManagerToken(googleUserEmail, userName);
-    setAuthCookie(res, managerToken);
+    issueSession(res, googleUserEmail, userName);
 
     return res.status(200).json({
       success: true,
@@ -63,8 +68,33 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
+export const refresh = async (req: Request, res: Response) => {
+  const refreshToken = extractRefreshToken(req);
+  if (!refreshToken) {
+    return res.status(401).json({ success: false, message: 'Refresh token חסר.' });
+  }
+
+  try {
+    const user = verifyRefreshToken(refreshToken);
+
+    const authorized = await prisma.authorizedUser.findUnique({
+      where: { email: user.email },
+    });
+    if (!authorized) {
+      clearSessionCookies(res);
+      return res.status(403).json({ success: false, message: 'אין הרשאות גישה.' });
+    }
+
+    issueSession(res, user.email, user.name);
+    return res.status(200).json({ success: true });
+  } catch {
+    clearSessionCookies(res);
+    return res.status(401).json({ success: false, message: 'Refresh token לא תקין או שפג תוקפו.' });
+  }
+};
+
 export const logout = (_req: Request, res: Response) => {
-  clearAuthCookie(res);
+  clearSessionCookies(res);
   res.status(200).json({ success: true, message: 'התנתקת בהצלחה.' });
 };
 

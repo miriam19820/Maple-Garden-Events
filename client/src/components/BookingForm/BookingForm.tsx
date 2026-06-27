@@ -4,6 +4,7 @@ import styles from './BookingForm.module.css';
 import { type TimeSlot, TIME_SLOTS, SLOT_LABELS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
+import { useGlobalSettingsQuery } from '../../hooks/queries';
 import { promptPrintAfterClose } from '../../utils/contractPrint';
 import { getSignatureDataUrl } from '../../utils/signature';
 import { scanCheckImage, fileToDataUrl, type DepositCheckDetails } from '../../utils/checkOcr';
@@ -17,6 +18,7 @@ import MetaBar from './sections/MetaBar';
 import OptionDatesBar, { normalizeOptionDate } from './sections/OptionDatesBar';
 import FinalizeOptionDatesBar from './sections/FinalizeOptionDatesBar';
 import { verifyAllOptionDates } from '../../utils/optionDateApi';
+import { API_URL } from '../../config/api';
 import { NotesList } from '../NotesList/NotesList';
 import MenuDisplay from '../MenuDisplay/MenuDisplay';
 
@@ -233,15 +235,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [contractText, setContractText] = useState('');
   const [vatRate, setVatRate] = useState(17);
+  const { data: globalSettings } = useGlobalSettingsQuery();
 
   useEffect(() => {
-    apiFetch('http://localhost:5000/api/settings/global')
-      .then(r => r.json())
-      .then(settings => {
-        if (settings?.vatRate) setVatRate(Number(settings.vatRate));
-      })
-      .catch(() => {});
-  }, []);
+    if (globalSettings?.vatRate) setVatRate(Number(globalSettings.vatRate));
+  }, [globalSettings]);
 
   useEffect(() => {
     if (selectedDatesDisplay.length > 0) {
@@ -257,7 +255,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
     const loadNextCode = async () => {
       try {
-        const res = await apiFetch(`http://localhost:5000/api/bookings/next-code?prefix=${prefix}&count=${dateCount}`);
+        const res = await apiFetch(`${API_URL}/bookings/next-code?prefix=${prefix}&count=${dateCount}`);
         const json = await res.json();
         if (!res.ok || !json.success) return;
         const codes: string[] = json.data.codes || [];
@@ -271,7 +269,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   useEffect(() => {
     if (convertFromOption && activeEditId) {
-      apiFetch('http://localhost:5000/api/bookings/next-code?prefix=EVT&count=1')
+      apiFetch(`${API_URL}/bookings/next-code?prefix=EVT&count=1`)
         .then(r => r.json())
         .then(json => {
           if (json.success && json.data?.code) setOrderNumber(json.data.code);
@@ -328,7 +326,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     if (!activeEditId) return;
     const loadBooking = async () => {
       try {
-        const res = await apiFetch(`http://localhost:5000/api/bookings/${activeEditId}`);
+        const res = await apiFetch(`${API_URL}/bookings/${activeEditId}`);
         const json = await res.json();
         if (!res.ok || !json.success) {
           alert(json.message || 'שגיאה בטעינת ההזמנה');
@@ -348,7 +346,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
         if (convertFromOption) {
           try {
-            const relatedRes = await apiFetch(`http://localhost:5000/api/bookings/${b.id}/related-options`);
+            const relatedRes = await apiFetch(`${API_URL}/bookings/${b.id}/related-options`);
             if (relatedRes.ok) {
               const relatedJson = await relatedRes.json();
               if (relatedJson.success && Array.isArray(relatedJson.data)) {
@@ -757,7 +755,7 @@ const calculateTotals = () => {
       }
 
       const submitId = convertFromOption ? activeBookingId : editId;
-      const url = isEditMode ? `http://localhost:5000/api/bookings/${submitId}` : 'http://localhost:5000/api/bookings';
+      const url = isEditMode ? `${API_URL}/bookings/${submitId}` : `${API_URL}/bookings`;
       const method = isEditMode ? 'PUT' : 'POST';
 
       const response = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

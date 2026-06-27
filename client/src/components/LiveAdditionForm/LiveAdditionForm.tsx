@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
+import { secureFetch } from '../../services/api';
+import { API_URL } from '../../config/api';
 import './LiveAdditionForm.css';
 
 interface LiveAdditionFormProps {
@@ -46,8 +48,9 @@ const signatureData = sigCanvas.current?.getCanvas().toDataURL('image/png');
     };
 
     try {
-      const response = await fetch(`http://localhost:5000/api/bookings/${bookingId}/additions`, {
+      const response = await secureFetch(`${API_URL}/bookings/${bookingId}/additions`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });

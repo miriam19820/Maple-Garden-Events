@@ -12,6 +12,14 @@ import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
 import { calculatePortionBilling, MIN_PORTIONS_MIXED, MIN_PORTIONS_PER_UNIT } from '../../utils/portionBilling';
+import { API_URL } from '../../config/api';
+import { secureFetch } from '../../services/api';
+import {
+  useBookingsQuery,
+  useEventFormsQuery,
+  useGlobalSettingsQuery,
+  useKashrutQuery,
+} from '../../hooks/queries';
 
 const EventFormPieChart = lazy(() => import('./EventFormPieChart'));
 
@@ -97,11 +105,26 @@ const KASHRUT_LIST = [
 
 const EventFormManager = () => {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [allForms, setAllForms] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Booking | null>(null);
+
+  const { data: bookingsData, isLoading: bookingsLoading } = useBookingsQuery({
+    status: 'BOOKED',
+    limit: 200,
+    page: 1,
+  });
+  const { data: allForms = [] } = useEventFormsQuery();
+  const { data: kashruts = [] } = useKashrutQuery();
+  const { data: globalSettings } = useGlobalSettingsQuery();
+
+  const bookings = useMemo(
+    () =>
+      ((bookingsData?.data ?? []) as Booking[]).filter(
+        (b) => b.eventDate?.status === 'BOOKED',
+      ),
+    [bookingsData],
+  );
+  const loading = bookingsLoading;
   
   const [viewMode, setViewMode] = useState<'bookings' | 'forms' | 'stats'>('bookings'); 
   
@@ -183,38 +206,16 @@ const EventFormManager = () => {
   };
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/bookings?status=BOOKED&limit=200`)
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) {
-          const bookedBookings = res.data.filter((b: any) => b.eventDate?.status === 'BOOKED');
-          setBookings(bookedBookings);
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    if (kashruts.length > 0 && kashruts[0].imageUrl) {
+      setKashrutImage(kashruts[0].imageUrl);
+    }
+  }, [kashruts]);
 
-    fetch('http://localhost:5000/api/event-forms')
-      .then(r => r.json())
-      .then(forms => setAllForms(forms || []))
-      .catch(console.error);
-
-    fetch('http://localhost:5000/api/kashrut')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.length > 0 && data[0].imageUrl) {
-          setKashrutImage(data[0].imageUrl);
-        }
-      })
-      .catch(err => console.error("שגיאה בטעינת תעודת כשרות:", err));
-
-    fetch('http://localhost:5000/api/settings/global')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.barPortionPrice) setBarPortionPrice(Number(data.barPortionPrice));
-      })
-      .catch(console.error);
-  }, []);
+  useEffect(() => {
+    if (globalSettings?.barPortionPrice) {
+      setBarPortionPrice(Number(globalSettings.barPortionPrice));
+    }
+  }, [globalSettings]);
 
   useEffect(() => {
     if (!selected) {
@@ -226,7 +227,7 @@ const EventFormManager = () => {
       return;
     }
     setShowCamera(false);
-    fetch(`http://localhost:5000/api/event-forms/${selected.id}`)
+    secureFetch(`${API_URL}/event-forms/${selected.id}`, { credentials: 'include' })
       .then(r => r.json())
       .then(form => {
         if (form && form.id) {
@@ -269,8 +270,9 @@ const EventFormManager = () => {
     if (!selected) return;
     setTableLayoutSaving(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/tables`, {
+      const response = await secureFetch(`${API_URL}/event-forms/${selected.id}/tables`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tables: clientTablesToServer(tables),
@@ -377,7 +379,7 @@ const EventFormManager = () => {
   const handleDownloadPDF = async () => {
     if (!selected) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/pdf`);
+      const response = await secureFetch(`${API_URL}/event-forms/${selected.id}/pdf`, { credentials: 'include' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -459,8 +461,9 @@ const EventFormManager = () => {
         totalPrice: portionBilling?.totalAmount,
       });
 
-      const response = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
+      const response = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSave)
       });
@@ -469,10 +472,6 @@ const EventFormManager = () => {
       
       const result = await response.json();
       if (result.success) {
-        const updatedBookings = bookings.map(b =>
-          b.id === selected.id ? { ...b, eventForm: result.data } : b
-        );
-        setBookings(updatedBookings);
         setDepositCheckFile(null);
         setSubmitting(false);
         setSelected(null);
@@ -1316,8 +1315,9 @@ const EventFormManager = () => {
         menuSelections: selectedMenu
       });
 
-      const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
+      const saveResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -1369,8 +1369,9 @@ const EventFormManager = () => {
         menuSelections: selectedMenu
       });
 
-      const saveResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}`, {
+      const saveResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -1382,8 +1383,9 @@ const EventFormManager = () => {
          return;
       }
       
-      const emailResponse = await fetch(`http://localhost:5000/api/event-forms/${selected.id}/send-email`, {
+      const emailResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}/send-email`, {
         method: 'POST',
+        credentials: 'include',
       });
       
       const data = await emailResponse.json();

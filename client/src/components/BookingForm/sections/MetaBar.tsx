@@ -1,18 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import styles from '../BookingForm.module.css';
-import { apiFetch } from '../../../services/api';
+import { useStaffQuery } from '../../../hooks/queries';
 
 const eventTypesList = ['חתונה', 'אירוסין', 'בר מצווה', 'בת מצווה', 'ברית', 'בריתה', 'חינה', 'הרמת כוסית', 'כנס מקצועי', 'אירוע חברה/עסקי', 'השכרת אולם בלי אוכל'];
 
 const MetaBar = ({ formData, handleChange, isOption, orderNumber, optionDurationHours, setOptionDurationHours }: any) => {
-  const [staffMembers, setStaffMembers] = useState<{ id: string; name: string }[]>([]);
-
-  useEffect(() => {
-    apiFetch('http://localhost:5000/api/settings/staff')
-      .then(r => r.json())
-      .then(data => setStaffMembers(Array.isArray(data) ? data : []))
-      .catch(() => setStaffMembers([]));
-  }, []);
+  const { data: staffMembers = [] } = useStaffQuery();
 
   const currentDateDisplay = new Date().toLocaleString('he-IL', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useKashrutQuery } from '../../hooks/queries';
 import './KashrutSelector.css';
 
 interface Props {
@@ -6,7 +7,6 @@ interface Props {
   onChange: (val: string) => void;
 }
 
-// הרשימה הקבועה שביקשת (הורדתי את "רובין" הכפול)
 const KASHRUT_LIST = [
   "רובין",
   "מחפוד",
@@ -17,21 +17,11 @@ const KASHRUT_LIST = [
 ];
 
 export default function KashrutSelector({ value, onChange }: Props) {
-  const [certImage, setCertImage] = useState<string | null>(null);
+  const { data: kashruts = [] } = useKashrutQuery();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  useEffect(() => {
-    // משיכת התעודה (התעודה הראשונה שמוגדרת בהגדרות תהיה תקפה לכולם)
-    fetch('http://localhost:5000/api/kashrut')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.length > 0 && data[0].imageUrl) {
-          setCertImage(data[0].imageUrl);
-        }
-      })
-      .catch(err => console.error("שגיאה בטעינת תעודה:", err));
-  }, []);
+  const certImage = kashruts.length > 0 ? kashruts[0].imageUrl ?? null : null;
 
   useEffect(() => {
     setImageError(false);
@@ -52,7 +42,6 @@ export default function KashrutSelector({ value, onChange }: Props) {
         </select>
       </div>
 
-      {/* תצוגת התעודה הכללית */}
       {certImage && !imageError ? (
         <div
           onClick={() => setIsModalOpen(true)}
@@ -75,7 +64,6 @@ export default function KashrutSelector({ value, onChange }: Props) {
         </div>
       )}
 
-      {/* מודאל הגדלת תמונה */}
       {isModalOpen && certImage && (
         <div
           onClick={() => setIsModalOpen(false)}

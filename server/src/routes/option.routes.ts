@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { createOptionEntry } from '../models/option.model';
+import { requireAuth } from '../middlewares/auth';
 
 const router = Router();
+router.use(requireAuth);
 
 // נתיב ליצירת אופציה חדשה
 router.post('/', async (req: Request, res: Response) => {

@@ -7,7 +7,11 @@ import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
 import { getContractText } from '../utils/getContractText';
 import { sendPDFToClient } from '../Services/emailService';
-import { io } from '../server';
+import {
+  emitBookingUpdated,
+  emitDateUpdated,
+  emitDateUpdatedMany,
+} from '../utils/realtime';
 import {
   normalizeTimeSlot,
   formatStoredTimeOfDay,
@@ -334,7 +338,10 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     }
   }, neonTransactionOptions));
 
-  eventsToEmit.forEach(ev => io.emit('date-updated', ev));
+  eventsToEmit.forEach(ev => emitDateUpdated(ev));
+  if (createdBookings.length > 0) {
+    emitBookingUpdated(createdBookings[0].id);
+  }
 
   if (data.contractSigned && data.clientSignature && createdBookings.length > 0) {
     try {
@@ -611,10 +618,10 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   });
 
   if (isConverting) {
-    io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
+    emitDateUpdated({ dateId: booking.eventDate.id, status: 'BOOKED' });
     const releaseDateIds: string[] = Array.isArray(data.releaseDateIds) ? data.releaseDateIds : [];
     releaseDateIds.forEach((dateId: string) => {
-      io.emit('date-updated', { dateId, status: 'AVAILABLE' });
+      emitDateUpdated({ dateId, status: 'AVAILABLE' });
     });
 
     if (finalSignature && data.contractSigned) {
@@ -660,7 +667,8 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     });
   }
 
-  io.emit('date-updated', { dateId: booking.eventDate.id, status: booking.eventDate.status });
+  emitDateUpdated({ dateId: booking.eventDate.id, status: booking.eventDate.status });
+  emitBookingUpdated(id);
   res.status(200).json({ success: true, message: 'ההזמנה עודכנה בהצלחה.', data: updated });
 });
 
@@ -772,6 +780,7 @@ export const addEventAddition = async (req: Request, res: Response) => {
       return addition;
     });
 
+    emitBookingUpdated(bookingId);
     res.status(201).json({ message: 'התוספת נשמרה בהצלחה!', addition: newAddition });
   } catch (error) {
     console.error('Error adding event addition:', error);
@@ -884,7 +893,8 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
     }
   }
 
-  io.emit('date-updated', { dateId: booking.eventDate.id, status: 'BOOKED' });
+  emitDateUpdated({ dateId: booking.eventDate.id, status: 'BOOKED' });
+  emitBookingUpdated(bookingId);
   res.status(200).json({ success: true, message: 'האירוע נסגר והחוזה נחתם בהצלחה!', data: updated });
 });
 
@@ -921,6 +931,9 @@ export const releaseOptions = catchAsync(async (req: Request, res: Response) => 
     }
   });
 
+  emitDateUpdatedMany(dateIds.map((dateId: string) => ({ dateId, status: 'AVAILABLE' })));
+  emitBookingUpdated();
+
   res.status(200).json({ success: true, message: 'התאריכים שוחררו והסטטיסטיקה נשמרה בהצלחה.' });
 });
 
@@ -943,6 +956,9 @@ export const bumpOption = catchAsync(async (req: Request, res: Response) => {
           await sendBumpWhatsApp(booking.clientAPhone.split(' | ')[0].trim(), booking.clientAFullName, eventDate.date.toString(), newDeadline);
       }
   }
+
+  emitDateUpdated({ dateId, status: 'OPTION' });
+  emitBookingUpdated();
 
   res.status(200).json({ success: true, message: 'הדד-ליין קוצר.', newDeadline });
 });
