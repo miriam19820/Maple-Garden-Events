@@ -152,11 +152,12 @@
 
 .header {
   background: linear-gradient(135deg, var(--maple-green) 0%, var(--maple-green-dark) 100%);
-  padding: 22px 28px;
+  padding: 16px 24px;
   color: #fff;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .headerLogo {
@@ -722,9 +723,9 @@
 @media (max-width: 768px) {
   .container { padding: 12px 10px 24px; }
   .formWrapper { padding: 16px; gap: 16px; }
-  .header { padding: 16px; flex-direction: column; align-items: flex-start; }
-  .headerLogo { height: 42px; }
-  .inputRow, .splitRow, .eventDetailsGrid, .paymentGrid {
+  .header { padding: 14px 16px; flex-direction: column; align-items: flex-start; }
+  .title { font-size: 1.1rem; }
+  .inputRow, .splitRow, .splitRowThree, .eventDetailsGrid, .paymentGrid {
     grid-template-columns: 1fr;
   }
 
@@ -735,6 +736,51 @@
     grid-auto-columns: unset;
   }
   .metaBar { grid-template-columns: 1fr; margin: 0; }
+  .formFooter {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 16px;
+  }
+  .submitBtn {
+    width: 100%;
+    padding: 14px 20px;
+  }
+  .formBottomRow {
+    grid-template-columns: 1fr !important;
+  }
+  .optionPickerModal {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    border-radius: var(--maple-radius-lg) var(--maple-radius-lg) 0 0;
+    max-height: 92dvh;
+  }
+  .optionPickerOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1023px) {
+  .formWrapper {
+    padding: 20px;
+  }
+
+  .formGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .formBottomRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .formBottomRowCompact {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* Desktop full-screen — must stay last so nothing overrides width */
@@ -1219,17 +1265,17 @@
 .optionPickerWeekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: clamp(4px, 0.8vh, 8px);
+  margin-bottom: clamp(6px, 1vh, 10px);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: clamp(0.75rem, 1.1vh, 0.88rem);
   color: #64748b;
 }
 
 .optionPickerGrid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: clamp(4px, 0.9vh, 10px);
 }
 
 .optionPickerDay {
@@ -1237,12 +1283,13 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
+  min-height: clamp(52px, 8vh, 72px);
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #f0fdf4;
   cursor: pointer;
-  padding: 4px;
+  padding: clamp(6px, 1vh, 10px);
+  gap: 4px;
 }
 
 .optionPickerDay:hover:not(:disabled) {
@@ -1259,12 +1306,14 @@
 
 .optionPickerDayNum {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: clamp(0.95rem, 1.4vh, 1.1rem);
 }
 
 .optionPickerDayHeb {
-  font-size: 0.65rem;
+  font-size: clamp(0.65rem, 1vh, 0.78rem);
   color: #64748b;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .optionPickerDayEmpty {

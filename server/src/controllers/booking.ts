@@ -6,6 +6,8 @@ import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
 import { getContractText, resolveContractWithPaymentTerms, resolveDefaultPaymentTermsText } from '../utils/getContractText';
+import { buildExtrasLineItems } from '../utils/contractSections';
+import { parseNotesBundle } from '../utils/notesStorage';
 import { getPaymentTemplatesFromSettings } from '../utils/paymentTerms';
 import { sendPDFToClient } from '../Services/emailService';
 import {
@@ -169,11 +171,25 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
   const clientBPhoneCombined = data.clientBPhone2 ? `${data.clientBPhone} | נוסף: ${data.clientBPhone2}` : data.clientBPhone;
   const clientBAddressCombined = data.clientBCity ? `${data.clientBCity}, ${data.clientBAddress}` : data.clientBAddress;
 
+  const menuNotes = parseNotesBundle(data.clientComments).menu;
+  const hallOnly = isHallOnlyBooking(data);
+  const extras = buildExtrasLineItems({
+    upgrades: typeof data.upgrades === 'object' && data.upgrades !== null
+      ? (data.upgrades as Record<string, boolean>)
+      : {},
+    kosherType: data.kosherType,
+    guestCount: Number(data.guestCount) || 0,
+    isHallOnly: hallOnly,
+    isFoodRelevant: !hallOnly,
+  });
+
   const resolvedContractText = data.contractText?.trim()
     || await resolveContractWithPaymentTerms({
       paymentTermsText: data.paymentTermsText,
       total: prices.totalPrice,
       eventDate: typeof datesToProcess[0] === 'object' ? datesToProcess[0]?.date : datesToProcess[0],
+      extras,
+      menuNotes,
     });
   const paymentTermsText = data.paymentTermsText?.trim()
     || await resolveDefaultPaymentTermsText(

@@ -1,6 +1,7 @@
 .settings-container {
   direction: rtl;
   font-family: var(--maple-font);
+  color: var(--maple-text);
 }
 
 .settings-header {
@@ -8,6 +9,16 @@
   color: var(--maple-text);
   border-bottom: 2px solid var(--maple-green-light);
   padding-bottom: 16px;
+}
+
+.settings-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.settings-header p {
+  margin: 0;
+  color: var(--maple-text-muted);
 }
 
 .settings-grid {
@@ -23,53 +34,68 @@
 }
 
 .settings-card {
-  background: white;
-  border-radius: 12px;
+  background: var(--maple-surface);
+  border-radius: var(--maple-radius-lg);
   padding: 24px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e2e8f0;
+  box-shadow: var(--maple-shadow-sm);
+  border: 1px solid var(--maple-border);
 }
 
 .settings-card h2 {
   margin-top: 0;
-  color: #0f172a;
-  font-size: 1.25rem;
+  color: var(--maple-text);
+  font-size: 1.2rem;
   margin-bottom: 20px;
 }
 
-.form-group {
+.settings-container .form-group {
   margin-bottom: 16px;
 }
 
-.form-group label {
+.settings-container .form-group label {
   display: block;
   margin-bottom: 8px;
-  font-weight: 500;
-  color: #475569;
+  font-weight: 600;
+  color: var(--maple-text-secondary);
 }
 
-.form-group input, .form-group select {
+.settings-container .form-group input,
+.settings-container .form-group select,
+.settings-container .form-group textarea {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--maple-border-strong);
+  border-radius: var(--maple-radius-sm);
   font-size: 1rem;
+  background: var(--maple-surface);
+  transition: border-color var(--maple-transition), box-shadow var(--maple-transition);
+}
+
+.settings-container .form-group input:focus,
+.settings-container .form-group select:focus,
+.settings-container .form-group textarea:focus {
+  outline: none;
+  border-color: var(--maple-green);
+  box-shadow: 0 0 0 3px rgba(140, 191, 142, 0.25);
 }
 
 .save-btn {
-  background: #2563eb;
+  background: var(--maple-green-dark);
   color: white;
   border: none;
   padding: 12px 24px;
-  border-radius: 6px;
+  border-radius: var(--maple-radius-sm);
   font-weight: 600;
   cursor: pointer;
   width: 100%;
   margin-top: 16px;
-  transition: background 0.2s;
+  transition: background var(--maple-transition);
+  font-family: var(--maple-font);
 }
 
-.save-btn:hover { background: #1d4ed8; }
+.save-btn:hover {
+  background: var(--maple-green-deep);
+}
 
 .add-extra-form {
   display: grid;
@@ -77,49 +103,85 @@
   gap: 12px;
   margin-bottom: 24px;
   align-items: end;
-  background: #f8fafc;
+  background: var(--maple-green-light);
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--maple-radius);
+  border: 1px solid var(--maple-green-muted);
+}
+
+@media (max-width: 768px) {
+  .add-extra-form {
+    grid-template-columns: 1fr;
+  }
 }
 
 .add-btn {
-  background: #16a34a;
+  background: var(--maple-green-dark);
   color: white;
   border: none;
   padding: 10px 20px;
-  border-radius: 6px;
+  border-radius: var(--maple-radius-sm);
   font-weight: 600;
   cursor: pointer;
   height: 42px;
+  font-family: var(--maple-font);
+  transition: background var(--maple-transition);
 }
 
-.add-btn:hover { background: #15803d; }
+.add-btn:hover {
+  background: var(--maple-green-deep);
+}
 
 .extras-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.extras-table th, .extras-table td {
+.extras-table th,
+.extras-table td {
   padding: 12px;
   text-align: right;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--maple-border);
 }
 
 .extras-table th {
-  background: #f1f5f9;
+  background: var(--maple-green-light);
   font-weight: 600;
-  color: #334155;
+  color: var(--maple-text-secondary);
 }
 
 .status-toggle {
   cursor: pointer;
   padding: 6px 12px;
-  border-radius: 20px;
+  border-radius: 999px;
   font-size: 0.85rem;
   font-weight: bold;
   border: none;
+  font-family: var(--maple-font);
 }
 
-.status-active { background: #dcfce7; color: #166534; }
-.status-inactive { background: #fee2e2; color: #991b1b; }
+.status-active {
+  background: var(--maple-green-light);
+  color: var(--maple-green-deep);
+}
+
+.status-inactive {
+  background: #fff5f5;
+  color: var(--maple-danger);
+}
+
+.delete-btn {
+  background: transparent;
+  color: var(--maple-danger);
+  border: 1px solid rgba(229, 62, 62, 0.35);
+  padding: 6px 12px;
+  border-radius: var(--maple-radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-family: var(--maple-font);
+}
+
+.delete-btn:hover {
+  background: var(--maple-danger);
+  color: #fff;
+}

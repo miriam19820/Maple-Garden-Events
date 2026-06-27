@@ -104,6 +104,54 @@
   margin-top: 4px;
 }
 
+@media (max-width: 768px) {
+  .title {
+    font-size: 1.2rem;
+  }
+
+  .searchInput {
+    max-width: none;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .popupRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .popupRow label {
+    min-width: 0;
+  }
+
+  .detailsActions {
+    gap: 8px;
+  }
+
+  .btnPrimary,
+  .btnSecondary,
+  .btnAddition {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .popupBox,
+  .detailsBox {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--maple-radius-lg) var(--maple-radius-lg) 0 0;
+  }
+
+  .popupOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
 .popupOverlay {
   position: fixed;
   inset: 0;

@@ -161,10 +161,11 @@
 
 .year-display {
   text-align: center;
-  font-size: 1.5rem;
+  font-size: clamp(1.35rem, 2.2vh, 1.75rem);
   font-weight: 700;
   color: var(--maple-text-secondary);
   letter-spacing: 0.02em;
+  margin-bottom: clamp(4px, 0.8vh, 10px);
 }
 
 /* =========================================
@@ -174,7 +175,7 @@
   background: var(--maple-surface);
   border: 1px solid var(--maple-border);
   border-radius: var(--maple-radius-lg);
-  padding: 16px;
+  padding: clamp(16px, 2vh, 24px);
   box-shadow: var(--maple-shadow);
   width: 100%;
   flex: 1;
@@ -186,7 +187,8 @@
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
+  grid-template-rows: auto repeat(var(--calendar-week-rows, 5), minmax(clamp(88px, 10vh, 148px), 1fr));
+  gap: clamp(8px, 1.2vh, 14px);
   direction: ltr;
   width: 100%;
   flex: 1;
@@ -198,8 +200,8 @@
   text-align: center;
   font-weight: 700;
   color: var(--maple-green-dark);
-  padding: 10px 4px;
-  font-size: 0.95rem;
+  padding: clamp(10px, 1.4vh, 16px) 6px;
+  font-size: clamp(0.88rem, 1.2vh, 1.05rem);
   background: var(--maple-green-light);
   border-radius: var(--maple-radius-sm);
   border: 1px solid var(--maple-green-muted);
@@ -210,11 +212,12 @@
 ========================================= */
 .calendar-cell {
   background: var(--maple-surface);
-  min-height: clamp(92px, 11vh, 112px);
-  padding: 9px 10px;
+  min-height: clamp(92px, 11vh, 132px);
+  padding: clamp(10px, 1.6vh, 18px) clamp(10px, 1vw, 14px);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  gap: clamp(4px, 0.9vh, 10px);
   border: 1px solid var(--maple-border);
   border-radius: var(--maple-radius);
   cursor: pointer;
@@ -259,8 +262,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 4px;
-  gap: 4px;
+  gap: clamp(4px, 0.8vh, 8px);
   flex-shrink: 0;
 }
 
@@ -269,17 +271,17 @@
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
-  font-size: 1.2rem;
+  font-size: clamp(1.1rem, 1.8vh, 1.45rem);
   font-weight: 800;
   color: var(--maple-text);
-  line-height: 1;
+  line-height: 1.1;
 }
 
 .hebrew-text {
   color: var(--maple-text-muted);
   font-weight: 500;
-  font-size: 0.82rem;
-  line-height: 1.2;
+  font-size: clamp(0.78rem, 1.1vh, 0.95rem);
+  line-height: 1.25;
   text-align: left;
 }
 
@@ -293,11 +295,10 @@
 }
 
 .cell-status-text {
-  font-size: 0.78rem;
+  font-size: clamp(0.76rem, 1.05vh, 0.9rem);
   font-weight: 600;
-  margin-top: 2px;
   text-align: right;
-  line-height: 1.2;
+  line-height: 1.35;
   flex-shrink: 0;
 }
 
@@ -337,9 +338,16 @@
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding-top: 4px;
+  gap: clamp(3px, 0.6vh, 6px);
+  padding-top: clamp(2px, 0.5vh, 6px);
   overflow: hidden;
+  min-height: 0;
+}
+
+.cell-events-container:empty {
+  display: none;
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .small-event-pill {
@@ -444,7 +452,7 @@
   position: fixed;
   inset: 0;
   background: rgba(26, 32, 44, 0.45);
-  z-index: 200;
+  z-index: var(--maple-z-panel);
   display: flex;
   justify-content: flex-start;
   direction: rtl;
@@ -518,9 +526,27 @@
 
 .calendar-loading {
   text-align: center;
-  padding: 48px;
+  padding: 48px 24px;
   color: var(--maple-text-muted);
   font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.calendar-loading::before {
+  content: '';
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--maple-green-muted);
+  border-top-color: var(--maple-green-dark);
+  border-radius: 50%;
+  animation: calendarSpin 0.8s linear infinite;
+}
+
+@keyframes calendarSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* =========================================
@@ -545,25 +571,37 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    padding: clamp(18px, 2.5vh, 28px);
   }
 
   .app-layout-viewport-fill .calendar-grid {
     height: 100%;
     min-height: 0;
+    gap: clamp(10px, 1.6vh, 18px);
   }
 
   .app-layout-viewport-fill .calendar-cell {
     min-height: 0;
     height: 100%;
+    padding: clamp(12px, 2.2vh, 24px) clamp(12px, 1.2vw, 18px);
+    gap: clamp(6px, 1.1vh, 14px);
   }
 
   .app-layout-viewport-fill .gregorian-num {
-    font-size: 1.2rem;
+    font-size: clamp(1.15rem, 2vh, 1.55rem);
+  }
+
+  .app-layout-viewport-fill .hebrew-text {
+    font-size: clamp(0.8rem, 1.2vh, 1rem);
+  }
+
+  .app-layout-viewport-fill .cell-status-text {
+    font-size: clamp(0.78rem, 1.1vh, 0.95rem);
   }
 
   .app-layout-viewport-fill .week-day-label {
-    font-size: 0.95rem;
-    padding: 10px 4px;
+    font-size: clamp(0.92rem, 1.3vh, 1.08rem);
+    padding: clamp(10px, 1.6vh, 18px) 8px;
   }
 }
 
@@ -572,12 +610,16 @@
     padding: 0 32px 20px;
   }
 
+  .app-layout-viewport-fill .calendar-grid {
+    gap: clamp(12px, 1.8vh, 20px);
+  }
+
   .app-layout-viewport-fill .calendar-cell {
-    padding: 10px 11px;
+    padding: clamp(14px, 2.4vh, 28px) clamp(14px, 1.4vw, 20px);
   }
 
   .app-layout-viewport-fill .gregorian-num {
-    font-size: 1.3rem;
+    font-size: clamp(1.25rem, 2.2vh, 1.65rem);
   }
 }
 
@@ -611,11 +653,12 @@
 
   .calendar-grid-wrapper {
     padding: 8px;
-    overflow-x: auto;
+    overflow-x: hidden;
   }
 
   .calendar-grid {
-    min-width: 320px;
+    min-width: 0;
+    width: 100%;
     flex: none;
     grid-auto-rows: auto;
   }

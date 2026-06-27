@@ -1,46 +1,55 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(26, 32, 44, 0.5);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1100;
+  z-index: var(--maple-z-modal-top);
   direction: rtl;
+  padding: 16px;
 }
 
 .modal {
-  background: #ffffff;
-  border-radius: 8px;
+  background: var(--maple-surface);
+  border-radius: var(--maple-radius-lg);
   width: 520px;
   max-width: 95vw;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--maple-shadow-lg);
+  border: 1px solid var(--maple-border);
 }
 
 .header {
-  background: #d97706;
+  background: linear-gradient(135deg, var(--maple-warning) 0%, #c05621 100%);
   color: #ffffff;
-  padding: 14px 16px;
+  padding: 16px 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: bold;
+  font-weight: 700;
   font-size: 0.95rem;
 }
 
 .closeBtn {
-  background: none;
-  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.45);
   color: #ffffff;
-  font-size: 1.2rem;
+  font-size: 1rem;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .closeBtn:hover {
-  color: #fef3c7;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .body {
@@ -52,23 +61,23 @@
 
 .infoRow {
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--maple-text-secondary);
   margin: 0;
 }
 
 .infoRow strong {
-  color: #1e293b;
+  color: var(--maple-text);
 }
 
 .label {
-  font-weight: bold;
-  color: #475569;
+  font-weight: 700;
+  color: var(--maple-text-secondary);
   font-size: 0.85rem;
 }
 
 .textarea {
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid var(--maple-border-strong);
+  border-radius: var(--maple-radius-sm);
   padding: 12px;
   font-size: 0.95rem;
   outline: none;
@@ -80,22 +89,23 @@
 }
 
 .textarea:focus {
-  border-color: #d97706;
+  border-color: var(--maple-warning);
+  box-shadow: 0 0 0 3px rgba(221, 107, 32, 0.2);
 }
 
 .hint {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--maple-text-muted);
   margin: 0;
 }
 
 .resultBox {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 6px;
+  background: var(--maple-green-light);
+  border: 1px solid var(--maple-green-muted);
+  border-radius: var(--maple-radius-sm);
   padding: 12px;
   font-size: 0.9rem;
-  color: #166534;
+  color: var(--maple-green-deep);
 }
 
 .resultBoxPartial {
@@ -109,41 +119,68 @@
   justify-content: space-between;
   align-items: center;
   padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--maple-border);
   gap: 10px;
 }
 
 .cancelBtn {
-  background: #e2e8f0;
-  border: none;
-  border-radius: 8px;
+  background: var(--maple-bg);
+  border: 1px solid var(--maple-border-strong);
+  border-radius: var(--maple-radius-sm);
   padding: 10px 18px;
-  font-weight: bold;
+  font-weight: 700;
   cursor: pointer;
   font-size: 0.9rem;
+  font-family: var(--maple-font);
 }
 
 .cancelBtn:hover {
-  background: #cbd5e1;
+  background: var(--maple-green-light);
 }
 
 .sendBtn {
-  background: #d97706;
+  background: var(--maple-warning);
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--maple-radius-sm);
   padding: 10px 24px;
-  font-weight: bold;
+  font-weight: 700;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--maple-transition);
+  font-family: var(--maple-font);
 }
 
 .sendBtn:hover {
-  background: #b45309;
+  filter: brightness(0.92);
 }
 
 .sendBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .overlay {
+    padding: 8px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: var(--maple-radius-lg) var(--maple-radius-lg) 0 0;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cancelBtn,
+  .sendBtn {
+    width: 100%;
+    min-height: 44px;
+  }
 }

@@ -27,9 +27,16 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 768px) {
+  .page-content {
+    padding: 16px 12px 24px;
+  }
+}
+
 @media (min-width: 1024px) {
   .app-layout-viewport-fill {
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -40,5 +47,19 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+}
+
+/* מובייל / טאבלט — גלילה טבעית של הדף */
+@media (max-width: 1023px) {
+  .app-layout-viewport-fill {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .app-layout-main-fill {
+    flex: 1;
+    min-height: 0;
+    overflow: visible;
   }
 }

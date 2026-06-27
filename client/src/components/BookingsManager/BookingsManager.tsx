@@ -4,6 +4,7 @@ import LiveAdditionForm from '../LiveAdditionForm/LiveAdditionForm';
 import BookingDetailsModal from './BookingDetailsModal';
 import { useBookingsQuery } from '../../hooks/queries';
 import { PaginationBar } from '../PaginationBar/PaginationBar';
+import { PageLoader } from '../PageLoader/PageLoader';
 
 const BookingsManager = () => {
   const [page, setPage] = useState(1);
@@ -51,7 +52,7 @@ const BookingsManager = () => {
       />
 
       {isLoading ? (
-        <p className={styles.empty}>טוען...</p>
+        <PageLoader />
       ) : bookings.length === 0 ? (
         <p className={styles.empty}>{search ? 'לא נמצאו תוצאות.' : 'אין הזמנות סגורות.'}</p>
       ) : (

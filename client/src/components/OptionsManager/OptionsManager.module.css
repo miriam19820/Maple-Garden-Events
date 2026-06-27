@@ -46,6 +46,31 @@
   gap: 10px;
 }
 
+@media (max-width: 768px) {
+  .title {
+    font-size: 1.2rem;
+  }
+
+  .cardContent {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn,
+  .bumpBtn,
+  .notifyBtn {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
 .eventDateText {
   margin: 0 0 5px 0;
   color: #1f2937;

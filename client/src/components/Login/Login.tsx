@@ -39,17 +39,15 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   return (
     <div className="login-container">
       <div className="login-form">
-        <h2>כניסת מנהל - גן אירועים</h2>
+        <div className="login-brand">
+          <img src="/logo.png" alt="מייפל אירועים" className="login-logo" />
+          <h2>כניסת מנהל</h2>
+          <p className="login-subtitle">גן אירועים מייפל — מערכת ניהול</p>
+        </div>
 
-        {error && <div className="error-message" style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+        {error && <div className="error-message">{error}</div>}
 
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          marginTop: '30px',
-          marginBottom: '20px',
-          minHeight: '50px',
-        }}>
+        <div className="login-google-wrap">
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
             onError={() => setError('שגיאה בטעינת ממשק גוגל')}

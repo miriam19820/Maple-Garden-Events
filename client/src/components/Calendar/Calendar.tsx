@@ -206,7 +206,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
         <div className="calendar-grid-wrapper">
           <div
             className="calendar-grid"
-            style={{ gridTemplateRows: `auto repeat(${weekRowCount}, minmax(0, 1fr))` }}
+            style={{ ['--calendar-week-rows' as string]: weekRowCount } as React.CSSProperties}
           >
             {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
             {grid.map(day => {

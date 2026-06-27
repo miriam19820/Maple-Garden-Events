@@ -76,11 +76,7 @@ function App() {
   };
 
   if (isAuthenticated === null) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        טוען...
-      </div>
-    );
+    return <PageLoader />;
   }
 
   const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {

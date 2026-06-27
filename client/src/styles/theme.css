@@ -27,6 +27,12 @@
   --maple-danger: #E53E3E;
   --maple-warning: #DD6B20;
   --maple-info: #4A6FA5;
+
+  --maple-z-header: 200;
+  --maple-z-drawer: 300;
+  --maple-z-panel: 500;
+  --maple-z-modal: 1000;
+  --maple-z-modal-top: 1100;
 }
 
 .maple-close-btn {
@@ -49,4 +55,112 @@
 .maple-close-btn:hover {
   background: var(--maple-bg);
   color: var(--maple-text);
+}
+
+.maple-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 32, 44, 0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--maple-z-modal);
+  direction: rtl;
+  padding: 16px;
+}
+
+.maple-modal-header {
+  background: linear-gradient(135deg, var(--maple-green) 0%, var(--maple-green-dark) 100%);
+  color: #fff;
+  padding: 18px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.maple-modal-header h3,
+.maple-modal-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.maple-modal-header .maple-close-btn {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.maple-modal-header .maple-close-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.maple-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--maple-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--maple-font);
+  cursor: pointer;
+  border: none;
+  transition: background var(--maple-transition), color var(--maple-transition), border-color var(--maple-transition);
+}
+
+.maple-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.maple-btn-primary {
+  background: var(--maple-green-dark);
+  color: #fff;
+}
+
+.maple-btn-primary:hover:not(:disabled) {
+  background: var(--maple-green-deep);
+}
+
+.maple-btn-secondary {
+  background: var(--maple-surface);
+  color: var(--maple-text-secondary);
+  border: 1px solid var(--maple-border-strong);
+}
+
+.maple-btn-secondary:hover:not(:disabled) {
+  background: var(--maple-bg);
+}
+
+.maple-btn-danger {
+  background: var(--maple-surface);
+  color: var(--maple-danger);
+  border: 2px solid var(--maple-danger);
+}
+
+.maple-btn-danger:hover:not(:disabled) {
+  background: var(--maple-danger);
+  color: #fff;
+}
+
+.maple-btn-warning {
+  background: var(--maple-warning);
+  color: #fff;
+}
+
+.maple-btn-warning:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.maple-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--maple-text-muted);
+  font-size: 1rem;
 }

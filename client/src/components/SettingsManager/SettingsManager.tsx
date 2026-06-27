@@ -9,6 +9,7 @@ import {
   useKashrutQuery,
 } from '../../hooks/queries';
 import { AuthorizedUsers } from './AuthorizedUsers';
+import { PageLoader } from '../PageLoader/PageLoader';
 import PaymentTemplatesSettings from './PaymentTemplatesSettings';
 import { getPaymentTemplatesFromSettings } from '../../utils/paymentTerms';
 
@@ -142,7 +143,7 @@ export const SettingsManager = () => {
     return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
   };
 
-  if (loading) return <div>טוען הגדרות...</div>;
+  if (loading) return <PageLoader />;
 
   const mainKashrut = kashruts[0];
 

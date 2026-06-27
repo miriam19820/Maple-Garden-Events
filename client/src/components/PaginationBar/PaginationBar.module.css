@@ -26,3 +26,22 @@
   font-size: 0.9rem;
   color: var(--maple-text-secondary, #666);
 }
+
+@media (max-width: 480px) {
+  .bar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    min-width: 88px;
+    min-height: 44px;
+  }
+
+  .info {
+    width: 100%;
+    text-align: center;
+    order: -1;
+  }
+}

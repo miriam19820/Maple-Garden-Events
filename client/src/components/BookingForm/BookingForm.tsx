@@ -9,10 +9,13 @@ import {
   DEFAULT_PAYMENT_TEMPLATES,
   findPaymentTemplate,
   getPaymentTemplatesFromSettings,
-  mergePaymentTermsIntoContract,
   renderPaymentTermsText,
   type PaymentTermsTemplate,
 } from '../../utils/paymentTerms';
+import {
+  buildExtrasLineItems,
+  resolveFullContractText,
+} from '../../utils/contractSections';
 import { promptPrintAfterClose } from '../../utils/contractPrint';
 import { getSignatureDataUrl } from '../../utils/signature';
 import { scanCheckImage, fileToDataUrl, type DepositCheckDetails } from '../../utils/checkOcr';
@@ -640,10 +643,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   const handlePaymentTermsTextChange = (text: string) => {
     setPaymentTermsText(text);
-    const base = contractBaseText || contractText;
-    if (base) {
-      setContractText(mergePaymentTermsIntoContract(base, text));
-    }
   };
 
   useEffect(() => {
@@ -655,7 +654,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       eventDate: getEventDateStr(),
     });
     setPaymentTermsText(paragraph);
-    setContractText(mergePaymentTermsIntoContract(contractBaseText, paragraph));
   }, [
     paymentTemplateId,
     paymentTermsCustom,
@@ -664,6 +662,32 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     totals.finalTotal,
     selectedDatesDisplay,
     formData.calendarDateId,
+  ]);
+
+  useEffect(() => {
+    if (!contractBaseText) return;
+    const extras = buildExtrasLineItems({
+      upgrades,
+      kosherType,
+      guestCount: Number(formData.guestCount) || 0,
+      isHallOnly,
+      isFoodRelevant,
+    });
+    setContractText(resolveFullContractText({
+      baseContract: contractBaseText,
+      paymentTerms: paymentTermsText,
+      extras,
+      menuNotes: menuNotesList,
+    }));
+  }, [
+    contractBaseText,
+    paymentTermsText,
+    upgrades,
+    kosherType,
+    formData.guestCount,
+    isHallOnly,
+    isFoodRelevant,
+    menuNotesList,
   ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -889,7 +913,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     <div className={styles.container}>
       <div className={styles.formCard}>
         <div className={styles.header}>
-          <img src="/logo.png" alt="מיפל" className={styles.headerLogo} />
           <div className={styles.headerText}>
             <h2 className={styles.title}>
               {convertFromOption

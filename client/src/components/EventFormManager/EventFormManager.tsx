@@ -629,7 +629,7 @@ const EventFormManager = () => {
               <span className={styles.headerMetaChip}>סופי: {formData.finalGuestCount || '—'}</span>
               <span className={styles.headerMetaChip}>כשרות: {formData.kashrut || '—'}</span>
             </div>
-            <button onClick={() => setSelected(null)} className={styles.closeBtn}>✕ סגור</button>
+            <button type="button" onClick={() => setSelected(null)} className={styles.closeBtn}>✕ סגור</button>
           </div>
 
           <div className={styles.formBody}>
