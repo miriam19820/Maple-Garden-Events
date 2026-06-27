@@ -34,6 +34,7 @@ interface Booking {
   clientBEmail?: string;
   eventDate: {
     date: string;
+    status?: string;
   };
   guestCount: number;
   eventType: string;
