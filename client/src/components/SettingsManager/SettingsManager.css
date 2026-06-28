@@ -170,6 +170,45 @@
   color: var(--maple-danger);
 }
 
+.price-group-title {
+  margin: 20px 0 10px;
+  font-size: 1rem;
+  color: var(--maple-green-dark);
+}
+
+.price-catalog-table {
+  margin-bottom: 8px;
+}
+
+.price-inline-input {
+  width: 100%;
+  max-width: 120px;
+  padding: 6px 8px;
+  border: 1px solid var(--maple-border);
+  border-radius: var(--maple-radius-sm);
+  font-family: var(--maple-font);
+}
+
+.price-suffix {
+  margin-right: 6px;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.extra-row-inactive {
+  opacity: 0.55;
+}
+
+.extra-delete-btn {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: var(--maple-font);
+}
+
 .delete-btn {
   background: transparent;
   color: var(--maple-danger);

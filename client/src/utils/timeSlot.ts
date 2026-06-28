@@ -103,6 +103,7 @@ export function getAvailableSlots(bookings: { timeOfDay?: string | null }[]): Ti
 
 export function getBlockedSlotsForDate(dateStr: string): TimeSlot[] {
   const d = new Date(`${dateStr}T12:00:00`);
+  if (d.getDay() === 5) return ['noon', 'evening'];
   if (d.getDay() === 6) return ['morning', 'noon'];
   return [];
 }

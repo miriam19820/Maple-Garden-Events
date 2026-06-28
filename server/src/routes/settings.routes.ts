@@ -5,6 +5,7 @@ import { validate } from '../middlewares/validate';
 import {
   addExtraSchema,
   addStaffSchema,
+  deleteExtraSchema,
   deleteStaffSchema,
   updateExtraSchema,
   updateSettingsSchema,
@@ -21,6 +22,7 @@ router.put('/global', validate(updateSettingsSchema), settingsController.updateS
 router.get('/extras', settingsController.getExtras);
 router.post('/extras', validate(addExtraSchema), settingsController.addExtra);
 router.put('/extras/:id', validate(updateExtraSchema), settingsController.updateExtra);
+router.delete('/extras/:id', validate(deleteExtraSchema), settingsController.deleteExtra);
 
 router.get('/staff', settingsController.getStaff);
 router.post('/staff', validate(addStaffSchema), settingsController.addStaff);

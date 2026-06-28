@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import styles from './BookingForm.module.css';
 import { type TimeSlot, TIME_SLOTS, SLOT_LABELS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
@@ -53,33 +53,12 @@ export const SERVING_STYLES: Record<string, string> = {
 
 export const DEFAULT_SERVING_STYLE = 'american';
 
-export const UPGRADES_PRICING: Record<string, number> = {
-  baseDesign: 4500, amplification: 1400, lighting: 1800, screens: 800,
-  reception: 2000, separateReception: 3000, extraSecurity: 650, fireworks: 700,
-};
-
-/** סדר תצוגה בגריד התוספות (כמו במקור) */
-export const UPGRADE_DISPLAY_ORDER = [
-  'baseDesign', 'reception', 'separateReception', 'lighting',
-  'amplification', 'screens', 'fireworks', 'extraSecurity',
-] as const;
-
-/** תוספות שמשולמות לאולם (כולל כשרות — מחושבת בנפרד) */
-export const HALL_UPGRADE_KEYS = ['reception', 'separateReception', 'extraSecurity'] as const;
-
-/** שדרוגים שמשולמים לספקים חיצוניים */
-export const EXTERNAL_UPGRADE_KEYS = ['baseDesign', 'lighting', 'amplification', 'screens', 'fireworks'] as const;
-
-export const UPGRADE_LABELS: Record<string, string> = {
-  baseDesign: 'עיצוב בסיסי',
-  reception: 'קבלת פנים',
-  separateReception: 'קבלת פנים נפרד',
-  lighting: 'תאורה',
-  amplification: 'הגברה',
-  screens: 'מסכים',
-  fireworks: 'זיקוקים',
-  extraSecurity: 'מאבטח נוסף',
-};
+import {
+  buildUpgradesPricingFromSettings,
+  filterUpgradeDisplayOrder,
+  HALL_UPGRADE_KEYS,
+  EXTERNAL_UPGRADE_KEYS,
+} from '../../utils/pricing';
 
 /** קישורי דמה לתשלום לספקים חיצוניים — יוחלפו בקישורים אמיתיים */
 export const EXTERNAL_SUPPLIER_LINKS: Record<string, string> = {
@@ -252,9 +231,17 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [paymentTermsText, setPaymentTermsText] = useState('');
   const [vatRate, setVatRate] = useState(17);
   const { data: globalSettings } = useGlobalSettingsQuery();
+  const upgradesPricing = useMemo(
+    () => buildUpgradesPricingFromSettings(globalSettings),
+    [globalSettings],
+  );
+  const visibleUpgradeKeys = useMemo(
+    () => filterUpgradeDisplayOrder(globalSettings),
+    [globalSettings],
+  );
 
   useEffect(() => {
-    if (globalSettings?.vatRate) setVatRate(Number(globalSettings.vatRate));
+    if (globalSettings?.vatRate != null) setVatRate(Number(globalSettings.vatRate));
   }, [globalSettings]);
 
   useEffect(() => {
@@ -590,13 +577,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     hallExtrasBase += portions * KOSHER_PRICING[kosherType].extra;
   }
   HALL_UPGRADE_KEYS.forEach((key) => {
-    if (upgrades[key]) hallExtrasBase += UPGRADES_PRICING[key];
+    if (upgrades[key]) hallExtrasBase += upgradesPricing[key] ?? 0;
   });
 
   let externalExtrasBase = 0;
   EXTERNAL_UPGRADE_KEYS.forEach((key) => {
     if (key === 'baseDesign' && isHallOnly) return;
-    if (upgrades[key]) externalExtrasBase += UPGRADES_PRICING[key];
+    if (upgrades[key]) externalExtrasBase += upgradesPricing[key] ?? 0;
   });
 
   let discountVal = 0;
@@ -672,6 +659,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       guestCount: Number(formData.guestCount) || 0,
       isHallOnly,
       isFoodRelevant,
+      upgradesPricing,
     });
     setContractText(resolveFullContractText({
       baseContract: contractBaseText,
@@ -688,6 +676,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     isHallOnly,
     isFoodRelevant,
     menuNotesList,
+    upgradesPricing,
   ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -965,7 +954,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
             </div>
 
             <div className={styles.formColumn}>
-              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} isHallOnly={isHallOnly} isOption={isOption} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} paymentTemplates={paymentTemplates} paymentTemplateId={paymentTemplateId} onPaymentTemplateChange={setPaymentTemplateId} paymentTermsCustom={paymentTermsCustom} onPaymentTermsCustomChange={setPaymentTermsCustom} paymentTermsText={paymentTermsText} onPaymentTermsTextChange={handlePaymentTermsTextChange} eventDate={getEventDateStr()} />
+              <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} upgrades={upgrades} handleUpgradeChange={handleUpgradeChange} upgradesPricing={upgradesPricing} upgradeDisplayOrder={visibleUpgradeKeys} isHallOnly={isHallOnly} isOption={isOption} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} styles={styles} paymentTemplates={paymentTemplates} paymentTemplateId={paymentTemplateId} onPaymentTemplateChange={setPaymentTemplateId} paymentTermsCustom={paymentTermsCustom} onPaymentTermsCustomChange={setPaymentTermsCustom} paymentTermsText={paymentTermsText} onPaymentTermsTextChange={handlePaymentTermsTextChange} eventDate={getEventDateStr()} />
             </div>
           </div>
 

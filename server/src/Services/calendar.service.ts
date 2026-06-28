@@ -57,11 +57,11 @@ export function getDayStaticStatus(jsDate: Date, eventType: string = 'חתונה
     return { type: EventStatus.PROBLEMATIC, reason: 'שבת' };
   }
   if (jsDay === 5) {
+    const reason = 'יום שישי (בוקר בלבד)';
     if (eventType === 'חתונה') {
-      return { type: EventStatus.PROBLEMATIC, reason: 'יום שישי ' };
-    } else {
-      return { type: EventStatus.AVAILABLE, reason: 'יום שישי (בוקר בלבד)' };
+      return { type: EventStatus.PROBLEMATIC, reason };
     }
+    return { type: EventStatus.AVAILABLE, reason };
   }
 
   const holidays: any[] = hDate.holidays(true) || [];

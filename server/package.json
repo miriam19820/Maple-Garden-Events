@@ -6,7 +6,7 @@
     "dev": "ts-node src/server.ts",
     "start": "node dist/server.js",
     "migrate:event-codes": "ts-node scripts/migrate-legacy-event-codes.ts",
-    "backup": "ts-node scripts/backup-database.ts",
+    "verify:double-booking": "ts-node scripts/verify-no-double-booking.ts",
     "sentry:verify": "ts-node scripts/sentry-verify.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

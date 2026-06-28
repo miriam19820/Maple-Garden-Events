@@ -12,6 +12,13 @@ const cases = [
     expectCanAdd: true,
   },
   {
+    name: 'friday - morning only',
+    date: '2026-06-26',
+    bookings: [] as { timeOfDay?: string }[],
+    expectBookable: ['morning'],
+    expectCanAdd: true,
+  },
+  {
     name: 'shabbat option evening only',
     date: '2026-06-27',
     bookings: [{ timeOfDay: 'evening|18:00 - 00:00' }],

@@ -120,7 +120,7 @@ const EventSettingsSection = ({ formData, handleChange, isOption, availableSlots
               <div className={styles.inputGroup}>
                 <label>מנות אופציה (רזרבה)</label>
                 <input type="number" name="optionalGuestCount" min="0" value={formData.optionalGuestCount} onChange={handleChange} className={styles.input} />
-                <span className={styles.slotHint}>מתמלא אוטומטית 10% מכמות המנות · ללא חיוב</span>
+                <span className={styles.slotHint}>10% מכמות המנות · ללא חיוב</span>
               </div>
             </div>
             

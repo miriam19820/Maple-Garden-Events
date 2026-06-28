@@ -200,6 +200,7 @@ model SystemSettings {
   barPortionPrice        Float    @default(60.0)
   paymentTemplates       Json?
   defaultPaymentTemplateId String?
+  hiddenPriceFields      Json     @default("[]")
 }
 
 model ExtraService {

@@ -16,7 +16,11 @@ function formatDateLocal(date: Date): string {
 function validateSlotOnDate(dateStr: string, slot: TimeSlot): string | null {
   const blocked = getBlockedSlotsForDate(dateStr);
   if (blocked.includes(slot)) {
-    if (new Date(`${dateStr}T12:00:00`).getDay() === 6) {
+    const jsDay = new Date(`${dateStr}T12:00:00`).getDay();
+    if (jsDay === 5) {
+      return 'ביום שישי ניתן לשמור אופציה בבוקר בלבד.';
+    }
+    if (jsDay === 6) {
       return 'לא ניתן לשמור אופציה בשבת.';
     }
     return `משבצת ${SLOT_LABELS[slot]} אינה זמינה בתאריך זה.`;

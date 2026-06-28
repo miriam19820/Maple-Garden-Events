@@ -34,6 +34,7 @@ export const updateSettingsSchema = z.object({
         })).min(1),
       })).optional(),
       defaultPaymentTemplateId: z.string().trim().min(1).optional(),
+      hiddenPriceFields: z.array(z.string().trim().min(1)).optional(),
     })
     .strict(),
 });
@@ -62,6 +63,10 @@ export const addStaffSchema = z.object({
   body: z.object({
     name: z.string().trim().min(1),
   }),
+});
+
+export const deleteExtraSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
 });
 
 export const deleteStaffSchema = z.object({

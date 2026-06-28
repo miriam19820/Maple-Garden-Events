@@ -114,6 +114,13 @@ export const settingsController = {
     res.status(201).json(member);
   }),
 
+  deleteExtra: catchAsync(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    await prisma.extraService.delete({ where: { id } });
+    emitSettingsUpdated();
+    res.json({ success: true });
+  }),
+
   deleteStaff: catchAsync(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     await prisma.staffMember.delete({ where: { id } });

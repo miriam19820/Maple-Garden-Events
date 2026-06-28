@@ -7,6 +7,7 @@ import { AuthRequest } from '../middlewares/auth';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
 import { getContractText, resolveContractWithPaymentTerms, resolveDefaultPaymentTermsText } from '../utils/getContractText';
 import { buildExtrasLineItems } from '../utils/contractSections';
+import { buildUpgradesPricingFromSettings } from '../utils/pricing';
 import { parseNotesBundle } from '../utils/notesStorage';
 import { getPaymentTemplatesFromSettings } from '../utils/paymentTerms';
 import { sendPDFToClient } from '../Services/emailService';
@@ -33,6 +34,7 @@ import {
 } from '../utils/eventCode';
 import { isHallOnlyBooking, HALL_ONLY_EVENT_TYPE } from '../validators/booking.validator';
 import { neonTransactionOptions, withDbRetry } from '../utils/dbRetry';
+import { isSlotUniqueViolation, slotUniqueConflictError } from '../utils/bookingSlotGuard';
 
 function canEditBookingDate(eventDate: Date): boolean {
   const today = new Date();
@@ -43,6 +45,10 @@ function canEditBookingDate(eventDate: Date): boolean {
 }
 
 type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function lockEventDateRow(tx: TxClient, eventDateId: string): Promise<void> {
+  await tx.$executeRaw`SELECT id FROM "EventDate" WHERE id = ${eventDateId} FOR UPDATE`;
+}
 
 async function releaseOptionDateInTx(tx: TxClient, dateId: string) {
   await tx.booking.deleteMany({ where: { calendarDateId: dateId } });
@@ -173,6 +179,8 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
 
   const menuNotes = parseNotesBundle(data.clientComments).menu;
   const hallOnly = isHallOnlyBooking(data);
+  const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 'global' } });
+  const upgradesPricing = buildUpgradesPricingFromSettings(systemSettings);
   const extras = buildExtrasLineItems({
     upgrades: typeof data.upgrades === 'object' && data.upgrades !== null
       ? (data.upgrades as Record<string, boolean>)
@@ -181,6 +189,7 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
     guestCount: Number(data.guestCount) || 0,
     isHallOnly: hallOnly,
     isFoodRelevant: !hallOnly,
+    upgradesPricing,
   });
 
   const resolvedContractText = data.contractText?.trim()
@@ -290,6 +299,17 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         }
       }
 
+      await lockEventDateRow(tx, eventDate.id);
+      eventDate = await tx.eventDate.findUnique({
+        where: { id: eventDate.id },
+        include: { bookings: true },
+      });
+      if (!eventDate) {
+        const err: any = new Error('תאריך האירוע לא נמצא.');
+        err.statusCode = 404;
+        throw err;
+      }
+
       const existingBookings = eventDate.bookings || [];
       const bookableSlots = getBookableSlotsForDate(parseDateLocal(possibleDate), existingBookings);
       if (!bookableSlots.includes(slot)) {
@@ -313,10 +333,12 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
       const timeString = formatStoredTimeOfDay(slot, data.startTime, data.endTime);
       const eventCode = await allocateEventCode(newStatus === 'OPTION' ? 'OPT' : 'EVT', tx);
 
-      const newBooking = await tx.booking.create({
+      let newBooking;
+      try {
+        newBooking = await tx.booking.create({
         data: {
           clientAFullName: data.clientAFullName,
-          clientAIdNumber: data.clientAIdNumber,
+          clientAIdNumber: data.clientAIdNumber || '',
           clientAPhone: clientAPhoneCombined,
           clientAEmail: data.clientAEmail || null,
           clientAAddress: clientAAddressCombined,
@@ -361,6 +383,12 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
           paymentTermsText: paymentTermsText || null,
         }
       });
+      } catch (createErr) {
+        if (isSlotUniqueViolation(createErr)) {
+          throw slotUniqueConflictError(slot);
+        }
+        throw createErr;
+      }
       createdBookings.push(newBooking);
       
       eventsToEmit.push({ dateId: eventDate.id, status: newStatus });
@@ -562,6 +590,8 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockEventDateRow(tx, booking.eventDate.id);
+
     const updateData: Record<string, unknown> = {
       clientAFullName: data.clientAFullName,
       clientAIdNumber: data.clientAIdNumber,
@@ -620,11 +650,19 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
       }
     }
 
-    const updatedBooking = await tx.booking.update({
+    let updatedBooking;
+    try {
+      updatedBooking = await tx.booking.update({
       where: { id },
       data: updateData,
       include: { eventDate: true },
     });
+    } catch (updateErr) {
+      if (slot && isSlotUniqueViolation(updateErr)) {
+        throw slotUniqueConflictError(slot);
+      }
+      throw updateErr;
+    }
 
     if (isConverting) {
       await tx.eventDate.update({

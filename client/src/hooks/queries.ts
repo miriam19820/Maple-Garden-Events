@@ -77,6 +77,7 @@ export function useGlobalSettingsQuery() {
       const res = await apiFetch(`${API_URL}/settings/global`);
       return res.json();
     },
+    staleTime: 0,
   });
 }
 

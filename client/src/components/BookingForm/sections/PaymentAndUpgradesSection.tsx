@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
-  UPGRADES_PRICING,
   UPGRADE_DISPLAY_ORDER,
-  HALL_UPGRADE_KEYS,
   UPGRADE_LABELS,
-  EXTERNAL_SUPPLIER_LINKS,
-} from '../BookingForm';
+  HALL_UPGRADE_KEYS,
+  type UpgradeKey,
+} from '../../../utils/pricing';
+import { EXTERNAL_SUPPLIER_LINKS } from '../BookingForm';
 import CheckCamera from '../../CheckCamera/CheckCamera';
 import CheckDetailsForm from '../../CheckDetailsForm/CheckDetailsForm';
 import type { DepositCheckDetails } from '../../../utils/checkOcr';
@@ -18,6 +18,8 @@ interface PaymentAndUpgradesSectionProps {
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   upgrades: Record<string, boolean>;
   handleUpgradeChange: (key: string) => void;
+  upgradesPricing: Record<string, number>;
+  upgradeDisplayOrder?: readonly UpgradeKey[];
   isHallOnly: boolean;
   isOption?: boolean;
   depositMethod: string;
@@ -69,6 +71,8 @@ const PaymentAndUpgradesSection = ({
   handleChange,
   upgrades,
   handleUpgradeChange,
+  upgradesPricing,
+  upgradeDisplayOrder = UPGRADE_DISPLAY_ORDER,
   isHallOnly,
   isOption = false,
   depositMethod,
@@ -123,7 +127,7 @@ const PaymentAndUpgradesSection = ({
   const hasCheckImage = !!formData.depositCheckUrl;
   const isHallUpgrade = (key: string) => (HALL_UPGRADE_KEYS as readonly string[]).includes(key);
 
-  const renderUpgrade = (key: typeof UPGRADE_DISPLAY_ORDER[number]) => {
+  const renderUpgrade = (key: UpgradeKey) => {
     const disabled = key === 'baseDesign' && isHallOnly;
     const checked = disabled ? false : upgrades[key];
     const isExternal = !isHallUpgrade(key);
@@ -140,7 +144,7 @@ const PaymentAndUpgradesSection = ({
         <span>
           {UPGRADE_LABELS[key]}
           {key === 'baseDesign' && !isHallOnly ? ' (חובה)' : ''}
-          {' - '}{UPGRADES_PRICING[key].toLocaleString()} ₪
+          {' - '}{(upgradesPricing[key] ?? 0).toLocaleString()} ₪
         </span>
         {isExternal && checked && !disabled && (
           <a
@@ -162,7 +166,7 @@ const PaymentAndUpgradesSection = ({
       <div className={styles.sectionCard}>
         <h3 className={styles.sectionHeader}>חבילת תוספות ושדרוגים</h3>
         <div className={styles.upgradesGrid}>
-          {UPGRADE_DISPLAY_ORDER.map(renderUpgrade)}
+          {upgradeDisplayOrder.map(renderUpgrade)}
         </div>
       </div>
 

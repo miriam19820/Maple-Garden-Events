@@ -331,6 +331,23 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
+.eventDetailsGrid > .splitRow,
+.eventDetailsGrid > .inputGroup.splitRow {
+  grid-column: 1 / -1;
+}
+
+.eventDetailsGrid .splitRowThree {
+  grid-column: 1 / -1;
+}
+
+.eventDetailsGrid .splitRowThree .inputGroup {
+  min-width: 0;
+}
+
+.eventDetailsGrid .splitRowThree .slotHint {
+  line-height: 1.35;
+}
+
 .input {
   width: 100%;
   border: 1px solid var(--maple-border-strong);

@@ -1,4 +1,9 @@
 import { mergePaymentTermsIntoContract } from './paymentTerms';
+import {
+  UPGRADE_DISPLAY_ORDER,
+  UPGRADE_LABELS,
+  DEFAULT_UPGRADES_PRICING,
+} from './pricing';
 
 export const CONTRACT_ANNEX_PLACEHOLDER = '{{CONTRACT_ANNEX}}';
 export const SECTION_DIVIDER = '────────────────────────────────';
@@ -82,27 +87,13 @@ export function resolveFullContractText(options: {
   return mergePaymentTermsIntoContract(withAnnex, options.paymentTerms);
 }
 
-const UPGRADES_PRICING: Record<string, number> = {
-  baseDesign: 4500,
-  amplification: 1400,
-  lighting: 1800,
-  screens: 800,
-  reception: 2000,
-  separateReception: 3000,
-  extraSecurity: 650,
-  fireworks: 700,
-};
-
-const UPGRADE_LABELS: Record<string, string> = {
-  baseDesign: 'עיצוב בסיסי',
-  reception: 'קבלת פנים',
-  separateReception: 'קבלת פנים נפרד',
-  lighting: 'תאורה',
-  amplification: 'הגברה',
-  screens: 'מסכים',
-  fireworks: 'זיקוקים',
-  extraSecurity: 'מאבטח נוסף',
-};
+const EXTERNAL_UPGRADE_KEYS = new Set([
+  'baseDesign',
+  'lighting',
+  'amplification',
+  'screens',
+  'fireworks',
+]);
 
 const KOSHER_PRICING: Record<string, { label: string; extra: number }> = {
   machpud: { label: 'הרב מחפוד', extra: 0 },
@@ -113,37 +104,20 @@ const KOSHER_PRICING: Record<string, { label: string; extra: number }> = {
   badatz: { label: 'בד"ץ העדה החרדית', extra: 20 },
 };
 
-const UPGRADE_DISPLAY_ORDER = [
-  'baseDesign',
-  'reception',
-  'separateReception',
-  'lighting',
-  'amplification',
-  'screens',
-  'fireworks',
-  'extraSecurity',
-] as const;
-
-const EXTERNAL_UPGRADE_KEYS = new Set([
-  'baseDesign',
-  'lighting',
-  'amplification',
-  'screens',
-  'fireworks',
-]);
-
 export function buildExtrasLineItems(options: {
   upgrades?: Record<string, boolean> | null;
   kosherType?: string | null;
   guestCount?: number;
   isHallOnly?: boolean;
   isFoodRelevant?: boolean;
+  upgradesPricing?: Record<string, number>;
 }): ExtrasLineItem[] {
   const upgrades = options.upgrades ?? {};
   const kosherType = options.kosherType || 'machpud';
   const guestCount = Number(options.guestCount) || 0;
   const isHallOnly = !!options.isHallOnly;
   const isFoodRelevant = options.isFoodRelevant ?? !isHallOnly;
+  const pricing = options.upgradesPricing ?? DEFAULT_UPGRADES_PRICING;
   const items: ExtrasLineItem[] = [];
 
   if (isFoodRelevant && guestCount > 0) {
@@ -162,7 +136,7 @@ export function buildExtrasLineItems(options: {
     if (isHallOnly && key === 'baseDesign') continue;
     items.push({
       label: UPGRADE_LABELS[key] ?? key,
-      price: UPGRADES_PRICING[key] ?? 0,
+      price: pricing[key] ?? 0,
       paidTo: EXTERNAL_UPGRADE_KEYS.has(key) ? 'external' : 'hall',
     });
   }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './SettingsManager.css';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
 import {
@@ -12,9 +13,16 @@ import { AuthorizedUsers } from './AuthorizedUsers';
 import { PageLoader } from '../PageLoader/PageLoader';
 import PaymentTemplatesSettings from './PaymentTemplatesSettings';
 import { getPaymentTemplatesFromSettings } from '../../utils/paymentTerms';
+import {
+  getHiddenSystemPriceFields,
+  getVisibleSystemPriceFields,
+  NON_REMOVABLE_PRICE_FIELDS,
+  parseHiddenPriceFields,
+} from '../../utils/pricing';
 
 
 export const SettingsManager = () => {
+  const queryClient = useQueryClient();
   const { data: globalSettingsData, isLoading: settingsLoading } = useGlobalSettingsQuery();
   const { data: extras = [], isLoading: extrasLoading } = useExtrasQuery();
   const { data: kashrutsData = [], isLoading: kashrutLoading } = useKashrutQuery();
@@ -41,9 +49,67 @@ export const SettingsManager = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(globalSettings)
       });
+      await queryClient.invalidateQueries({ queryKey: ['settings'] });
       alert('הגדרות נשמרו בהצלחה!');
     } catch (error) {
       alert('שגיאה בשמירת הגדרות');
+    }
+  };
+
+  const updatePriceField = (field: string, value: string) => {
+    const num = Number(value);
+    setGlobalSettings((prev: Record<string, unknown>) => ({
+      ...prev,
+      [field]: value === '' ? '' : num,
+    }));
+  };
+
+  const persistHiddenPriceFields = async (hiddenPriceFields: string[]) => {
+    try {
+      await apiFetch(`${API_URL}/settings/global`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hiddenPriceFields }),
+      });
+      setGlobalSettings((prev: Record<string, unknown>) => ({ ...prev, hiddenPriceFields }));
+      await queryClient.invalidateQueries({ queryKey: ['settings'] });
+    } catch {
+      alert('שגיאה בעדכון המחירון');
+    }
+  };
+
+  const hidePriceField = async (field: string, label: string) => {
+    if (NON_REMOVABLE_PRICE_FIELDS.has(field)) return;
+    if (!window.confirm(`להסיר את "${label}" מהמחירון?`)) return;
+    const hidden = [...new Set([...parseHiddenPriceFields(globalSettings), field])];
+    await persistHiddenPriceFields(hidden);
+  };
+
+  const restorePriceField = async (field: string) => {
+    const hidden = parseHiddenPriceFields(globalSettings).filter((item) => item !== field);
+    await persistHiddenPriceFields(hidden);
+  };
+
+  const updateExtraField = async (id: string, patch: { name?: string; price?: number; category?: string }) => {
+    try {
+      await apiFetch(`${API_URL}/settings/extras/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'extras'] });
+    } catch {
+      alert('שגיאה בעדכון פריט');
+    }
+  };
+
+  const deleteExtra = async (id: string, name: string) => {
+    if (!window.confirm(`להסיר את "${name}" מהקטלוג?`)) return;
+    try {
+      await apiFetch(`${API_URL}/settings/extras/${id}`, { method: 'DELETE' });
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'extras'] });
+    } catch {
+      alert('שגיאה בהסרת פריט');
     }
   };
 
@@ -85,6 +151,7 @@ export const SettingsManager = () => {
         body: JSON.stringify(newExtra)
       });
       setNewExtra({ name: '', category: 'עיצוב', price: '' });
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'extras'] });
     } catch (error) {
       alert('שגיאה בהוספת תוספת');
     }
@@ -97,6 +164,7 @@ export const SettingsManager = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus })
       });
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'extras'] });
     } catch (error) {
       alert('שגיאה בעדכון סטטוס');
     }
@@ -145,6 +213,8 @@ export const SettingsManager = () => {
 
   if (loading) return <PageLoader />;
 
+  const visiblePriceFields = getVisibleSystemPriceFields(globalSettings);
+  const hiddenPriceFields = getHiddenSystemPriceFields(globalSettings);
   const mainKashrut = kashruts[0];
 
   return (
@@ -155,64 +225,124 @@ export const SettingsManager = () => {
       </div>
 
       <div className="settings-grid">
-        {/* כרטיס תעריפי בסיס */}
-        <div className="settings-card">
-          <h2>תעריפי בסיס ומערכת</h2>
-          <div className="form-group">
-            <label>מע"מ נוכחי (%)</label>
-            <input 
-              type="number" 
-              value={globalSettings.vatRate || ''} 
-              onChange={e => setGlobalSettings({...globalSettings, vatRate: Number(e.target.value)})} 
-            />
-          </div>
-          <div className="form-group">
-            <label>מחיר בסיס ממוצע למנה (₪)</label>
-            <input 
-              type="number" 
-              value={globalSettings.basePricePerPortion || ''} 
-              onChange={e => setGlobalSettings({...globalSettings, basePricePerPortion: Number(e.target.value)})} 
-            />
-          </div>
-          <div className="form-group">
-            <label>עלות מנת בר (₪)</label>
-            <input
-              type="number"
-              value={globalSettings.barPortionPrice ?? ''}
-              onChange={e => setGlobalSettings({ ...globalSettings, barPortionPrice: Number(e.target.value) })}
-            />
-            <span style={{ fontSize: '12px', color: '#666' }}>משמש לחישוב מינימום מנות בטופס הפקת אירוע ובחוזה</span>
-          </div>
-          <div className="form-group">
-            <label>מחיר בסיס לעיצוב אולם (₪)</label>
-            <input 
-              type="number" 
-              value={globalSettings.designBasePrice || ''} 
-              onChange={e => setGlobalSettings({...globalSettings, designBasePrice: Number(e.target.value)})} 
-            />
-          </div>
-          <div className="form-group">
-            <label>מחיר למנת איש צוות (₪)</label>
-            <input 
-              type="number" 
-              value={globalSettings.staffPortionPrice || ''} 
-              onChange={e => setGlobalSettings({...globalSettings, staffPortionPrice: Number(e.target.value)})} 
-            />
-          </div>
-          <div className="form-group">
-            <label>מחיר חבילת תאורה (₪)</label>
-            <input 
-              type="number" 
-              value={globalSettings.lightingPrice || ''} 
-              onChange={e => setGlobalSettings({...globalSettings, lightingPrice: Number(e.target.value)})} 
-            />
-          </div>
-          <button className="save-btn" onClick={saveGlobalSettings}>שמור הגדרות בסיס</button>
+        {/* מחירון מאוחד — כל הפריטים הקיימים במערכת */}
+        <div className="settings-card" style={{ gridColumn: '1 / -1' }}>
+          <h2>מחירון מערכת</h2>
+          <p style={{ color: '#666', fontSize: '14px', marginBottom: '12px' }}>
+            שינוי מחיר כאן מתעדכן מיד בטופס הזמנה, בחוזה ובכל המסכים הפתוחים.
+          </p>
+
+          <h3 className="price-group-title">תעריפי בסיס</h3>
+          <table className="extras-table price-catalog-table">
+            <thead>
+              <tr>
+                <th>פריט</th>
+                <th>מחיר</th>
+                <th>הערה</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiblePriceFields.filter((f) => f.group === 'system').map((item) => (
+                <tr key={item.field}>
+                  <td>{item.label}</td>
+                  <td>
+                    <input
+                      type="number"
+                      className="price-inline-input"
+                      value={globalSettings[item.field] ?? ''}
+                      onChange={(e) => updatePriceField(item.field, e.target.value)}
+                    />
+                    {item.suffix && <span className="price-suffix">{item.suffix}</span>}
+                  </td>
+                  <td style={{ fontSize: '12px', color: '#666' }}>{item.hint || '—'}</td>
+                  <td>
+                    {!item.required && (
+                      <button
+                        type="button"
+                        className="extra-delete-btn"
+                        onClick={() => hidePriceField(item.field, item.label)}
+                      >
+                        הסר
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3 className="price-group-title">שדרוגים בטופס הזמנה</h3>
+          <table className="extras-table price-catalog-table">
+            <thead>
+              <tr>
+                <th>פריט</th>
+                <th>מחיר (₪)</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiblePriceFields.filter((f) => f.group === 'upgrades').map((item) => (
+                <tr key={item.field}>
+                  <td>{item.label}</td>
+                  <td>
+                    <input
+                      type="number"
+                      className="price-inline-input"
+                      value={globalSettings[item.field] ?? ''}
+                      onChange={(e) => updatePriceField(item.field, e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="extra-delete-btn"
+                      onClick={() => hidePriceField(item.field, item.label)}
+                    >
+                      הסר
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {hiddenPriceFields.length > 0 && (
+            <>
+              <h3 className="price-group-title">פריטים שהוסרו מהמחירון</h3>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 16px' }}>
+                {hiddenPriceFields.map((item) => (
+                  <li
+                    key={item.field}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 0',
+                      borderBottom: '1px solid #eee',
+                    }}
+                  >
+                    <span style={{ color: '#666' }}>{item.label}</span>
+                    <button
+                      type="button"
+                      className="add-btn"
+                      style={{ padding: '6px 12px', fontSize: '13px' }}
+                      onClick={() => restorePriceField(item.field)}
+                    >
+                      החזר למחירון
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <button className="save-btn" onClick={saveGlobalSettings}>שמור מחירון מערכת</button>
         </div>
 
         {/* כרטיס קטלוג תוספות */}
         <div className="settings-card">
-          <h2>קטלוג תוספות ושדרוגים (דינמי)</h2>
+          <h2>קטלוג תוספות נוספות</h2>
           <form className="add-extra-form" onSubmit={handleAddExtra}>
             <div className="form-group" style={{marginBottom: 0}}>
               <label>שם הפריט</label>
@@ -247,22 +377,54 @@ export const SettingsManager = () => {
               <tr>
                 <th>שם פריט</th>
                 <th>קטגוריה</th>
-                <th>מחיר</th>
+                <th>מחיר (₪)</th>
                 <th>סטטוס</th>
+                <th>פעולות</th>
               </tr>
             </thead>
             <tbody>
               {extras.map(extra => (
-                <tr key={extra.id}>
-                  <td>{extra.name}</td>
+                <tr key={extra.id} className={!extra.isActive ? 'extra-row-inactive' : ''}>
+                  <td>
+                    <input
+                      type="text"
+                      className="price-inline-input"
+                      defaultValue={extra.name}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v && v !== extra.name) updateExtraField(extra.id, { name: v });
+                      }}
+                    />
+                  </td>
                   <td>{extra.category}</td>
-                  <td>₪{extra.price}</td>
+                  <td>
+                    <input
+                      type="number"
+                      className="price-inline-input"
+                      defaultValue={extra.price}
+                      onBlur={(e) => {
+                        const v = Number(e.target.value);
+                        if (Number.isFinite(v) && v >= 0 && v !== extra.price) {
+                          updateExtraField(extra.id, { price: v });
+                        }
+                      }}
+                    />
+                  </td>
                   <td>
                     <button 
                       onClick={() => toggleExtraStatus(extra.id, extra.isActive)}
                       className={`status-toggle ${extra.isActive ? 'status-active' : 'status-inactive'}`}
                     >
                       {extra.isActive ? 'פעיל' : 'מוסתר'}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="extra-delete-btn"
+                      onClick={() => deleteExtra(extra.id, extra.name)}
+                    >
+                      הסר
                     </button>
                   </td>
                 </tr>

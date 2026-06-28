@@ -70,9 +70,11 @@ export function getAvailableSlots(bookings: { timeOfDay?: string | null }[]): Ti
   return TIME_SLOTS.filter((s) => !taken.has(s));
 }
 
-/** משבצות שלא ניתן לקבוע בהן אירוע בתאריך (למשל שבת: בוקר וצהריים). */
+/** משבצות שלא ניתן לקבוע בהן אירוע בתאריך (שישי: צהריים וערב; שבת: בוקר וצהריים). */
 export function getBlockedSlotsForDate(date: Date): TimeSlot[] {
-  if (date.getDay() === 6) return ['morning', 'noon'];
+  const day = date.getDay();
+  if (day === 5) return ['noon', 'evening'];
+  if (day === 6) return ['morning', 'noon'];
   return [];
 }
 
@@ -110,8 +112,12 @@ export function isDateFullyBooked(date: Date, bookings: { timeOfDay?: string | n
 export function validateSlotOnDate(date: Date, slot: TimeSlot): string | null {
   const blocked = getBlockedSlotsForDate(date);
   if (blocked.includes(slot)) {
-    if (date.getDay() === 6) {
-      return 'ביום זה ניתן לקבוע אירוע בערב בלבד.';
+    const day = date.getDay();
+    if (day === 5) {
+      return 'ביום שישי ניתן לקבוע אירוע בבוקר בלבד.';
+    }
+    if (day === 6) {
+      return 'ביום שבת ניתן לקבוע אירוע בערב בלבד.';
     }
     return `משבצת ${SLOT_LABELS[slot]} אינה זמינה בתאריך זה.`;
   }
