@@ -6,18 +6,8 @@ import {
   resolveRouteTitle,
   shouldShowGlobalBack,
 } from '../../utils/appNavigation';
+import { NAV_ITEMS, isNavItemActive } from '../../utils/navConfig';
 import './AppHeader.css';
-
-const NAV_ITEMS = [
-  { label: 'לוח שנה', path: '/', icon: '📅' },
-  { label: 'הגדרות מתחם', path: '/settings', icon: '⚙️' },
-  { label: 'ניהול אופציות', path: '/options-manager', icon: '' },
-  { label: 'ניהול הזמנות', path: '/bookings-manager', icon: '' },
-  { label: 'משובי לקוחות', path: '/feedback-manager', icon: '⭐' },
-  { label: 'סטטיסטיקות וחישובים', path: '/feedback-stats', icon: '📊' },
-  { label: 'שליחת ברכה', path: '/greeting', icon: '💌' },
-  { label: 'טופס הפקת אירוע', path: '/event-form-manager', icon: '' },
-];
 
 export const AppHeader = () => {
   const navigate = useNavigate();
@@ -30,7 +20,9 @@ export const AppHeader = () => {
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [menuOpen]);
 
   const goTo = (path: string) => {
@@ -75,7 +67,9 @@ export const AppHeader = () => {
               onClick={handleBack}
               aria-label={pageTitle ? `חזרה — ${pageTitle}` : 'חזרה'}
             >
-              <span className="app-header-back-icon" aria-hidden="true">→</span>
+              <span className="app-header-back-icon" aria-hidden="true">
+                →
+              </span>
               <span className="app-header-back-text">חזרה</span>
             </button>
           )}
@@ -118,7 +112,7 @@ export const AppHeader = () => {
             <li key={item.path}>
               <button
                 type="button"
-                className={`nav-drawer-item ${location.pathname === item.path ? 'active' : ''}`}
+                className={`nav-drawer-item ${isNavItemActive(location.pathname, item.path) ? 'active' : ''}`}
                 onClick={() => goTo(item.path)}
               >
                 {item.icon && <span className="nav-drawer-icon">{item.icon}</span>}

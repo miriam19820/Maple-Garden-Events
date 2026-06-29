@@ -14,6 +14,13 @@
   --maple-border: #E4E8E4;
   --maple-border-strong: #CDD5CD;
 
+  --maple-sidebar-bg: #FFFFFF;
+  --maple-sidebar-active: var(--maple-green-light);
+  --maple-accent-gradient: linear-gradient(135deg, #8CBF8E 0%, #6BA86E 100%);
+  --maple-page-padding: clamp(16px, 2vw, 32px);
+  --maple-sidebar-width: 240px;
+  --maple-header-height: 56px;
+
   --maple-radius: 10px;
   --maple-radius-lg: 14px;
   --maple-radius-sm: 6px;
@@ -21,7 +28,13 @@
   --maple-shadow: 0 4px 12px rgba(45, 55, 72, 0.08);
   --maple-shadow-lg: 0 8px 24px rgba(45, 55, 72, 0.12);
 
-  --maple-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --maple-font: 'Heebo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --maple-text-xs: 0.78rem;
+  --maple-text-sm: 0.875rem;
+  --maple-text-base: 1rem;
+  --maple-text-lg: 1.125rem;
+  --maple-text-xl: 1.4rem;
+  --maple-heading: 1.5rem;
   --maple-transition: 0.18s ease;
 
   --maple-danger: #E53E3E;

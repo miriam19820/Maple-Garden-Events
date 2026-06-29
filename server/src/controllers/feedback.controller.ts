@@ -64,6 +64,55 @@ function buildEventDateRange(year: number, month: number | null): { gte: Date; l
   return { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) };
 }
 
+type StatsPeriod = {
+  allYears: boolean;
+  year: number | null;
+  month: number | null;
+};
+
+function parseStatsPeriod(query: Record<string, unknown>): StatsPeriod {
+  const yearParam = query.year;
+  const month = query.month ? Number(query.month) : null;
+
+  if (yearParam === 'all') {
+    return { allYears: true, year: null, month };
+  }
+
+  return {
+    allYears: false,
+    year: yearParam ? Number(yearParam) : new Date().getFullYear(),
+    month,
+  };
+}
+
+function eventDateFilter(period: StatsPeriod): { gte: Date; lt: Date } | undefined {
+  if (period.allYears) return undefined;
+  return buildEventDateRange(period.year!, period.month);
+}
+
+function eventMonthMatches(date: Date, month: number | null): boolean {
+  if (!month) return true;
+  return new Date(date).getMonth() + 1 === month;
+}
+
+async function getAvailableFeedbackYears(): Promise<number[]> {
+  const feedbacks = await prisma.feedback.findMany({
+    where: {
+      isCompleted: true,
+      booking: { isOption: false, eventDate: { status: 'BOOKED' } },
+    },
+    select: { booking: { select: { eventDate: { select: { date: true } } } } },
+  });
+
+  const years = new Set<number>();
+  for (const fb of feedbacks) {
+    if (fb.booking.eventDate?.date) {
+      years.add(new Date(fb.booking.eventDate.date).getFullYear());
+    }
+  }
+  return [...years].sort((a, b) => b - a);
+}
+
 function buildAdminGroup(
   booking: {
     id: string;
@@ -401,19 +450,19 @@ export const feedbackController = {
   /** סטטיסטיקות וחישובים על משובי לקוחות */
   async statsAdmin(req: Request, res: Response) {
     try {
-      const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-      const month = req.query.month ? Number(req.query.month) : null;
-      const dateRange = buildEventDateRange(year, month);
+      const period = parseStatsPeriod(req.query as Record<string, unknown>);
+      const dateRange = eventDateFilter(period);
       const now = new Date();
+      const availableYears = await getAvailableFeedbackYears();
 
-      const completedFeedbacks = await prisma.feedback.findMany({
+      const completedFeedbacksRaw = await prisma.feedback.findMany({
         where: {
           isCompleted: true,
           booking: {
             isOption: false,
             eventDate: {
               status: 'BOOKED',
-              date: dateRange,
+              ...(dateRange ? { date: dateRange } : {}),
             },
           },
         },
@@ -424,6 +473,12 @@ export const feedbackController = {
         },
         orderBy: { updatedAt: 'desc' },
       });
+
+      const completedFeedbacks = period.allYears && period.month
+        ? completedFeedbacksRaw.filter(
+            (f) => f.booking.eventDate && eventMonthMatches(f.booking.eventDate.date, period.month),
+          )
+        : completedFeedbacksRaw;
 
       const averages = {
         combined: avgNumbers(completedFeedbacks.map((f) => f.averageScore)),
@@ -454,7 +509,24 @@ export const feedbackController = {
         .sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
 
       let byMonth: { month: number; label: string; average: number | null; count: number }[] = [];
-      if (!month) {
+      let byYear: { year: number; average: number | null; count: number }[] = [];
+
+      if (!period.month && period.allYears) {
+        const byYearMap = new Map<number, number[]>();
+        for (const fb of completedFeedbacks) {
+          if (fb.averageScore == null || !fb.booking.eventDate) continue;
+          const y = new Date(fb.booking.eventDate.date).getFullYear();
+          if (!byYearMap.has(y)) byYearMap.set(y, []);
+          byYearMap.get(y)!.push(fb.averageScore);
+        }
+        byYear = [...byYearMap.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([y, scores]) => ({
+            year: y,
+            average: avgNumbers(scores),
+            count: scores.length,
+          }));
+      } else if (!period.month && period.year != null) {
         const byMonthMap = new Map<number, number[]>();
         for (const fb of completedFeedbacks) {
           if (fb.averageScore == null || !fb.booking.eventDate) continue;
@@ -478,10 +550,13 @@ export const feedbackController = {
         { category: 'אולם', average: averages.venue },
       ].filter((c) => c.average != null);
 
-      const candidates = await prisma.booking.findMany({
+      const candidatesRaw = await prisma.booking.findMany({
         where: {
           isOption: false,
-          eventDate: { status: 'BOOKED', date: dateRange },
+          eventDate: {
+            status: 'BOOKED',
+            ...(dateRange ? { date: dateRange } : {}),
+          },
         },
         include: {
           eventDate: true,
@@ -489,6 +564,12 @@ export const feedbackController = {
           feedbacks: true,
         },
       });
+
+      const candidates = period.allYears && period.month
+        ? candidatesRaw.filter(
+            (b) => b.eventDate && eventMonthMatches(b.eventDate.date, period.month),
+          )
+        : candidatesRaw;
 
       const finishedBookings = candidates.filter(
         (b) => b.eventDate && hasEventEnded(b, b.eventDate.date, b.eventForm, now),
@@ -551,7 +632,12 @@ export const feedbackController = {
       res.status(200).json({
         success: true,
         data: {
-          period: { year, month },
+          period: {
+            year: period.allYears ? null : period.year,
+            month: period.month,
+            allYears: period.allYears,
+          },
+          availableYears,
           averages,
           counts: {
             completedFeedbacks: completedFeedbacks.length,
@@ -565,6 +651,7 @@ export const feedbackController = {
           responseRate,
           byEventType,
           byMonth,
+          byYear,
           categoryComparison,
           recentLow,
           recentComments,

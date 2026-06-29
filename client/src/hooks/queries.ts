@@ -73,7 +73,8 @@ export function useFeedbackAdminQuery(page: number, limit = 20) {
 }
 
 export interface FeedbackStatsData {
-  period: { year: number; month: number | null };
+  period: { year: number | null; month: number | null; allYears: boolean };
+  availableYears: number[];
   averages: {
     combined: number | null;
     food: number | null;
@@ -92,6 +93,7 @@ export interface FeedbackStatsData {
   responseRate: number | null;
   byEventType: { eventType: string; average: number | null; count: number }[];
   byMonth: { month: number; label: string; average: number | null; count: number }[];
+  byYear: { year: number; average: number | null; count: number }[];
   categoryComparison: { category: string; average: number | null }[];
   recentLow: {
     eventCode: string;

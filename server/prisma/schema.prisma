@@ -268,3 +268,18 @@ model AuthorizedUser {
   email     String   @unique
   createdAt DateTime @default(now())
 }
+
+model ScheduledGreeting {
+  id             String    @id @default(uuid())
+  subject        String
+  message        String    @db.Text
+  scheduledAt    DateTime
+  attachmentPath String?
+  attachmentName String?
+  status         String    @default("PENDING")
+  sentAt         DateTime?
+  sendStats      Json?
+  errorMessage   String?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+}

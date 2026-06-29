@@ -1,0 +1,31 @@
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--maple-text-muted);
+  font-size: var(--maple-text-base);
+  background: var(--maple-surface);
+  border: 1px dashed var(--maple-border-strong);
+  border-radius: var(--maple-radius-lg);
+}
+
+.icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: var(--maple-text-lg);
+  font-weight: 700;
+  color: var(--maple-text-secondary);
+}
+
+.message {
+  margin: 0;
+  font-size: var(--maple-text-sm);
+}
+
+.action {
+  margin-top: 20px;
+}

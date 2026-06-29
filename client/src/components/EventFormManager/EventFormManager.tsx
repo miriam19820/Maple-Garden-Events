@@ -12,6 +12,7 @@ import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
 import { calculatePortionBilling, MIN_PORTIONS_MIXED, MIN_PORTIONS_PER_UNIT } from '../../utils/portionBilling';
+import { hasEventEnded } from '../../utils/eventStart';
 import { API_URL } from '../../config/api';
 import { secureFetch } from '../../services/api';
 import {
@@ -127,12 +128,15 @@ const EventFormManager = () => {
   );
   const loading = bookingsLoading;
   
-  const [viewMode, setViewMode] = useState<'bookings' | 'forms' | 'stats'>('bookings'); 
+  const [viewMode, setViewMode] = useState<'bookings' | 'forms' | 'stats'>('bookings');
+  const [showPastEvents, setShowPastEvents] = useState(false);
   
   const [formData, setFormData] = useState<EventFormData>({});
   const [depositCheckFile, setDepositCheckFile] = useState<File | null>(null);
   const [checkScanning, setCheckScanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const actionBusy = submitting || emailSending;
   const [notesList, setNotesList] = useState<string[]>([]);
   const [newNote, setNewNote] = useState('');
 
@@ -298,12 +302,34 @@ const EventFormManager = () => {
 
   const layoutGuestCount = Number(formData.finalGuestCount) || 0;
 
-  const filtered = bookings.filter(b =>
+  const matchesSearch = (b: Booking) =>
     b.clientAFullName?.includes(search) ||
     b.clientAIdNumber?.includes(search) ||
     b.clientBFullName?.includes(search) ||
-    b.clientBIdNumber?.includes(search)
+    b.clientBIdNumber?.includes(search);
+
+  const isPastBooking = (b: Booking) =>
+    !!b.eventDate?.date && hasEventEnded(b, b.eventDate.date, b.eventForm);
+
+  const searchFiltered = bookings.filter(matchesSearch);
+  const upcomingBookings = searchFiltered.filter((b) => !isPastBooking(b));
+  const pastBookings = searchFiltered.filter(isPastBooking);
+  const displayedBookings = showPastEvents ? pastBookings : upcomingBookings;
+
+  const isPastForm = (form: { booking?: Booking | null; eventTime?: string | null }) => {
+    if (!form.booking?.eventDate?.date) return false;
+    return hasEventEnded(form.booking, form.booking.eventDate.date, form);
+  };
+
+  const searchFilteredForms = allForms.filter(
+    (form) =>
+      !search ||
+      form.booking?.clientAFullName?.includes(search) ||
+      form.booking?.clientBFullName?.includes(search),
   );
+  const upcomingForms = searchFilteredForms.filter((form) => !isPastForm(form));
+  const pastForms = searchFilteredForms.filter(isPastForm);
+  const displayedForms = showPastEvents ? pastForms : upcomingForms;
 
   const dateStr = (b: Booking) => b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '';
 
@@ -377,6 +403,36 @@ const EventFormManager = () => {
     }
   };
 
+  const showEmailSaveMessage = (result: {
+    emailSent?: boolean;
+    emailSkipped?: boolean;
+    emailError?: string;
+  }) => {
+    if (result.emailSent) {
+      alert('הטופס נשמר והמייל נשלח בהצלחה!');
+      return;
+    }
+    if (result.emailSkipped) {
+      alert('הטופס נשמר (מייל כבר נשלח לפני פחות מדקה)');
+      return;
+    }
+    if (result.emailError) {
+      alert(`הטופס נשמר, אך המייל לא נשלח: ${result.emailError}`);
+    }
+  };
+
+  const buildDataToSave = async () => {
+    const checkUrl = await uploadCheckFile();
+    return prepareFormDataForSave({
+      ...formData,
+      depositCheckUrl: checkUrl || formData.depositCheckUrl,
+      notes: JSON.stringify(notesList),
+      menuSelections: selectedMenu,
+      guestPortionCount: portionBilling?.totalBillablePortions,
+      pricePerPortion: portionBilling?.pricePerPortion ?? barPortionPrice,
+      totalPrice: portionBilling?.totalAmount,
+    });
+  };
   const handleDownloadPDF = async () => {
     if (!selected) return;
     try {
@@ -444,23 +500,14 @@ const EventFormManager = () => {
   };
 
   const handleSaveForm = async () => {
-    if (!selected) return;
+    if (!selected || actionBusy) return;
     if (!isFormValid()) {
       alert('אנא מלא את כל השדות החובה:\n✓ שעה וקבלת פנים\n✓ סוג ישיבה\n✓ מוזמנים סופיים\n✓ חלוקה (כמות גברים/נשים)\n✓ צ"ק פיקדון\n✓ כשרות\n\nהערות = אופציונלי');
       return;
     }
     setSubmitting(true);
     try {
-      const checkUrl = await uploadCheckFile();
-      const dataToSave: EventFormData = prepareFormDataForSave({
-        ...formData,
-        depositCheckUrl: checkUrl || formData.depositCheckUrl,
-        notes: JSON.stringify(notesList),
-        menuSelections: selectedMenu,
-        guestPortionCount: portionBilling?.totalBillablePortions,
-        pricePerPortion: portionBilling?.pricePerPortion ?? barPortionPrice,
-        totalPrice: portionBilling?.totalAmount,
-      });
+      const dataToSave = await buildDataToSave();
 
       const response = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
         method: 'POST',
@@ -474,7 +521,7 @@ const EventFormManager = () => {
       const result = await response.json();
       if (result.success) {
         setDepositCheckFile(null);
-        setSubmitting(false);
+        showEmailSaveMessage(result);
         setSelected(null);
         return;
       } else {
@@ -488,6 +535,85 @@ const EventFormManager = () => {
     }
   };
 
+  const handleSaveAndDownloadPDF = async () => {
+    if (!selected || actionBusy) return;
+    setSubmitting(true);
+    try {
+      const dataToSave = await buildDataToSave();
+
+      const saveResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSave),
+      });
+
+      if (!saveResponse.ok) {
+        alert('שגיאה בשמירת הנתונים טרם הורדת ה-PDF.');
+        return;
+      }
+
+      const saveResult = await saveResponse.json();
+      if (saveResult.emailSent || saveResult.emailSkipped || saveResult.emailError) {
+        showEmailSaveMessage(saveResult);
+      }
+
+      await handleDownloadPDF();
+    } catch (error) {
+      console.error(error);
+      alert('שגיאת תקשורת עם השרת בעת הפעולה.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!selected || actionBusy) return;
+    setEmailSending(true);
+    try {
+      const dataToSave = await buildDataToSave();
+
+      const saveResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSave),
+      });
+
+      if (!saveResponse.ok) {
+        alert('שגיאה בשמירת הנתונים, המייל לא נשלח.');
+        return;
+      }
+
+      const saveResult = await saveResponse.json();
+
+      const emailResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}/send-email`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const emailResult = await emailResponse.json();
+      const emailWasSent =
+        saveResult.emailSent ||
+        (emailResponse.ok && emailResult.success && !emailResult.skipped);
+      const emailWasSkipped =
+        !emailWasSent && (saveResult.emailSkipped || emailResult.skipped);
+
+      if (emailWasSent) {
+        alert('הטופס נשמר והמייל נשלח בהצלחה!');
+      } else if (emailWasSkipped) {
+        alert('הטופס נשמר (מייל כבר נשלח לפני פחות מדקה)');
+      } else {
+        alert(`שגיאה בשליחת המייל: ${saveResult.emailError || emailResult.error || 'אנא נסה שוב'}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('שגיאת תקשורת עם השרת בעת הפעולה.');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   return (
     <div className={`${styles.container} ${selected ? styles.containerFormMode : ''}`}>
       {!selected && (
@@ -495,19 +621,19 @@ const EventFormManager = () => {
         <h2 className={styles.title}>טופס הפקת אירוע</h2>
         <div className={styles.viewTabs}>
           <button
-            onClick={() => setViewMode('bookings')}
+            onClick={() => { setViewMode('bookings'); setShowPastEvents(false); }}
             className={`${styles.tabBtn} ${viewMode === 'bookings' ? styles.tabBtnActive : ''}`}
           >
             חיפוש הזמנה
           </button>
           <button
-            onClick={() => setViewMode('forms')}
+            onClick={() => { setViewMode('forms'); setShowPastEvents(false); }}
             className={`${styles.tabBtn} ${viewMode === 'forms' ? styles.tabBtnActive : ''}`}
           >
-            כל הטפסים
+            טפסים שמורים
           </button>
           <button
-            onClick={() => setViewMode('stats')}
+            onClick={() => { setViewMode('stats'); setShowPastEvents(false); }}
             className={`${styles.tabBtn} ${styles.tabBtnStats} ${viewMode === 'stats' ? styles.tabBtnActive : ''}`}
           >
             סטטיסטיקות
@@ -526,17 +652,44 @@ const EventFormManager = () => {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
+              <div className={styles.pastEventsBar}>
+                {showPastEvents ? (
+                  <button
+                    type="button"
+                    className={styles.pastEventsBtn}
+                    onClick={() => setShowPastEvents(false)}
+                  >
+                    ← חזרה לאירועים קרובים
+                  </button>
+                ) : pastBookings.length > 0 ? (
+                  <button
+                    type="button"
+                    className={styles.pastEventsBtn}
+                    onClick={() => setShowPastEvents(true)}
+                  >
+                    📁 טפסי אירועים שעברו ({pastBookings.length})
+                  </button>
+                ) : null}
+              </div>
               {loading ? (
                 <p className={styles.empty}>טוען...</p>
-              ) : filtered.length === 0 ? (
-                <p className={styles.empty}>{search ? 'לא נמצאו תוצאות.' : 'אין הזמנות סגורות.'}</p>
+              ) : displayedBookings.length === 0 ? (
+                <p className={styles.empty}>
+                  {search
+                    ? 'לא נמצאו תוצאות.'
+                    : showPastEvents
+                      ? 'אין טפסי אירועים שעברו.'
+                      : 'אין אירועים קרובים.'}
+                </p>
               ) : (
                 <>
-                  {filtered.filter(b => !b.eventForm).length > 0 && (
+                  {displayedBookings.filter(b => !b.eventForm).length > 0 && (
                     <>
-                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitlePending}`}>⚠️ ממתינות למילוי טופס ({filtered.filter(b => !b.eventForm).length})</p>
+                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitlePending}`}>
+                        {showPastEvents ? '📁 ממתינות למילוי (עבר)' : '⚠️ ממתינות למילוי טופס'} ({displayedBookings.filter(b => !b.eventForm).length})
+                      </p>
                       <div className={styles.grid}>
-                        {filtered.filter(b => !b.eventForm).map(b => (
+                        {displayedBookings.filter(b => !b.eventForm).map(b => (
                           <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
                             <div className={styles.cardDate}>{dateStr(b)}</div>
                             <div className={styles.cardName}>{b.clientAFullName}</div>
@@ -548,11 +701,13 @@ const EventFormManager = () => {
                       </div>
                     </>
                   )}
-                  {filtered.filter(b => b.eventForm).length > 0 && (
+                  {displayedBookings.filter(b => b.eventForm).length > 0 && (
                     <>
-                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitleDone}`}>✓ טפסים שמורים ({filtered.filter(b => b.eventForm).length})</p>
+                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitleDone}`}>
+                        {showPastEvents ? '📁 טפסים שמורים (עבר)' : '✓ טפסים שמורים'} ({displayedBookings.filter(b => b.eventForm).length})
+                      </p>
                       <div className={styles.grid}>
-                        {filtered.filter(b => b.eventForm).map(b => (
+                        {displayedBookings.filter(b => b.eventForm).map(b => (
                           <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
                             <div className={styles.cardDate}>{dateStr(b)}</div>
                             <div className={styles.cardName}>{b.clientAFullName}</div>
@@ -578,22 +733,43 @@ const EventFormManager = () => {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
+              <div className={styles.pastEventsBar}>
+                {showPastEvents ? (
+                  <button
+                    type="button"
+                    className={styles.pastEventsBtn}
+                    onClick={() => setShowPastEvents(false)}
+                  >
+                    ← חזרה לטפסים של אירועים קרובים
+                  </button>
+                ) : pastForms.length > 0 ? (
+                  <button
+                    type="button"
+                    className={styles.pastEventsBtn}
+                    onClick={() => setShowPastEvents(true)}
+                  >
+                    📁 טפסי אירועים שעברו ({pastForms.length})
+                  </button>
+                ) : null}
+              </div>
               <p className={styles.listCount}>
-                📊 סה"כ טפסים שנשמרו: {allForms.length}
+                {showPastEvents
+                  ? `📁 טפסים של אירועים שעברו: ${displayedForms.length}`
+                  : `📊 טפסים של אירועים קרובים: ${displayedForms.length}`}
               </p>
-              {allForms.length === 0 ? (
-                <p className={styles.empty}>אין טפסים שנשמרו עדיין.</p>
+              {displayedForms.length === 0 ? (
+                <p className={styles.empty}>
+                  {search
+                    ? 'לא נמצאו תוצאות.'
+                    : showPastEvents
+                      ? 'אין טפסי אירועים שעברו.'
+                      : 'אין טפסים של אירועים קרובים.'}
+                </p>
               ) : (
                 <div className={styles.savedFormsGrid}>
-                  {allForms
-                    .filter((form) =>
-                      !search ||
-                      form.booking?.clientAFullName?.includes(search) ||
-                      form.booking?.clientBFullName?.includes(search)
-                    )
-                    .map((form, idx) => (
+                  {displayedForms.map((form) => (
                     <div
-                      key={idx}
+                      key={form.id}
                       className={styles.savedFormCard}
                       onClick={() => {
                         if (form.booking) {
@@ -1300,48 +1476,19 @@ const EventFormManager = () => {
               <button
                 onClick={handleSaveForm}
                 className={styles.saveBtn}
-                disabled={submitting}
+                disabled={actionBusy}
               >
                 {submitting ? 'שומר...' : 'שמירת טופס'}
               </button>
 
-       <button
-  onClick={async () => {
-    try {
-      const checkUrl = await uploadCheckFile();
-      const dataToSave = prepareFormDataForSave({
-        ...formData,
-        depositCheckUrl: checkUrl || formData.depositCheckUrl,
-        notes: JSON.stringify(notesList),
-        menuSelections: selectedMenu
-      });
-
-      const saveResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dataToSave) 
-      });
-
-      if (!saveResponse.ok) {
-         alert('שגיאה בשמירת הנתונים טרם הורדת ה-PDF.');
-         return;
-      }
-      
-      await handleDownloadPDF(); 
-      
-    } catch (error) {
-      console.error(error);
-      alert('שגיאת תקשורת עם השרת בעת הפעולה.');
-    }
-  }}
-  className={styles.downloadBtn}
-  title="שמור והורד PDF"
->
-  הורד PDF 📥
-</button>
+              <button
+                onClick={handleSaveAndDownloadPDF}
+                disabled={actionBusy}
+                className={styles.downloadBtn}
+                title="שמור והורד PDF"
+              >
+                {submitting ? 'שומר...' : 'הורד PDF 📥'}
+              </button>
 
               <button
                 onClick={() => {
@@ -1357,57 +1504,17 @@ const EventFormManager = () => {
                 </svg>
                 שלח ווצאפ
               </button>
-<button
-  onClick={async () => {
-    try {
-      alert('שומר את הטופס ושולח למייל... אנא המתן מעט'); 
-      
-      const checkUrl = await uploadCheckFile();
-      const dataToSave = prepareFormDataForSave({
-        ...formData,
-        depositCheckUrl: checkUrl || formData.depositCheckUrl,
-        notes: JSON.stringify(notesList),
-        menuSelections: selectedMenu
-      });
-
-      const saveResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dataToSave) 
-      });
-
-      if (!saveResponse.ok) {
-         alert('שגיאה בשמירת הנתונים, המייל לא נשלח.');
-         return;
-      }
-      
-      const emailResponse = await secureFetch(`${API_URL}/event-forms/${selected.id}/send-email`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      
-      const data = await emailResponse.json();
-      if (emailResponse.ok && data.success) {
-        alert('הטופס נשמר והמייל נשלח בהצלחה!');
-      } else {
-        alert(`שגיאה בשליחת המייל: ${data.error || 'אנא נסה שוב'}`);
-      }
-    } catch (error) {
-      console.error(error);
-      alert('שגיאת תקשורת עם השרת בעת הפעולה.');
-    }
-  }}
-  className={styles.emailBtn}
-  title="שמור ושלח למייל"
->
-  <svg className={styles.btnIcon} fill="currentColor" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-    <path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48H48zM0 176V384c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V176L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"></path>
-  </svg>                                
-  שלח למייל
-</button>
+              <button
+                onClick={handleSendEmail}
+                disabled={actionBusy}
+                className={styles.emailBtn}
+                title="שמור ושלח למייל"
+              >
+                <svg className={styles.btnIcon} fill="currentColor" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4L236.8 313.6c11.4 8.5 27 8.5 38.4 0L492.8 150.4c12.1-9.1 19.2-23.3 19.2-38.4c0-26.5-21.5-48-48-48H48zM0 176V384c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V176L294.4 339.2c-22.8 17.1-54 17.1-76.8 0L0 176z"></path>
+                </svg>
+                {emailSending ? 'שולח...' : 'שלח למייל'}
+              </button>
             </div>
           </div>
         </div>

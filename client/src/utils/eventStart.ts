@@ -145,3 +145,19 @@ export function isEventLive(
 ): boolean {
   return canEditCheckIn(eventDateStr, booking, eventForm, now);
 }
+
+export function toEventDateKey(eventDate: string | Date): string {
+  return formatDateStr(new Date(eventDate));
+}
+
+/** האירוע הסתיים (לפי שעת סיום המשבצת). */
+export function hasEventEnded(
+  booking: BookingTime,
+  eventDate: string | Date,
+  eventForm?: EventFormTime | null,
+  now: Date = new Date(),
+): boolean {
+  const eventDateStr = toEventDateKey(eventDate);
+  const endAt = getEventEndDateTime(eventDateStr, booking, eventForm);
+  return now >= endAt;
+}

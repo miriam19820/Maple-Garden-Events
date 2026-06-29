@@ -106,6 +106,14 @@
   gap: 18px;
 }
 
+@media (min-width: 1024px) {
+  .chartsRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+}
+
 @media (max-width: 768px) {
   .twoCol {
     grid-template-columns: 1fr;

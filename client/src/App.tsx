@@ -28,7 +28,7 @@ const Gallery = lazy(() => import('./components/Gallery/Gallery'));
 const CalendarWrapper = () => {
   const navigate = useNavigate();
   return (
-    <AppLayout viewportFill>
+    <AppLayout layout="viewportFill">
       <Calendar
         onDateSelect={(day) => {
           navigate('/booking', {
@@ -45,10 +45,8 @@ const CalendarWrapper = () => {
   );
 };
 
-const PageShell = ({ children }: { children: React.ReactNode }) => (
-  <AppLayout>
-    <div className="page-content">{children}</div>
-  </AppLayout>
+const FullWidthShell = ({ children }: { children: React.ReactNode }) => (
+  <AppLayout layout="fullWidth">{children}</AppLayout>
 );
 
 const Lazy = ({ children }: { children: React.ReactNode }) => (
@@ -93,19 +91,19 @@ function App() {
         <Route path="/feedback/:token" element={<Lazy><FeedbackPage /></Lazy>} />
 
         <Route path="/" element={<ProtectedRoute><CalendarWrapper /></ProtectedRoute>} />
-        <Route path="/booking" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
-        <Route path="/booking/close-option/:optionId" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
-        <Route path="/booking/edit/:id" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
-        <Route path="/options-manager" element={<ProtectedRoute><Lazy><PageShell><OptionsManager /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/bookings-manager" element={<ProtectedRoute><Lazy><PageShell><BookingsManager /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/greeting" element={<ProtectedRoute><Lazy><PageShell><GreetingBlast /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/event-form-manager" element={<ProtectedRoute><Lazy><AppLayout viewportFill><EventFormManager /></AppLayout></Lazy></ProtectedRoute>} />
-        <Route path="/option" element={<ProtectedRoute><Lazy><AppLayout viewportFill><OptionPage /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/booking" element={<ProtectedRoute><Lazy><AppLayout layout="viewportFill"><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/booking/close-option/:optionId" element={<ProtectedRoute><Lazy><AppLayout layout="viewportFill"><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/booking/edit/:id" element={<ProtectedRoute><Lazy><AppLayout layout="viewportFill"><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/options-manager" element={<ProtectedRoute><Lazy><FullWidthShell><OptionsManager /></FullWidthShell></Lazy></ProtectedRoute>} />
+        <Route path="/bookings-manager" element={<ProtectedRoute><Lazy><FullWidthShell><BookingsManager /></FullWidthShell></Lazy></ProtectedRoute>} />
+        <Route path="/greeting" element={<ProtectedRoute><Lazy><FullWidthShell><GreetingBlast /></FullWidthShell></Lazy></ProtectedRoute>} />
+        <Route path="/event-form-manager" element={<ProtectedRoute><Lazy><AppLayout layout="viewportFill"><EventFormManager /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/option" element={<ProtectedRoute><Lazy><AppLayout layout="viewportFill"><OptionPage /></AppLayout></Lazy></ProtectedRoute>} />
         <Route path="/menu" element={<ProtectedRoute><Lazy><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></Lazy></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><Lazy><PageShell><SettingsManager /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/feedback-manager" element={<ProtectedRoute><Lazy><PageShell><FeedbackManager /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/feedback-stats" element={<ProtectedRoute><Lazy><PageShell><FeedbackStats /></PageShell></Lazy></ProtectedRoute>} />
-        <Route path="/gallery" element={<ProtectedRoute><Lazy><AppLayout><Gallery /></AppLayout></Lazy></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Lazy><FullWidthShell><SettingsManager /></FullWidthShell></Lazy></ProtectedRoute>} />
+        <Route path="/feedback-manager" element={<ProtectedRoute><Lazy><FullWidthShell><FeedbackManager /></FullWidthShell></Lazy></ProtectedRoute>} />
+        <Route path="/feedback-stats" element={<ProtectedRoute><Lazy><FullWidthShell><FeedbackStats /></FullWidthShell></Lazy></ProtectedRoute>} />
+        <Route path="/gallery" element={<ProtectedRoute><Lazy><FullWidthShell><Gallery /></FullWidthShell></Lazy></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );

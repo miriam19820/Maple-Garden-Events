@@ -13,6 +13,7 @@ import {
 } from './mailer';
 import { processEndedEventsFeedback } from './feedbackHelpers';
 import { runDatabaseBackup } from './databaseBackup';
+import { processDueScheduledGreetings } from '../Services/greetingService';
 
 export const startCronJobs = () => {
   logger.info('Cron jobs service started');
@@ -132,6 +133,20 @@ export const startCronJobs = () => {
       }
     } catch (error) {
       logger.error('שגיאה בתהליך שליחת משוב אוטומטי:', error);
+    }
+  });
+
+  // ==========================================
+  // ברכות מתוזמנות — בדיקה כל דקה
+  // ==========================================
+  cron.schedule('* * * * *', async () => {
+    try {
+      const processed = await processDueScheduledGreetings();
+      if (processed > 0) {
+        logger.info(`[GREETING] טיפל ב-${processed} ברכות מתוזמנות`);
+      }
+    } catch (error) {
+      logger.error('שגיאה בעיבוד ברכות מתוזמנות:', error);
     }
   });
 

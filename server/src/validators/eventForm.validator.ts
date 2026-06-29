@@ -5,6 +5,11 @@ const optionalNumber = z.preprocess(
   z.coerce.number().optional(),
 );
 
+const optionalBoolean = z.preprocess(
+  (val) => (val === null || val === undefined ? undefined : val),
+  z.boolean().optional(),
+);
+
 const tableSchema = z.object({
   id: z.coerce.number(),
   x: z.coerce.number(),
@@ -28,16 +33,16 @@ const eventFormFieldsSchema = z
     napkinId: z.string().nullable().optional(),
     centerpiece: z.string().nullable().optional(),
     bridgeChair: z.string().nullable().optional(),
-    hasLighting: z.boolean().optional(),
-    hasSoundSystem: z.boolean().optional(),
-    hasScreens: z.boolean().optional(),
-    hasFireworks: z.boolean().optional(),
+    hasLighting: optionalBoolean,
+    hasSoundSystem: optionalBoolean,
+    hasScreens: optionalBoolean,
+    hasFireworks: optionalBoolean,
     entertainersBar: optionalNumber,
     entertainersSitting: optionalNumber,
     entertainersMen: optionalNumber,
     entertainersWomen: optionalNumber,
     depositCheckUrl: z.string().nullable().optional(),
-    depositCheckStatus: z.boolean().optional(),
+    depositCheckStatus: optionalBoolean,
     depositCheckDetails: z.unknown().optional(),
     akumCode: z.string().nullable().optional(),
     kashrut: z.string().nullable().optional(),
@@ -47,7 +52,7 @@ const eventFormFieldsSchema = z
     designPrice: optionalNumber,
     extrasJson: z.string().nullable().optional(),
     totalPrice: optionalNumber,
-    contractSigned: z.boolean().optional(),
+    contractSigned: optionalBoolean,
     contractSentAt: z.string().nullable().optional(),
     notes: z.string().nullable().optional(),
     menuSelections: z.unknown().optional(),
@@ -56,7 +61,7 @@ const eventFormFieldsSchema = z
     menCount: optionalNumber,
     womenCount: optionalNumber,
     entertainersTotal: optionalNumber,
-    akumPaid: z.boolean().optional(),
+    akumPaid: optionalBoolean,
   });
 
 export const upsertEventFormSchema = z.object({

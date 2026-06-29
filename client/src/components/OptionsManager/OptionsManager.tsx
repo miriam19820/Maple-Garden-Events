@@ -5,6 +5,9 @@ import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
 import { useBookingsQuery } from '../../hooks/queries';
 import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
+import { PageHeader } from '../ui/PageHeader';
+import { Input } from '../ui/Input';
+import { EmptyState } from '../ui/EmptyState';
 
 const HEBREW_NUMERALS: Record<number, string> = {
   1:'א',2:'ב',3:'ג',4:'ד',5:'ה',6:'ו',7:'ז',8:'ח',9:'ט',10:'י',
@@ -97,17 +100,21 @@ const OptionsManager = () => {
 
   return (
     <div className={styles.container}>
-      <h2 className={styles.title}>ניהול אופציות פעילות ⏳</h2>
+      <PageHeader title="ניהול אופציות פעילות" subtitle="תאריכים שמורים הממתינים לסגירה" />
 
-      <input
-        style={{ width: '100%', maxWidth: '400px', padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '1rem', marginBottom: '20px', direction: 'rtl', outline: 'none' }}
+      <Input
+        fieldClassName={styles.searchInput}
         placeholder="חיפוש לפי שם או תעודת זהות..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
 
       {options.length === 0 ? (
-        <p className={styles.emptyMessage}>{search ? 'לא נמצאו תוצאות.' : 'אין כרגע תאריכים שממתינים באופציה.'}</p>
+        <EmptyState
+          icon="⏳"
+          title={search ? 'לא נמצאו תוצאות' : 'אין אופציות פעילות'}
+          message={search ? 'נסה לחפש בשם אחר' : 'תאריכים באופציה יופיעו כאן'}
+        />
       ) : (
         <div className={styles.grid}>
           {options.map((option: any) => {

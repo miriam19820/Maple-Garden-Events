@@ -51,8 +51,12 @@
   gap: 12px;
   padding: 14px 24px;
   border-top: 1px solid var(--maple-border);
-  background: var(--maple-bg);
+  background: var(--maple-surface);
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -4px 12px rgba(45, 55, 72, 0.06);
 }
 
 .contractBox {
@@ -236,8 +240,14 @@
 .sectionCard {
   background: var(--maple-surface);
   border: 1px solid var(--maple-border);
-  border-radius: var(--maple-radius);
+  border-radius: var(--maple-radius-lg);
   padding: 20px;
+  box-shadow: var(--maple-shadow-sm);
+  transition: border-color var(--maple-transition), box-shadow var(--maple-transition);
+}
+
+.sectionCard:hover {
+  border-color: var(--maple-green-muted);
 }
 
 .sectionHeader {

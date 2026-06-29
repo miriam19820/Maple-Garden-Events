@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './FeedbackStats.module.css';
 import { useFeedbackStatsQuery } from '../../hooks/queries';
@@ -42,7 +42,15 @@ const FeedbackStats = () => {
   const stats = data;
 
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i));
+  const defaultYears = useMemo(
+    () => Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i)),
+    [currentYear],
+  );
+
+  const extraYears = useMemo(() => {
+    const fromApi = (stats?.availableYears ?? []).map(String);
+    return fromApi.filter((y) => !defaultYears.includes(y));
+  }, [stats?.availableYears, defaultYears]);
 
   const maxTypeAvg = stats?.byEventType.length
     ? Math.max(...stats.byEventType.map((t) => t.average ?? 0), 5)
@@ -55,6 +63,14 @@ const FeedbackStats = () => {
   const maxMonthAvg = stats?.byMonth.length
     ? Math.max(...stats.byMonth.map((m) => m.average ?? 0), 5)
     : 5;
+
+  const maxYearAvg = stats?.byYear.length
+    ? Math.max(...stats.byYear.map((y) => y.average ?? 0), 5)
+    : 5;
+
+  const periodLabel = year === 'all'
+    ? 'כל השנים'
+    : year;
 
   return (
     <div className={styles.container}>
@@ -72,9 +88,17 @@ const FeedbackStats = () => {
             ))}
           </select>
           <select className={styles.select} value={year} onChange={(e) => setYear(e.target.value)}>
-            {years.map((y) => (
+            <option value="all">כל השנים</option>
+            {defaultYears.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
+            {extraYears.length > 0 && (
+              <optgroup label="שנים נוספות עם משובים">
+                {extraYears.map((y) => (
+                  <option key={`extra-${y}`} value={y}>{y}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
       </div>
@@ -195,9 +219,31 @@ const FeedbackStats = () => {
             )}
           </div>
 
-          {!month && stats.byMonth.length > 0 && (
+          {!month && year === 'all' && stats.byYear.length > 0 && (
             <div className={styles.section}>
-              <h3 className={styles.sectionTitle}>ממוצע לפי חודש — {year}</h3>
+              <h3 className={styles.sectionTitle}>ממוצע לפי שנה — כל השנים</h3>
+              <div className={styles.monthChart}>
+                {stats.byYear.map((item) => {
+                  const heightPct = item.average != null ? (item.average / maxYearAvg) * 100 : 0;
+                  return (
+                    <div key={item.year} className={styles.monthCol}>
+                      <span className={styles.monthScore}>
+                        {item.average?.toFixed(1) ?? '—'}
+                      </span>
+                      <div className={styles.monthBarWrap}>
+                        <div className={styles.monthBar} style={{ height: `${heightPct}%` }} />
+                      </div>
+                      <span className={styles.monthLabel}>{item.year}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!month && year !== 'all' && stats.byMonth.length > 0 && (
+            <div className={styles.section}>
+              <h3 className={styles.sectionTitle}>ממוצע לפי חודש — {periodLabel}</h3>
               <div className={styles.monthChart}>
                 {stats.byMonth.map((item) => {
                   const heightPct = item.average != null ? (item.average / maxMonthAvg) * 100 : 0;

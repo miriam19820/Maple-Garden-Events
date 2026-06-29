@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
-import { sendPDFToClient, sendWhatsAppMessage } from '../Services/emailService';
+import { sendEventFormEmailIfAllowed } from '../utils/eventFormEmail';
 import { emitEventFormsUpdated } from '../utils/realtime';
 
 function mapTableCreate(table: {
@@ -56,7 +56,6 @@ const EVENT_FORM_DB_FIELDS = [
   'extrasJson',
   'totalPrice',
   'contractSigned',
-  'contractSentAt',
   'notes',
   'menuSelections',
   'tableLayoutImageUrl',
@@ -118,60 +117,34 @@ export const eventFormController = {
         }
       });
 
-      const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { eventDate: true }
-      });
+      let emailSent = false;
+      let emailSkipped = false;
+      let retryAfterSeconds: number | undefined;
+      let emailError: string | undefined;
 
-      if (booking) {
-        try {
-          const pdfData = {
-            eventCode: booking.eventCode,
-            clientAFullName: booking.clientAFullName,
-            clientAIdNumber: booking.clientAIdNumber,
-            clientBFullName: booking.clientBFullName || undefined,
-            clientBIdNumber: booking.clientBIdNumber || undefined,
-            eventDate: booking.eventDate.date.toString(),
-            guestCount: booking.guestCount,
-            minimumGuestCount: booking.minimumGuestCount ?? booking.guestCount,
-            eventType: booking.eventType,
-            timeOfDay: booking.timeOfDay || undefined,
-            clientSignatureUrl: booking.clientSignatureUrl,
-            contractText: booking.contractText,
-            eventForm: form,
-          };
-
-          const pdfBuffer = await generateEventFormPDF(pdfData);
-
-          // בניית רשימת נמענים למייל ולוואטסאפ לפי סוג אירוע
-          const emails: string[] = [];
-          const phones: string[] = [];
-
-          // תמיד מוסיפים את צד א' (הצד המרכזי) אם קיים לו מידע
-          if (booking.clientAEmail) emails.push(booking.clientAEmail);
-          if (booking.clientAPhone) phones.push(booking.clientAPhone);
-
-          // מוסיפים את צד ב' רק אם סוג האירוע הוא חתונה
-          if (booking.eventType === 'חתונה') {
-            if (booking.clientBEmail) emails.push(booking.clientBEmail);
-            if (booking.clientBPhone) phones.push(booking.clientBPhone);
-          }
-
-          // שליחת מייל לכל מי שברשימה
-          for (const email of emails) {
-            await sendPDFToClient(email, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
-          }
-
-          // שליחת וואטסאפ לכל מי שברשימה
-          for (const phone of phones) {
-            await sendWhatsAppMessage(phone, booking.clientAFullName, booking.eventDate.date.toString());
-          }
-        } catch (emailError) {
-          console.warn('Failed to send communications:', emailError);
+      try {
+        const emailResult = await sendEventFormEmailIfAllowed(bookingId);
+        if (emailResult.sent) {
+          emailSent = true;
+        } else if (emailResult.skipped) {
+          emailSkipped = true;
+          retryAfterSeconds = emailResult.retryAfterSeconds;
+        } else {
+          emailError = emailResult.error;
         }
+      } catch (sendError) {
+        console.warn('Failed to send communications:', sendError);
+        emailError = 'שגיאה בשליחת המייל';
       }
 
-      res.json({ success: true, data: form });
+      res.json({
+        success: true,
+        data: form,
+        emailSent,
+        emailSkipped,
+        retryAfterSeconds,
+        emailError,
+      });
       emitEventFormsUpdated();
     } catch (e) {
       console.error('Form upsert error:', e);
@@ -285,59 +258,26 @@ export const eventFormController = {
     }
   },
 
-  // הפונקציה החדשה לשליחת המייל אוטומטית בלחיצת כפתור
   async sendEmail(req: Request, res: Response) {
     try {
       const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { 
-          eventDate: true,
-          eventForm: { include: { tables: true } }
-        }
-      });
+      const emailResult = await sendEventFormEmailIfAllowed(bookingId);
 
-      if (!booking || !booking.eventForm) {
-        return res.status(404).json({ error: 'הזמנה או טופס לא נמצאו' });
+      if (emailResult.sent) {
+        return res.json({ success: true, message: 'המייל נשלח בהצלחה' });
       }
 
-      // 1. הכנת הנתונים ליצירת ה-PDF
-      const pdfData = {
-        eventCode: booking.eventCode,
-        clientAFullName: booking.clientAFullName,
-        clientAIdNumber: booking.clientAIdNumber,
-        clientBFullName: booking.clientBFullName || undefined,
-        clientBIdNumber: booking.clientBIdNumber || undefined,
-        eventDate: booking.eventDate.date.toString(),
-        guestCount: booking.guestCount,
-        minimumGuestCount: booking.minimumGuestCount ?? booking.guestCount,
-        eventType: booking.eventType,
-        timeOfDay: booking.timeOfDay || undefined,
-        clientSignatureUrl: booking.clientSignatureUrl,
-        contractText: booking.contractText,
-        eventForm: booking.eventForm,
-      };
-
-      const pdfBuffer = await generateEventFormPDF(pdfData);
-
-      // 2. בדיקה למי לשלוח (לפי חתונה או אירוע אחר)
-      const emails: string[] = [];
-      if (booking.clientAEmail) emails.push(booking.clientAEmail);
-      
-      if (booking.eventType === 'חתונה' && booking.clientBEmail) {
-        emails.push(booking.clientBEmail);
+      if (emailResult.skipped) {
+        return res.json({
+          success: true,
+          skipped: true,
+          message: 'המייל כבר נשלח לפני פחות מדקה',
+          retryAfterSeconds: emailResult.retryAfterSeconds,
+        });
       }
 
-      if (emails.length === 0) {
-        return res.status(400).json({ error: 'לא מוגדרות כתובות אימייל ללקוחות אלו' });
-      }
-
-      // 3. שליחת המייל עם ה-PDF המצורף
-      for (const email of emails) {
-        await sendPDFToClient(email, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
-      }
-
-      res.json({ success: true, message: 'המייל נשלח בהצלחה' });
+      const status = emailResult.error === 'הזמנה או טופס לא נמצאו' ? 404 : 400;
+      return res.status(status).json({ success: false, error: emailResult.error });
     } catch (e) {
       console.error('Send email error:', e);
       res.status(500).json({ error: 'שגיאה בשליחת המייל' });

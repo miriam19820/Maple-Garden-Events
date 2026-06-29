@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import styles from './BookingsManager.module.css';
 import BookingDetailsModal from './BookingDetailsModal';
 import { useBookingsQuery } from '../../hooks/queries';
 import { PageLoader } from '../PageLoader/PageLoader';
+import { PageHeader } from '../ui/PageHeader';
+import { Input } from '../ui/Input';
+import { EmptyState } from '../ui/EmptyState';
 
 const startOfDay = (d: Date) => {
   const copy = new Date(d);
@@ -78,12 +81,10 @@ const BookingsManager = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>ניהול הזמנות</h2>
-      </div>
+      <PageHeader title="ניהול הזמנות" subtitle="הזמנות סגורות — קרובות ועברו" />
 
-      <input
-        className={styles.searchInput}
+      <Input
+        fieldClassName={styles.searchInput}
         placeholder="חיפוש לפי שם או תעודת זהות..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -92,7 +93,11 @@ const BookingsManager = () => {
       {isLoading ? (
         <PageLoader />
       ) : upcomingBookings.length === 0 && pastBookings.length === 0 ? (
-        <p className={styles.empty}>{search ? 'לא נמצאו תוצאות.' : 'אין הזמנות סגורות.'}</p>
+        <EmptyState
+          icon="📋"
+          title={search ? 'לא נמצאו תוצאות' : 'אין הזמנות סגורות'}
+          message={search ? 'נסה לחפש בשם אחר או בתעודת זהות' : 'הזמנות חדשות יופיעו כאן לאחר סגירה'}
+        />
       ) : (
         <>
           {upcomingBookings.length > 0 && (

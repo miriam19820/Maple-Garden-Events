@@ -29,7 +29,7 @@ import {
   getNextEventCode,
   getContractTemplate,
 } from '../controllers/booking';
-import { sendGreeting } from '../controllers/greeting';
+import { sendGreeting, getScheduledGreetings, cancelScheduledGreetingHandler } from '../controllers/greeting';
 import { generateEventFormPDF } from '../utils/pdfGenerator';
 
 const router = Router();
@@ -81,6 +81,8 @@ router.get('/:id/contract-pdf', catchAsync(async (req: Request, res: Response) =
 router.get('/stats/cancellations', getCancellationStats); 
 router.get('/next-code', getNextEventCode);
 router.get('/contract-template', getContractTemplate);
+router.get('/scheduled-greetings', getScheduledGreetings);
+router.delete('/scheduled-greetings/:id', cancelScheduledGreetingHandler);
 
 // --- ראוטים של הזמנות ---
 router.post('/', validate(createBookingSchema), createBooking);
