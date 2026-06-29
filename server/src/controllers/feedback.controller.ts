@@ -46,6 +46,24 @@ type AdminGroup = {
   feedbackStatus: 'not_sent' | 'pending' | 'completed';
 };
 
+const MONTH_LABELS = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+];
+
+function avgNumbers(values: (number | null | undefined)[]): number | null {
+  const valid = values.filter((v): v is number => typeof v === 'number' && !Number.isNaN(v));
+  if (valid.length === 0) return null;
+  return Number((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(2));
+}
+
+function buildEventDateRange(year: number, month: number | null): { gte: Date; lt: Date } {
+  if (month) {
+    return { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
+  }
+  return { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) };
+}
+
 function buildAdminGroup(
   booking: {
     id: string;
@@ -377,6 +395,184 @@ export const feedbackController = {
     } catch (error) {
       logger.error('Error listing feedback', { error });
       res.status(500).json({ success: false, message: 'שגיאה בטעינת המשובים.' });
+    }
+  },
+
+  /** סטטיסטיקות וחישובים על משובי לקוחות */
+  async statsAdmin(req: Request, res: Response) {
+    try {
+      const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
+      const month = req.query.month ? Number(req.query.month) : null;
+      const dateRange = buildEventDateRange(year, month);
+      const now = new Date();
+
+      const completedFeedbacks = await prisma.feedback.findMany({
+        where: {
+          isCompleted: true,
+          booking: {
+            isOption: false,
+            eventDate: {
+              status: 'BOOKED',
+              date: dateRange,
+            },
+          },
+        },
+        include: {
+          booking: {
+            include: { eventDate: true },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      const averages = {
+        combined: avgNumbers(completedFeedbacks.map((f) => f.averageScore)),
+        food: avgNumbers(completedFeedbacks.map((f) => f.foodRating)),
+        service: avgNumbers(completedFeedbacks.map((f) => f.serviceRating)),
+        venue: avgNumbers(completedFeedbacks.map((f) => f.venueRating)),
+      };
+
+      const lowScore = completedFeedbacks.filter(
+        (f) => f.averageScore != null && f.averageScore <= 3,
+      ).length;
+      const excellent = completedFeedbacks.filter(
+        (f) => f.averageScore != null && f.averageScore >= 4.5,
+      ).length;
+
+      const byTypeMap = new Map<string, number[]>();
+      for (const fb of completedFeedbacks) {
+        const eventType = fb.booking.eventType;
+        if (!byTypeMap.has(eventType)) byTypeMap.set(eventType, []);
+        if (fb.averageScore != null) byTypeMap.get(eventType)!.push(fb.averageScore);
+      }
+      const byEventType = [...byTypeMap.entries()]
+        .map(([eventType, scores]) => ({
+          eventType,
+          average: avgNumbers(scores),
+          count: scores.length,
+        }))
+        .sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
+
+      let byMonth: { month: number; label: string; average: number | null; count: number }[] = [];
+      if (!month) {
+        const byMonthMap = new Map<number, number[]>();
+        for (const fb of completedFeedbacks) {
+          if (fb.averageScore == null || !fb.booking.eventDate) continue;
+          const m = new Date(fb.booking.eventDate.date).getMonth() + 1;
+          if (!byMonthMap.has(m)) byMonthMap.set(m, []);
+          byMonthMap.get(m)!.push(fb.averageScore);
+        }
+        byMonth = [...byMonthMap.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([m, scores]) => ({
+            month: m,
+            label: MONTH_LABELS[m - 1],
+            average: avgNumbers(scores),
+            count: scores.length,
+          }));
+      }
+
+      const categoryComparison = [
+        { category: 'אוכל', average: averages.food },
+        { category: 'שירות', average: averages.service },
+        { category: 'אולם', average: averages.venue },
+      ].filter((c) => c.average != null);
+
+      const candidates = await prisma.booking.findMany({
+        where: {
+          isOption: false,
+          eventDate: { status: 'BOOKED', date: dateRange },
+        },
+        include: {
+          eventDate: true,
+          eventForm: { select: { eventTime: true } },
+          feedbacks: true,
+        },
+      });
+
+      const finishedBookings = candidates.filter(
+        (b) => b.eventDate && hasEventEnded(b, b.eventDate.date, b.eventForm, now),
+      );
+
+      let expectedSides = 0;
+      let pendingFeedbacks = 0;
+      let notSentEvents = 0;
+
+      for (const booking of finishedBookings) {
+        const sides = buildFeedbackSides(booking);
+        expectedSides += sides.length;
+        if (sides.length === 0) continue;
+
+        const hasAnySent = booking.feedbacks.some((f) => f.lastNotifiedAt);
+
+        if (booking.feedbacks.length === 0 || !hasAnySent) {
+          notSentEvents++;
+        }
+
+        for (const side of sides) {
+          const fb = booking.feedbacks.find((f) => f.clientSide === side.side);
+          if (fb && !fb.isCompleted && fb.lastNotifiedAt) pendingFeedbacks++;
+        }
+      }
+
+      const responseRate =
+        expectedSides > 0
+          ? Number(((completedFeedbacks.length / expectedSides) * 100).toFixed(1))
+          : null;
+
+      const recentLow = completedFeedbacks
+        .filter((f) => f.averageScore != null && f.averageScore <= 3)
+        .sort((a, b) => (a.averageScore ?? 0) - (b.averageScore ?? 0))
+        .slice(0, 5)
+        .map((f) => ({
+          eventCode: f.booking.eventCode,
+          eventDate: f.booking.eventDate?.date
+            ? new Date(f.booking.eventDate.date).toISOString().split('T')[0]
+            : null,
+          eventType: f.booking.eventType,
+          clients: [f.booking.clientAFullName, f.booking.clientBFullName].filter(Boolean).join(' · '),
+          clientSide: f.clientSide,
+          score: f.averageScore!,
+          comment: f.comments,
+        }));
+
+      const recentComments = completedFeedbacks
+        .filter((f) => f.comments?.trim())
+        .slice(0, 5)
+        .map((f) => ({
+          eventCode: f.booking.eventCode,
+          eventDate: f.booking.eventDate?.date
+            ? new Date(f.booking.eventDate.date).toISOString().split('T')[0]
+            : null,
+          comment: f.comments!.trim(),
+          score: f.averageScore,
+        }));
+
+      res.status(200).json({
+        success: true,
+        data: {
+          period: { year, month },
+          averages,
+          counts: {
+            completedFeedbacks: completedFeedbacks.length,
+            totalEventsFinished: finishedBookings.length,
+            pendingFeedbacks,
+            notSentEvents,
+            lowScore,
+            excellent,
+            expectedSides,
+          },
+          responseRate,
+          byEventType,
+          byMonth,
+          categoryComparison,
+          recentLow,
+          recentComments,
+        },
+      });
+    } catch (error) {
+      logger.error('Error loading feedback stats', { error });
+      res.status(500).json({ success: false, message: 'שגיאה בטעינת סטטיסטיקות משוב.' });
     }
   },
 };

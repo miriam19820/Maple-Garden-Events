@@ -72,6 +72,58 @@ export function useFeedbackAdminQuery(page: number, limit = 20) {
   });
 }
 
+export interface FeedbackStatsData {
+  period: { year: number; month: number | null };
+  averages: {
+    combined: number | null;
+    food: number | null;
+    service: number | null;
+    venue: number | null;
+  };
+  counts: {
+    completedFeedbacks: number;
+    totalEventsFinished: number;
+    pendingFeedbacks: number;
+    notSentEvents: number;
+    lowScore: number;
+    excellent: number;
+    expectedSides: number;
+  };
+  responseRate: number | null;
+  byEventType: { eventType: string; average: number | null; count: number }[];
+  byMonth: { month: number; label: string; average: number | null; count: number }[];
+  categoryComparison: { category: string; average: number | null }[];
+  recentLow: {
+    eventCode: string;
+    eventDate: string | null;
+    eventType: string;
+    clients: string;
+    clientSide: string;
+    score: number;
+    comment: string | null;
+  }[];
+  recentComments: {
+    eventCode: string;
+    eventDate: string | null;
+    comment: string;
+    score: number | null;
+  }[];
+}
+
+export function useFeedbackStatsQuery(year: string, month: string) {
+  return useQuery({
+    queryKey: ['feedback-stats', year, month],
+    queryFn: async (): Promise<FeedbackStatsData> => {
+      let url = `${API_URL}/feedback/admin/stats?year=${year}`;
+      if (month) url += `&month=${month}`;
+      const res = await apiFetch(url);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || 'שגיאה בטעינת סטטיסטיקות');
+      return json.data as FeedbackStatsData;
+    },
+  });
+}
+
 export function useGlobalSettingsQuery() {
   return useQuery({
     queryKey: ['settings', 'global'],

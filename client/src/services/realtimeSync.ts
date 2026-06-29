@@ -44,6 +44,7 @@ function onCheckInUpdated(queryClient: QueryClient, payload?: { bookingId?: stri
 
 function onFeedbackUpdated(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: ['feedback-admin'] });
+  queryClient.invalidateQueries({ queryKey: ['feedback-stats'] });
 }
 
 function onMenuUpdated(queryClient: QueryClient): void {

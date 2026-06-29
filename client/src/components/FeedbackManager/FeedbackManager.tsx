@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFeedbackAdminQuery } from '../../hooks/queries';
 import { API_URL } from '../../config/api';
@@ -172,12 +173,17 @@ const FeedbackManager = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>משובי לקוחות</h2>
-        <p className={styles.subtitle}>
-          משובים נשלחים אוטומטית למייל/וואטסאפ בסיום כל אירוע (לפי שעת הסיום). בחתונה/אירוסין — נשלח לשני הצדדים.
-          ניתן גם לשלוח ידנית מכאן.
-        </p>
+        <div className={styles.header}>
+        <div>
+          <h2 className={styles.title}>משובי לקוחות</h2>
+          <p className={styles.subtitle}>
+            משובים נשלחים אוטומטית למייל/וואטסאפ בסיום כל אירוע (לפי שעת הסיום). בחתונה/אירוסין — נשלח לשני הצדדים.
+            ניתן גם לשלוח ידנית מכאן.
+          </p>
+        </div>
+        <Link to="/feedback-stats" className={styles.statsLink}>
+          📊 סטטיסטיקות וחישובים
+        </Link>
       </div>
 
       <div className={styles.filters}>

@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: 'ניהול אופציות', path: '/options-manager', icon: '' },
   { label: 'ניהול הזמנות', path: '/bookings-manager', icon: '' },
   { label: 'משובי לקוחות', path: '/feedback-manager', icon: '⭐' },
+  { label: 'סטטיסטיקות וחישובים', path: '/feedback-stats', icon: '📊' },
   { label: 'שליחת ברכה', path: '/greeting', icon: '💌' },
   { label: 'טופס הפקת אירוע', path: '/event-form-manager', icon: '' },
 ];

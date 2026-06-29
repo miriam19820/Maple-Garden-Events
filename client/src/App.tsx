@@ -22,6 +22,7 @@ const SettingsManager = lazy(() =>
 );
 const FeedbackPage = lazy(() => import('./components/FeedbackPage/FeedbackPage'));
 const FeedbackManager = lazy(() => import('./components/FeedbackManager/FeedbackManager'));
+const FeedbackStats = lazy(() => import('./components/FeedbackStats/FeedbackStats'));
 const Gallery = lazy(() => import('./components/Gallery/Gallery'));
 
 const CalendarWrapper = () => {
@@ -103,6 +104,7 @@ function App() {
         <Route path="/menu" element={<ProtectedRoute><Lazy><AppLayout fullHeight={false}><MenuDisplay /></AppLayout></Lazy></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Lazy><PageShell><SettingsManager /></PageShell></Lazy></ProtectedRoute>} />
         <Route path="/feedback-manager" element={<ProtectedRoute><Lazy><PageShell><FeedbackManager /></PageShell></Lazy></ProtectedRoute>} />
+        <Route path="/feedback-stats" element={<ProtectedRoute><Lazy><PageShell><FeedbackStats /></PageShell></Lazy></ProtectedRoute>} />
         <Route path="/gallery" element={<ProtectedRoute><Lazy><AppLayout><Gallery /></AppLayout></Lazy></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>

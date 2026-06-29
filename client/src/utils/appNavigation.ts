@@ -8,6 +8,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   '/menu': 'תפריט',
   '/settings': 'הגדרות מתחם',
   '/feedback-manager': 'משובי לקוחות',
+  '/feedback-stats': 'סטטיסטיקות וחישובים',
   '/gallery': 'גלריה',
 };
 

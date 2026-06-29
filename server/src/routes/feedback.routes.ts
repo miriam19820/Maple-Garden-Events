@@ -16,6 +16,7 @@ const feedbackLimiter = rateLimit({
 });
 
 router.get('/admin/list', requireAuth, feedbackController.listAdmin);
+router.get('/admin/stats', requireAuth, feedbackController.statsAdmin);
 router.post('/admin/send', requireAuth, validate(sendFeedbackAdminSchema), feedbackController.sendAdmin);
 
 router.get('/:token', feedbackLimiter, validate(feedbackTokenParamSchema), feedbackController.verifyToken);
