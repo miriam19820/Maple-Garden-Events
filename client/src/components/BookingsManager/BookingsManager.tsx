@@ -1,42 +1,80 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import styles from './BookingsManager.module.css';
-import LiveAdditionForm from '../LiveAdditionForm/LiveAdditionForm';
 import BookingDetailsModal from './BookingDetailsModal';
 import { useBookingsQuery } from '../../hooks/queries';
-import { PaginationBar } from '../PaginationBar/PaginationBar';
 import { PageLoader } from '../PageLoader/PageLoader';
 
+const startOfDay = (d: Date) => {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+};
+
+const getEventDay = (b: any) => (b.eventDate?.date ? startOfDay(new Date(b.eventDate.date)) : null);
+
 const BookingsManager = () => {
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selected, setSelected] = useState<any>(null);
-  const [showAdditionForm, setShowAdditionForm] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data, isLoading, refetch } = useBookingsQuery({
+  const { data, isLoading } = useBookingsQuery({
     status: 'BOOKED',
-    page,
-    limit: 24,
+    page: 1,
+    limit: 500,
     search: debouncedSearch || undefined,
   });
 
-  const bookings = data?.data ?? [];
-  const pagination = data?.pagination;
+  const { upcomingBookings, pastBookings } = useMemo(() => {
+    const today = startOfDay(new Date());
+    const bookings = (data?.data ?? []).filter((b: any) => !b.isOption);
+
+    const upcoming = bookings
+      .filter((b: any) => {
+        const day = getEventDay(b);
+        return day !== null && day >= today;
+      })
+      .sort((a: any, b: any) => getEventDay(a)!.getTime() - getEventDay(b)!.getTime());
+
+    const past = bookings
+      .filter((b: any) => {
+        const day = getEventDay(b);
+        return day !== null && day < today;
+      })
+      .sort((a: any, b: any) => getEventDay(b)!.getTime() - getEventDay(a)!.getTime());
+
+    return { upcomingBookings: upcoming, pastBookings: past };
+  }, [data]);
 
   const dateStr = (b: any) => b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '';
 
-  const closeSelected = () => {
-    setSelected(null);
-    setShowAdditionForm(false);
-  };
+  const closeSelected = () => setSelected(null);
+
+  const renderBookingCard = (b: any) => (
+    <div key={b.id} className={styles.card}>
+      <div className={styles.cardDate}>{dateStr(b)}</div>
+      {b.eventCode && <div className={styles.cardCode}>#{b.eventCode}</div>}
+      <div className={styles.cardName}>{b.clientAFullName}</div>
+      {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
+      <div className={styles.cardDetail}>סוג: {b.eventType} | {b.timeOfDay}</div>
+      <div className={styles.cardDetail}>
+        {b.eventType === 'השכרת אולם בלי אוכל' ? 'השכרת אולם (ללא מנות)' : `מוזמנים: ${b.guestCount}`}
+      </div>
+      <button
+        type="button"
+        className={styles.viewBtn}
+        onClick={() => setSelected(b)}
+      >
+        הצגת כל פרטי ההזמנה
+      </button>
+    </div>
+  );
 
   return (
     <div className={styles.container}>
@@ -53,71 +91,35 @@ const BookingsManager = () => {
 
       {isLoading ? (
         <PageLoader />
-      ) : bookings.length === 0 ? (
+      ) : upcomingBookings.length === 0 && pastBookings.length === 0 ? (
         <p className={styles.empty}>{search ? 'לא נמצאו תוצאות.' : 'אין הזמנות סגורות.'}</p>
       ) : (
         <>
-          <div className={styles.grid}>
-            {bookings.map((b: any) => (
-              <div key={b.id} className={styles.card}>
-                <div className={styles.cardDate}>{dateStr(b)}</div>
-                {b.eventCode && <div className={styles.cardCode}>#{b.eventCode}</div>}
-                <div className={styles.cardName}>{b.clientAFullName}</div>
-                {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
-                <div className={styles.cardDetail}>סוג: {b.eventType} | {b.timeOfDay}</div>
-                <div className={styles.cardDetail}>
-                  {b.eventType === 'השכרת אולם בלי אוכל' ? 'השכרת אולם (ללא מנות)' : `מוזמנים: ${b.guestCount}`}
-                </div>
-                <button
-                  type="button"
-                  className={styles.viewBtn}
-                  onClick={() => setSelected(b)}
-                >
-                  הצגת כל פרטי ההזמנה
-                </button>
+          {upcomingBookings.length > 0 && (
+            <section className={styles.section}>
+              <h3 className={styles.sectionTitle}>אירועים קרובים ({upcomingBookings.length})</h3>
+              <div className={styles.grid}>
+                {upcomingBookings.map(renderBookingCard)}
               </div>
-            ))}
-          </div>
-          {pagination && (
-            <PaginationBar
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              total={pagination.total}
-              onPageChange={setPage}
-            />
+            </section>
+          )}
+
+          {pastBookings.length > 0 && (
+            <section className={styles.section}>
+              <h3 className={styles.sectionTitle}>אירועים שעברו ({pastBookings.length})</h3>
+              <div className={styles.grid}>
+                {pastBookings.map(renderBookingCard)}
+              </div>
+            </section>
           )}
         </>
       )}
 
-      {selected && !showAdditionForm && (
+      {selected && (
         <BookingDetailsModal
           booking={selected}
           onClose={closeSelected}
-          onAddAddition={() => setShowAdditionForm(true)}
         />
-      )}
-
-      {selected && showAdditionForm && (
-        <div className={styles.popupOverlay} onClick={() => setShowAdditionForm(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => setShowAdditionForm(false)}
-              style={{ position: 'absolute', top: '10px', left: '10px', background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', zIndex: 10 }}
-            >
-              ✕
-            </button>
-            <LiveAdditionForm
-              bookingId={selected.id}
-              onSuccess={() => {
-                setShowAdditionForm(false);
-                closeSelected();
-                alert('התוספת נרשמה בהצלחה והמחיר הכולל עודכן!');
-                refetch();
-              }}
-            />
-          </div>
-        </div>
       )}
     </div>
   );

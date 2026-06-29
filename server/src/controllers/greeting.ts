@@ -1,28 +1,37 @@
 import { Request, Response } from 'express';
-import nodemailer from 'nodemailer';
-import prisma from '../config/prisma';
 import * as cron from 'node-cron';
+import prisma from '../config/prisma';
+import { deliverMail, getFromAddress, mailFailureMessage, type MailDeliveryResult } from '../utils/mailer';
+import { logger } from '../utils/logger';
+import { sendGreetingWhatsApp } from '../utils/whatsapp';
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'fake-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'fake-password',
-  },
-});
-
-const sendWhatsApp = async (phone: string, name: string, message: string) => {
-  const formatted = `שלום *${name}*,\n\n${message}\n\n*צוות מייפל - גן אירועים*\nטלפון: 03-6777772`;
-  // await axios.post('https://api.green-api.com/...', { phone, message: formatted });
-  console.log(`[WHATSAPP] ל-${phone} (${name}):\n${formatted}\n`);
+type GreetingClient = {
+  name: string;
+  email: string | null;
+  phone: string | null;
 };
 
-const sendEmail = async (email: string, name: string, subject: string, message: string, attachment?: Express.Multer.File) => {
-  const mailOptions = {
-    from: '"גן אירועים מייפל" <maple.events.il@gmail.com>',
-    to: email,
-    subject,
-    html: `
+type GreetingSendStats = {
+  emailSent: number;
+  whatsappSent: number;
+  emailSkipped: number;
+  whatsappSkipped: number;
+  skippedReasons: string[];
+};
+
+async function sendGreetingEmail(
+  email: string,
+  name: string,
+  subject: string,
+  message: string,
+  attachment?: Express.Multer.File,
+): Promise<MailDeliveryResult> {
+  return deliverMail(
+    {
+      from: getFromAddress(),
+      to: email,
+      subject,
+      html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #1e293b; padding: 20px; text-align: center;">
           <h2 style="color: #fff; margin: 0;">גן אירועים מייפל 🍁</h2>
@@ -35,94 +44,188 @@ const sendEmail = async (email: string, name: string, subject: string, message: 
         </div>
       </div>
     `,
-    attachments: attachment ? [{ filename: attachment.originalname, content: attachment.buffer }] : [],
+      attachments: attachment
+        ? [{ filename: attachment.originalname, content: attachment.buffer }]
+        : [],
+    },
+    `ברכה ל-${email}`,
+  );
+}
+
+async function sendToAllClients(
+  clients: GreetingClient[],
+  subject: string,
+  message: string,
+  file?: Express.Multer.File,
+): Promise<GreetingSendStats> {
+  const stats: GreetingSendStats = {
+    emailSent: 0,
+    whatsappSent: 0,
+    emailSkipped: 0,
+    whatsappSkipped: 0,
+    skippedReasons: [],
   };
-  // await transporter.sendMail(mailOptions);
-  console.log(`[EMAIL] ל-${email} (${name}) | נושא: ${subject}`);
-};
+
+  for (const client of clients) {
+    if (client.email) {
+      const result = await sendGreetingEmail(client.email, client.name, subject, message, file);
+      if (result.ok && !('simulated' in result && result.simulated)) {
+        stats.emailSent++;
+      } else {
+        stats.emailSkipped++;
+        if (!result.ok && result.reason) {
+          stats.skippedReasons.push(mailFailureMessage(result.reason));
+        } else if (result.ok && 'simulated' in result && result.simulated) {
+          stats.skippedReasons.push('מייל: לא מוגדר בשרת (לא נשלח בפועל)');
+        }
+      }
+    } else {
+      stats.emailSkipped++;
+      stats.skippedReasons.push(`ל-${client.name} חסר מייל`);
+    }
+
+    if (client.phone) {
+      const waResult = await sendGreetingWhatsApp(client.phone, client.name, message);
+      if (waResult.sent) {
+        stats.whatsappSent++;
+      } else {
+        stats.whatsappSkipped++;
+        if (waResult.hasWhatsApp === false) {
+          stats.skippedReasons.push(`ל-${client.name} אין וואטסאפ`);
+        } else if (waResult.simulated) {
+          stats.skippedReasons.push('וואטסאפ: לא מוגדר (לא נשלח בפועל)');
+        }
+      }
+    } else {
+      stats.whatsappSkipped++;
+    }
+  }
+
+  stats.skippedReasons = [...new Set(stats.skippedReasons)];
+  logger.info(
+    `[GREETING] מיילים: ${stats.emailSent}, וואטסאפ: ${stats.whatsappSent}, לקוחות: ${clients.length}`,
+  );
+  return stats;
+}
+
+function buildClientList(
+  bookings: Array<{
+    clientAFullName: string;
+    clientAEmail: string | null;
+    clientAPhone: string;
+    clientBFullName: string | null;
+    clientBEmail: string | null;
+    clientBPhone: string | null;
+  }>,
+): GreetingClient[] {
+  const clientMap = new Map<string, GreetingClient>();
+
+  for (const b of bookings) {
+    const phoneA = b.clientAPhone?.split(' | ')[0].trim() || null;
+    if (!clientMap.has(b.clientAFullName)) {
+      clientMap.set(b.clientAFullName, {
+        name: b.clientAFullName,
+        email: b.clientAEmail || null,
+        phone: phoneA,
+      });
+    }
+    if (b.clientBFullName) {
+      const phoneB = b.clientBPhone?.split(' | ')[0].trim() || null;
+      if (!clientMap.has(b.clientBFullName)) {
+        clientMap.set(b.clientBFullName, {
+          name: b.clientBFullName,
+          email: b.clientBEmail || null,
+          phone: phoneB,
+        });
+      }
+    }
+  }
+
+  return Array.from(clientMap.values());
+}
+
+function formatResultMessage(stats: GreetingSendStats, clientCount: number): string {
+  const parts: string[] = [];
+  if (stats.emailSent > 0) parts.push(`נשלחו ${stats.emailSent} מיילים`);
+  if (stats.whatsappSent > 0) parts.push(`נשלחו ${stats.whatsappSent} הודעות וואטסאפ`);
+  if (parts.length === 0) {
+    return stats.skippedReasons[0] || 'לא נשלח — בדקי שיש ללקוחות מייל והגדרות Gmail בשרת.';
+  }
+  if (stats.skippedReasons.length > 0) {
+    parts.push(`(${clientCount} לקוחות בסך הכל)`);
+  }
+  return parts.join(', ');
+}
 
 export const sendGreeting = async (req: Request, res: Response) => {
   try {
     const { subject, message, scheduledDate, scheduledTime } = req.body;
-    const file: Express.Multer.File | undefined = (req as any).file;
+    const file: Express.Multer.File | undefined = (req as Request & { file?: Express.Multer.File }).file;
 
     if (!subject || !message) {
       return res.status(400).json({ success: false, message: 'נושא ותוכן הברכה הם שדות חובה.' });
     }
 
-    // שליפת כל הלקוחות
     const bookings = await prisma.booking.findMany({
       select: {
-        clientAFullName: true, clientAEmail: true, clientAPhone: true,
-        clientBFullName: true, clientBEmail: true, clientBPhone: true,
-      }
+        clientAFullName: true,
+        clientAEmail: true,
+        clientAPhone: true,
+        clientBFullName: true,
+        clientBEmail: true,
+        clientBPhone: true,
+      },
     });
 
-    // בניית רשימה ייחודית של לקוחות (שם + מייל + טלפון ראשי)
-    const clientMap = new Map<string, { name: string; email: string | null; phone: string | null }>();
-
-    for (const b of bookings) {
-      // צד א'
-      const phoneA = b.clientAPhone?.split(' | ')[0].trim() || null;
-      if (!clientMap.has(b.clientAFullName)) {
-        clientMap.set(b.clientAFullName, { name: b.clientAFullName, email: b.clientAEmail || null, phone: phoneA });
-      }
-      // צד ב'
-      if (b.clientBFullName) {
-        const phoneB = b.clientBPhone?.split(' | ')[0].trim() || null;
-        if (!clientMap.has(b.clientBFullName)) {
-          clientMap.set(b.clientBFullName, { name: b.clientBFullName, email: b.clientBEmail || null, phone: phoneB });
-        }
-      }
+    const clients = buildClientList(bookings);
+    if (clients.length === 0) {
+      return res.status(400).json({ success: false, message: 'לא נמצאו לקוחות במערכת.' });
     }
 
-    const clients = Array.from(clientMap.values());
+    const doSend = () => sendToAllClients(clients, subject, message, file);
 
-    const doSend = async () => {
-      let emailCount = 0;
-      let whatsappCount = 0;
-
-      for (const client of clients) {
-        if (client.email) {
-          await sendEmail(client.email, client.name, subject, message, file);
-          emailCount++;
-        }
-        if (client.phone) {
-          await sendWhatsApp(client.phone, client.name, message);
-          whatsappCount++;
-        }
-      }
-
-      console.log(`[GREETING DONE] מיילים: ${emailCount}, וואטסאפ: ${whatsappCount}`);
-      return { emailCount, whatsappCount };
-    };
-
-    // תזמון
     if (scheduledDate && scheduledTime) {
       const [year, month, day] = scheduledDate.split('-');
       const [hour, minute] = scheduledTime.split(':');
       const cronExpr = `${minute} ${hour} ${day} ${month} *`;
 
-      cron.schedule(cronExpr, async () => {
-        console.log(`[CRON] מריץ שליחת ברכה מתוזמנת...`);
-        await doSend();
-      }, { timezone: 'Asia/Jerusalem' });
+      cron.schedule(
+        cronExpr,
+        async () => {
+          logger.info('[CRON] מריץ שליחת ברכה מתוזמנת...');
+          await doSend();
+        },
+        { timezone: 'Asia/Jerusalem' },
+      );
 
       return res.json({
         success: true,
-        message: `הברכה תישלח ב-${day}/${month}/${year} בשעה ${hour}:${minute} ל-${clients.length} לקוחות (מייל + וואטסאפ).`
+        message: `הברכה מתוזמנת ל-${day}/${month}/${year} בשעה ${hour}:${minute} ל-${clients.length} לקוחות.`,
       });
     }
 
-    // שליחה מיידית
-    const { emailCount, whatsappCount } = await doSend();
+    const stats = await doSend();
+    const resultMessage = formatResultMessage(stats, clients.length);
+
+    if (stats.emailSent === 0 && stats.whatsappSent === 0) {
+      return res.status(400).json({
+        success: false,
+        message: resultMessage,
+        emailSent: stats.emailSent,
+        whatsappSent: stats.whatsappSent,
+        skippedReasons: stats.skippedReasons,
+      });
+    }
+
     res.json({
       success: true,
-      message: `הברכה נשלחה! מיילים: ${emailCount}, הודעות וואטסאפ: ${whatsappCount}.`
+      message: resultMessage,
+      emailSent: stats.emailSent,
+      whatsappSent: stats.whatsappSent,
+      skippedReasons: stats.skippedReasons,
     });
-
   } catch (error) {
-    console.error('שגיאה בשליחת ברכה:', error);
+    logger.error('שגיאה בשליחת ברכה:', error);
     res.status(500).json({ success: false, message: 'שגיאה בשרת.' });
   }
 };

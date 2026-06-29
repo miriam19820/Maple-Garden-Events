@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { feedbackController } from '../controllers/feedback.controller';
 import { requireAuth } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
-import { feedbackTokenParamSchema, submitFeedbackSchema } from '../validators/feedback.validator';
+import { feedbackTokenParamSchema, sendFeedbackAdminSchema, submitFeedbackSchema } from '../validators/feedback.validator';
 
 const router = Router();
 
@@ -16,6 +16,7 @@ const feedbackLimiter = rateLimit({
 });
 
 router.get('/admin/list', requireAuth, feedbackController.listAdmin);
+router.post('/admin/send', requireAuth, validate(sendFeedbackAdminSchema), feedbackController.sendAdmin);
 
 router.get('/:token', feedbackLimiter, validate(feedbackTokenParamSchema), feedbackController.verifyToken);
 router.post('/:token', feedbackLimiter, validate(submitFeedbackSchema), feedbackController.submitFeedback);

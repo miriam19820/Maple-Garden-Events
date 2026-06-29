@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
+    "tunnel": "powershell -ExecutionPolicy Bypass -File scripts/start-public-tunnel.ps1",
     "start": "node dist/server.js",
     "migrate:event-codes": "ts-node scripts/migrate-legacy-event-codes.ts",
     "verify:double-booking": "ts-node scripts/verify-no-double-booking.ts",

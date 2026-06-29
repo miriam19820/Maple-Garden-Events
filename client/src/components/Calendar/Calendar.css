@@ -185,15 +185,23 @@
 }
 
 .calendar-grid {
+  --calendar-max-events: 3;
+  --event-pill-height: clamp(18px, 2.4vh, 26px);
+  --event-pill-gap: clamp(3px, 0.5vh, 6px);
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: auto repeat(var(--calendar-week-rows, 5), minmax(clamp(88px, 10vh, 148px), 1fr));
+  grid-template-rows: auto repeat(var(--calendar-week-rows, 5), 1fr);
   gap: clamp(8px, 1.2vh, 14px);
   direction: ltr;
   width: 100%;
   flex: 1;
   min-height: 0;
   align-content: stretch;
+}
+
+.calendar-grid-uniform .calendar-cell {
+  height: 100%;
+  min-height: 0;
 }
 
 .week-day-label {
@@ -212,12 +220,11 @@
 ========================================= */
 .calendar-cell {
   background: var(--maple-surface);
-  min-height: clamp(92px, 11vh, 132px);
-  padding: clamp(10px, 1.6vh, 18px) clamp(10px, 1vw, 14px);
+  padding: clamp(6px, 0.9vh, 10px) clamp(8px, 0.9vw, 12px);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: clamp(4px, 0.9vh, 10px);
+  gap: clamp(2px, 0.35vh, 5px);
   border: 1px solid var(--maple-border);
   border-radius: var(--maple-radius);
   cursor: pointer;
@@ -262,8 +269,9 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: clamp(4px, 0.8vh, 8px);
+  gap: clamp(3px, 0.5vh, 6px);
   flex-shrink: 0;
+  min-height: clamp(22px, 2.6vh, 28px);
 }
 
 .gregorian-num {
@@ -271,7 +279,7 @@
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
-  font-size: clamp(1.1rem, 1.8vh, 1.45rem);
+  font-size: clamp(0.92rem, 1.35vh, 1.15rem);
   font-weight: 800;
   color: var(--maple-text);
   line-height: 1.1;
@@ -280,8 +288,8 @@
 .hebrew-text {
   color: var(--maple-text-muted);
   font-weight: 500;
-  font-size: clamp(0.78rem, 1.1vh, 0.95rem);
-  line-height: 1.25;
+  font-size: clamp(0.68rem, 0.95vh, 0.82rem);
+  line-height: 1.2;
   text-align: left;
 }
 
@@ -295,11 +303,16 @@
 }
 
 .cell-status-text {
-  font-size: clamp(0.76rem, 1.05vh, 0.9rem);
+  font-size: clamp(0.66rem, 0.88vh, 0.78rem);
   font-weight: 600;
   text-align: right;
-  line-height: 1.35;
+  line-height: 1.25;
   flex-shrink: 0;
+  min-height: clamp(14px, 1.5vh, 18px);
+  max-height: clamp(14px, 1.5vh, 18px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* =========================================
@@ -338,29 +351,42 @@
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: clamp(3px, 0.6vh, 6px);
-  padding-top: clamp(2px, 0.5vh, 6px);
-  overflow: hidden;
-  min-height: 0;
+  justify-content: flex-end;
+  gap: var(--event-pill-gap);
+  flex: 1;
+  width: 100%;
+  min-height: calc(
+    var(--event-pill-height) * var(--calendar-max-events)
+    + var(--event-pill-gap) * (var(--calendar-max-events) - 1)
+  );
 }
 
 .cell-events-container:empty {
-  display: none;
-  margin-top: 0;
-  padding-top: 0;
+  display: flex;
+  margin-top: auto;
+}
+
+.cell-events-container:empty::before {
+  content: '';
+  display: block;
+  min-height: inherit;
 }
 
 .small-event-pill {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  line-height: 1.35;
-  font-size: 0.74rem;
-  padding: 4px 6px;
+  line-height: 1.2;
+  font-size: clamp(0.62rem, 0.95vh, 0.78rem);
+  padding: 0 clamp(4px, 0.5vw, 8px);
   border-radius: 4px;
   flex-shrink: 0;
+  height: var(--event-pill-height);
+  box-sizing: border-box;
 }
 
 /* =========================================
@@ -569,57 +595,78 @@
   .app-layout-viewport-fill .calendar-grid-wrapper {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: clamp(18px, 2.5vh, 28px);
+    overflow: hidden;
+    padding: clamp(12px, 1.8vh, 20px);
   }
 
   .app-layout-viewport-fill .calendar-grid {
     height: 100%;
     min-height: 0;
-    gap: clamp(10px, 1.6vh, 18px);
+    gap: clamp(5px, 0.85vh, 10px);
+    --event-pill-height: clamp(16px, 2.1vh, 22px);
+    --event-pill-gap: clamp(2px, 0.4vh, 4px);
   }
 
   .app-layout-viewport-fill .calendar-cell {
-    min-height: 0;
     height: 100%;
-    padding: clamp(12px, 2.2vh, 24px) clamp(12px, 1.2vw, 18px);
-    gap: clamp(6px, 1.1vh, 14px);
+    min-height: 0;
+  }
+
+  .app-layout-viewport-fill .cell-header-row {
+    min-height: clamp(20px, 2.3vh, 26px);
   }
 
   .app-layout-viewport-fill .gregorian-num {
-    font-size: clamp(1.15rem, 2vh, 1.55rem);
+    font-size: clamp(0.88rem, 1.25vh, 1.05rem);
   }
 
   .app-layout-viewport-fill .hebrew-text {
-    font-size: clamp(0.8rem, 1.2vh, 1rem);
+    font-size: clamp(0.64rem, 0.88vh, 0.76rem);
   }
 
   .app-layout-viewport-fill .cell-status-text {
-    font-size: clamp(0.78rem, 1.1vh, 0.95rem);
+    font-size: clamp(0.62rem, 0.82vh, 0.72rem);
+    min-height: clamp(12px, 1.35vh, 16px);
+    max-height: clamp(12px, 1.35vh, 16px);
+  }
+
+  .app-layout-viewport-fill .small-event-pill {
+    font-size: clamp(0.58rem, 0.88vh, 0.72rem);
   }
 
   .app-layout-viewport-fill .week-day-label {
-    font-size: clamp(0.92rem, 1.3vh, 1.08rem);
-    padding: clamp(10px, 1.6vh, 18px) 8px;
+    font-size: clamp(0.8rem, 1vh, 0.92rem);
+    padding: clamp(5px, 1vh, 10px) 6px;
+  }
+
+  .app-layout-viewport-fill .calendar-toolbar {
+    padding: 8px 14px;
+    gap: 10px;
+  }
+
+  .app-layout-viewport-fill .calendar-nav {
+    padding: 4px;
+  }
+
+  .app-layout-viewport-fill .month-tab {
+    padding: 8px 3px;
+    font-size: clamp(0.78rem, 1vh, 0.9rem);
+  }
+
+  .app-layout-viewport-fill .year-display {
+    font-size: clamp(1.1rem, 1.8vh, 1.45rem);
+    margin-bottom: clamp(2px, 0.4vh, 6px);
+  }
+
+  .app-layout-viewport-fill .calendar-container {
+    gap: clamp(8px, 1.2vh, 12px);
+    padding: 8px 0 4px;
   }
 }
 
 @media (min-width: 1280px) {
   .app-layout-viewport-fill .calendar-page-layout {
     padding: 0 32px 20px;
-  }
-
-  .app-layout-viewport-fill .calendar-grid {
-    gap: clamp(12px, 1.8vh, 20px);
-  }
-
-  .app-layout-viewport-fill .calendar-cell {
-    padding: clamp(14px, 2.4vh, 28px) clamp(14px, 1.4vw, 20px);
-  }
-
-  .app-layout-viewport-fill .gregorian-num {
-    font-size: clamp(1.25rem, 2.2vh, 1.65rem);
   }
 }
 
@@ -695,8 +742,8 @@
   }
 
   .small-event-pill {
-    font-size: 0.52rem;
-    padding: 2px 3px;
+    font-size: clamp(0.58rem, 0.9vh, 0.72rem);
+    padding: 0 clamp(3px, 0.4vw, 6px);
   }
 
   .year-display {

@@ -42,6 +42,10 @@ function onCheckInUpdated(queryClient: QueryClient, payload?: { bookingId?: stri
   queryClient.invalidateQueries({ queryKey: ['calendar'] });
 }
 
+function onFeedbackUpdated(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: ['feedback-admin'] });
+}
+
 function onMenuUpdated(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: ['menu'] });
 }
@@ -56,6 +60,7 @@ export function setupRealtimeSync(queryClient: QueryClient): void {
     'settings-updated': () => onSettingsUpdated(queryClient),
     'event-forms-updated': () => onEventFormsUpdated(queryClient),
     'check-in-updated': (payload?: { bookingId?: string }) => onCheckInUpdated(queryClient, payload),
+    'feedback-updated': () => onFeedbackUpdated(queryClient),
     menuUpdated: () => onMenuUpdated(queryClient),
   };
 

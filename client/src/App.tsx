@@ -89,7 +89,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/feedback/:token" element={<Lazy><AppLayout><FeedbackPage /></AppLayout></Lazy>} />
+        <Route path="/feedback/:token" element={<Lazy><FeedbackPage /></Lazy>} />
 
         <Route path="/" element={<ProtectedRoute><CalendarWrapper /></ProtectedRoute>} />
         <Route path="/booking" element={<ProtectedRoute><Lazy><AppLayout viewportFill><BookingForm /></AppLayout></Lazy></ProtectedRoute>} />

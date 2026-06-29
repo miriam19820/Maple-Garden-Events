@@ -13,6 +13,7 @@ const GreetingBlast = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [resultMessage, setResultMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,9 +35,13 @@ const GreetingBlast = () => {
 
       const result = await res.json();
       if (result.success) {
+        setResultMessage(result.message || 'הברכה נשלחה לכל הלקוחות');
         setSent(true);
       } else {
-        alert(result.message || 'שגיאה בשליחה');
+        const detail = result.skippedReasons?.length
+          ? `${result.message}\n\n${result.skippedReasons.join('\n')}`
+          : result.message || 'שגיאה בשליחה';
+        alert(detail);
       }
     } catch {
       alert('שגיאת תקשורת עם השרת');
@@ -54,7 +59,7 @@ const GreetingBlast = () => {
           <p>
             {scheduledDate && scheduledTime
               ? `מתוזמנת לשליחה בתאריך ${scheduledDate.split('-').reverse().join('/')} בשעה ${scheduledTime}`
-              : 'הברכה נשלחה לכל הלקוחות'}
+              : resultMessage || 'הברכה נשלחה לכל הלקוחות'}
           </p>
           <button className={styles.backBtn} onClick={() => navigate('/')}>חזרה ללוח</button>
         </div>

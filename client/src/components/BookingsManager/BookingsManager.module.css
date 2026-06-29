@@ -40,6 +40,19 @@
   font-size: 1rem;
 }
 
+.section {
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--maple-green-dark);
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--maple-border);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -132,8 +145,7 @@
   }
 
   .btnPrimary,
-  .btnSecondary,
-  .btnAddition {
+  .btnSecondary {
     width: 100%;
   }
 }
@@ -328,21 +340,6 @@
 
 .btnSecondary:hover {
   background: var(--maple-green-light);
-}
-
-.btnAddition {
-  padding: 10px 16px;
-  background: #16a34a;
-  color: #fff;
-  border: none;
-  border-radius: var(--maple-radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btnAddition:hover {
-  background: #15803d;
 }
 
 .editBlockedMsg {

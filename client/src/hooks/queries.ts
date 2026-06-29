@@ -67,6 +67,8 @@ export function useFeedbackAdminQuery(page: number, limit = 20) {
       if (!json.success) throw new Error(json.message || 'שגיאה בטעינת משובים');
       return { data: json.data, pagination: json.pagination as PaginationMeta };
     },
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
 }
 

@@ -10,7 +10,10 @@ export const releaseOptionsSchema = z.object({
 
 export const bumpOptionSchema = z.object({
   body: z.object({
-    dateId: z.string().uuid(),
+    dateId: z.string().uuid().optional(),
+    bookingId: z.string().uuid().optional(),
+  }).refine((d) => Boolean(d.dateId || d.bookingId), {
+    message: 'חסר מזהה תאריך או הזמנה.',
   }),
 });
 

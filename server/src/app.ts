@@ -1,10 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 
 import { validateEnv } from './config/env';
+import { isAllowedCorsOrigin } from './config/corsOrigins';
 import { errorHandler } from './middlewares/errorHandler';
 import { csrfProtection } from './middlewares/csrf';
 import { requestLogger } from './middlewares/requestLogger';
@@ -23,7 +25,6 @@ import checkInRoutes from './routes/checkIn.routes';
 validateEnv();
 
 const app = express();
-const clientOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
 
 app.use(helmet());
 
@@ -69,7 +70,9 @@ const authRefreshLimiter = rateLimit({
 app.use('/api/auth/refresh', authRefreshLimiter);
 
 app.use(cors({
-  origin: clientOrigin,
+  origin: (origin, callback) => {
+    callback(null, isAllowedCorsOrigin(origin));
+  },
   credentials: true,
   optionsSuccessStatus: 200,
 }));
@@ -90,6 +93,17 @@ app.use('/api/event-forms', eventFormRoutes);
 app.use('/api/options', optionRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/feedback', feedbackRoutes);
+
+const shouldServeClient =
+  process.env.SERVE_CLIENT === 'true' || process.env.NODE_ENV === 'production';
+
+if (shouldServeClient) {
+  const clientDist = path.resolve(__dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 app.use(errorHandler);
 

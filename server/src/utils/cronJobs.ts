@@ -1,20 +1,17 @@
 import cron from 'node-cron';
 import prisma from '../config/prisma';
-import { v4 as uuidv4 } from 'uuid';
 import { logger } from './logger';
-import { 
-  sendSelectionReminderWhatsApp, 
-  sendSecurityCheckReminderWhatsApp, 
+import {
+  sendSelectionReminderWhatsApp,
+  sendSecurityCheckReminderWhatsApp,
   sendManagerFinancialAlert,
-  sendFeedbackRequestWhatsApp // <-- ייבוא פונקציית הוואטסאפ החדשה
 } from './whatsapp';
 import {
   sendSelectionReminderEmail,
   sendSecurityCheckReminderEmail,
   sendManagerFinancialAlertEmail,
-  sendFeedbackRequestEmail // <-- ייבוא פונקציית המייל החדשה
 } from './mailer';
-import { buildFeedbackSides, primaryPhone } from './feedbackHelpers';
+import { processEndedEventsFeedback } from './feedbackHelpers';
 import { runDatabaseBackup } from './databaseBackup';
 
 export const startCronJobs = () => {
@@ -125,89 +122,16 @@ export const startCronJobs = () => {
   });
 
   // ==========================================
-  // טיימר 3: בקשת משוב לאחר אירוע (רץ כל בוקר ב-10:00)
+  // טיימר 3: בקשת משוב בסיום האירוע (כל 10 דקות)
   // ==========================================
-  cron.schedule('0 10 * * *', async () => {
-    logger.info('--- מתחיל תהליך איתור אירועים מאתמול לשליחת משוב ---');
-    
-    // הגדרת טווח הזמנים של "אתמול"
-    const now = new Date();
-    const startOfYesterday = new Date(now);
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-    startOfYesterday.setHours(0, 0, 0, 0);
-
-    const endOfYesterday = new Date(now);
-    endOfYesterday.setDate(endOfYesterday.getDate() - 1);
-    endOfYesterday.setHours(23, 59, 59, 999);
-
+  cron.schedule('*/10 * * * *', async () => {
     try {
-      // שליפת הזמנות של אירועים שהיו אתמול ובסטטוס "סגור"
-      const finishedBookings = await prisma.booking.findMany({
-        where: {
-          eventDate: {
-            date: {
-              gte: startOfYesterday,
-              lte: endOfYesterday
-            },
-            status: 'BOOKED'
-          }
-        },
-        include: {
-          feedbacks: true // נביא את הפידבקים כדי לוודא שטרם יצרנו
-        }
-      });
-
-      if (finishedBookings.length === 0) {
-        logger.info('לא נמצאו אירועים מאתמול.');
-        return;
+      const { eventsProcessed, linksSent, checked } = await processEndedEventsFeedback();
+      if (eventsProcessed > 0 || linksSent > 0) {
+        logger.info(`--- משוב אוטומטי: ${linksSent} קישורים נשלחו (${eventsProcessed} אירועים, ${checked} נבדקו) ---`);
       }
-
-      for (const booking of finishedBookings) {
-        // בודקים אם כבר הופק משוב לאירוע הזה (למנוע כפילויות)
-        if (booking.feedbacks && booking.feedbacks.length > 0) {
-          continue; 
-        }
-
-        const sides = buildFeedbackSides(booking);
-        const feedbacksToCreate = sides.map((side) => ({
-          bookingId: booking.id,
-          clientSide: side.side,
-          clientName: side.name,
-          token: uuidv4(),
-        }));
-
-        // אם יש לנו צדדים רלוונטיים, נשמור במסד ונייצר להם קישור
-        if (feedbacksToCreate.length > 0) {
-          await prisma.feedback.createMany({
-            data: feedbacksToCreate
-          });
-
-          for (let i = 0; i < feedbacksToCreate.length; i++) {
-            const fb = feedbacksToCreate[i];
-            const sideInfo = sides[i];
-            const baseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-            const feedbackLink = `${baseUrl}/feedback/${fb.token}`;
-
-            const phoneToSend = primaryPhone(sideInfo.phone);
-            const emailToSend = sideInfo.email?.trim() || null;
-
-            if (phoneToSend) {
-              await sendFeedbackRequestWhatsApp(phoneToSend, fb.clientName, feedbackLink);
-              logger.info(`✅ נשלח וואטסאפ משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
-            }
-
-            if (emailToSend) {
-              await sendFeedbackRequestEmail(emailToSend, fb.clientName, feedbackLink);
-              logger.info(`✅ נשלח מייל משוב ללקוח ${fb.clientName} (צד ${fb.clientSide})`);
-            }
-          }
-        }
-      }
-
-      logger.info('✅ תהליך שליחת משובים הסתיים בהצלחה.');
-
     } catch (error) {
-      logger.error('שגיאה בתהליך שליחת המשובים:', error);
+      logger.error('שגיאה בתהליך שליחת משוב אוטומטי:', error);
     }
   });
 

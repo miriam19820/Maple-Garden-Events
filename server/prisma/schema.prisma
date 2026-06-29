@@ -230,10 +230,13 @@ model Feedback {
   venueRating   Int?
   averageScore  Float?
   comments      String?
-  token         String   @unique
-  isCompleted   Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  token             String    @unique
+  isCompleted       Boolean   @default(false)
+  lastNotifiedAt    DateTime?
+  lastEmailSent     Boolean   @default(false)
+  lastWhatsappSent  Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   booking       Booking  @relation(fields: [bookingId], references: [id])
 
   @@unique([bookingId, clientSide])

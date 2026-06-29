@@ -3,7 +3,7 @@ import { useCalendarDatesQuery } from '../../hooks/queries';
 import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 import { EventPopup } from '../EventPopup/EventPopup';
-import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS, getTakenSlots, getBookableSlotsForDate, hasOptionOnDay, type TimeSlot } from '../../utils/timeSlot';
+import { getSlotColor, SLOT_COLORS, SLOT_LABELS, TIME_SLOTS, getTakenSlots, getBookableSlotsForDate, hasOptionOnDay, normalizeTimeSlot, type TimeSlot } from '../../utils/timeSlot';
 import { isEventLive } from '../../utils/eventStart';
 import liveStyles from '../LiveEvent/LiveEvent.module.css';
 interface DayData {
@@ -27,6 +27,17 @@ interface CalendarProps {
 const MONTH_NAMES = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 const DOW_TO_COL: Record<number, number> = { 0:7, 1:6, 2:5, 3:4, 4:3, 5:2, 6:1 };
 const COL_HEADERS = ['שבת','שישי','חמישי','רביעי','שלישי','שני','ראשון'];
+
+/** DOM order top→bottom so flex-end stacks: evening on top, morning at bottom */
+const CALENDAR_SLOT_STACK_ORDER: TimeSlot[] = ['evening', 'noon', 'morning'];
+
+function sortBookingsForCalendarCell(bookings: any[]) {
+  return [...bookings].sort((a, b) => {
+    const slotA = normalizeTimeSlot(a.timeOfDay) ?? 'morning';
+    const slotB = normalizeTimeSlot(b.timeOfDay) ?? 'morning';
+    return CALENDAR_SLOT_STACK_ORDER.indexOf(slotA) - CALENDAR_SLOT_STACK_ORDER.indexOf(slotB);
+  });
+}
 
 const formatDateLocal = (date: Date): string => {
   const yyyy = date.getFullYear();
@@ -124,6 +135,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
 
   const grid = buildGrid();
   const weekRowCount = grid.length > 0 ? Math.max(...grid.map((d) => d.row)) - 1 : 5;
+
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const prevYear  = () => setCurrentDate(new Date(year - 1, month, 1));
@@ -205,7 +217,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
       ) : (
         <div className="calendar-grid-wrapper">
           <div
-            className="calendar-grid"
+            className="calendar-grid calendar-grid-uniform"
             style={{ ['--calendar-week-rows' as string]: weekRowCount } as React.CSSProperties}
           >
             {COL_HEADERS.map((d, i) => <div key={d} className="week-day-label" style={{ gridColumn: i + 1, gridRow: 1 }}>{d}</div>)}
@@ -214,11 +226,11 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
               const isPast = day.date < todayStr;
               
               const cls = [
-                'calendar-cell', 
-                `status-${day.status.toLowerCase()}`, 
-                !day.isCurrentMonth ? 'out-of-month' : '', 
+                'calendar-cell',
+                `status-${day.status.toLowerCase()}`,
+                !day.isCurrentMonth ? 'out-of-month' : '',
                 isToday ? 'is-today' : '',
-                isPast && day.isCurrentMonth ? 'is-past' : ''
+                isPast && day.isCurrentMonth ? 'is-past' : '',
               ].filter(Boolean).join(' ');
               
               const dayNum = new Date(day.date + 'T12:00:00').getDate();
@@ -241,7 +253,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                   
                   <div className="cell-status-text">{day.isCurrentMonth ? (day.reason || '') : ''}</div>
                   <div className="cell-events-container">
-                    {day.bookings.map((b: any, idx: number) => {
+                    {sortBookingsForCalendarCell(day.bookings).map((b: any, idx: number) => {
                       const baseColor = getSlotColor(b.timeOfDay);
                       const isOptionBooking = b.isOption === true;
                       const isLive =

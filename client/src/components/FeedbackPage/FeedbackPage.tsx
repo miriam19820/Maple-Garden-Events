@@ -141,6 +141,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={styles.card}>
+          <img src="/logo.png" alt="מייפל" className={styles.logo} />
           <h2 className={styles.title}>טוען נתונים...</h2>
           <p className={styles.subtitle}>אנא המתן</p>
         </div>
@@ -152,6 +153,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={`${styles.card} ${styles.messageBox}`}>
+          <img src="/logo.png" alt="מייפל" className={styles.logo} />
           <div className={styles.iconBig}>😕</div>
           <h2 className={styles.title}>אופס!</h2>
           <p className={styles.subtitle}>{errorMessage}</p>
@@ -164,6 +166,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={`${styles.card} ${styles.messageBox}`}>
+          <img src="/logo.png" alt="מייפל" className={styles.logo} />
           <div className={styles.iconBig}>🤍</div>
           <h2 className={styles.title}>תודה רבה!</h2>
           <p className={styles.subtitle}>
@@ -178,11 +181,10 @@ const FeedbackPage: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h1 className={styles.title}>
-          היי {clientData?.clientName},
-        </h1>
+        <img src="/logo.png" alt="מייפל" className={styles.logo} />
+        <h1 className={styles.title}>נשמח לשמוע מכם</h1>
         <p className={styles.subtitle}>
-          שמחנו לקחת חלק באירוע שלכם! נשמח לשמוע איך היה כדי שנוכל להמשיך להשתפר.
+          היי {clientData?.clientName}, שמחנו לקחת חלק באירוע שלכם! נשמח לשמוע איך היה כדי שנוכל להמשיך להשתפר.
         </p>
 
         <div className={styles.ratingSection}>

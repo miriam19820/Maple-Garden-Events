@@ -29,3 +29,7 @@ export function emitMenuUpdated(payload: unknown): void {
 export function emitCheckInUpdated(bookingId: string): void {
   io.emit('check-in-updated', { bookingId });
 }
+
+export function emitFeedbackUpdated(payload?: { bookingId?: string }): void {
+  io.emit('feedback-updated', payload ?? {});
+}

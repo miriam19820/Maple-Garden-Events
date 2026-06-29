@@ -21,3 +21,11 @@ export const submitFeedbackSchema = z.object({
     })
     .strict(),
 });
+
+export const sendFeedbackAdminSchema = z.object({
+  body: z.object({
+    bookingId: z.string().uuid(),
+    clientSide: z.enum(['A', 'B']).optional(),
+    sendNotifications: z.boolean().optional(),
+  }),
+});

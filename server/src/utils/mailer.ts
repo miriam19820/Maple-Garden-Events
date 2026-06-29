@@ -1,8 +1,90 @@
 import fs from 'fs';
 import path from 'path';
 import nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { logger } from './logger';
 
 const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.png');
+
+export type MailFailureReason = 'missing_config' | 'auth_failed' | 'unknown';
+export type MailDeliveryResult =
+  | { ok: true; simulated?: boolean }
+  | { ok: false; reason: MailFailureReason };
+
+function getEmailUser(): string | undefined {
+  return process.env.EMAIL_USER?.trim() || undefined;
+}
+
+function getEmailPass(): string | undefined {
+  const pass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
+  return pass?.replace(/\s+/g, '') || undefined;
+}
+
+export function canSendRealMail(): boolean {
+  return !!(getEmailUser() && getEmailPass());
+}
+
+export function getFromAddress(): string {
+  return `"גן אירועים מייפל" <${getEmailUser() || 'maple.events.il@gmail.com'}>`;
+}
+
+let transporter: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | null = null;
+
+function getTransporter(): nodemailer.Transporter<SMTPTransport.SentMessageInfo> {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: getEmailUser(),
+        pass: getEmailPass(),
+      },
+    });
+  }
+  return transporter;
+}
+
+export function resetTransporterForTests(): void {
+  transporter = null;
+}
+
+function classifyMailError(error: unknown): MailFailureReason {
+  const err = error as { code?: string; responseCode?: number };
+  if (err?.code === 'EAUTH' || err?.responseCode === 535) return 'auth_failed';
+  return 'unknown';
+}
+
+export function mailFailureMessage(reason: MailFailureReason): string {
+  switch (reason) {
+    case 'missing_config':
+      return 'מייל לא מוגדר בשרת — הוסיפי EMAIL_USER ו-EMAIL_PASS (סיסמת אפליקציה מ-Google) בקובץ server/.env';
+    case 'auth_failed':
+      return 'Gmail דחה את ההתחברות — צרי סיסמת אפליקציה חדשה ב-myaccount.google.com/apppasswords (אחרי אימות דו-שלבי) ועדכני EMAIL_PASS ב-server/.env';
+    default:
+      return 'שליחת המייל נכשלה — בדקי את לוג השרת';
+  }
+}
+
+export async function verifyEmailConnection(): Promise<MailDeliveryResult> {
+  if (!canSendRealMail()) {
+    logger.warn(
+      'Email not configured — set EMAIL_USER and EMAIL_PASS (Google App Password) in server/.env',
+    );
+    return { ok: false, reason: 'missing_config' };
+  }
+
+  try {
+    await getTransporter().verify();
+    logger.info(`Email SMTP verified for ${getEmailUser()}`);
+    return { ok: true };
+  } catch (error) {
+    const reason = classifyMailError(error);
+    logger.error(`Email SMTP verification failed (${reason})`, {
+      user: getEmailUser(),
+      hint: mailFailureMessage(reason),
+    });
+    return { ok: false, reason };
+  }
+}
 
 function optionalLogoAttachment(): NonNullable<nodemailer.SendMailOptions['attachments']> {
   if (fs.existsSync(LOGO_PATH)) {
@@ -13,9 +95,9 @@ function optionalLogoAttachment(): NonNullable<nodemailer.SendMailOptions['attac
 
 function logoHeaderHtml(): string {
   if (fs.existsSync(LOGO_PATH)) {
-    return '<img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px;" />';
+    return '<img src="cid:mapleLogo" alt="מיפל - גן אירועים בעיר" style="max-width: 200px; height: auto; display: block; margin: 0 auto;" />';
   }
-  return '<div style="font-size: 1.5rem; font-weight: bold; color: #d97706;">🍁 גן אירועים מייפל</div>';
+  return '<div style="font-size: 1.5rem; font-weight: bold; color: #5a8f6b;">גן אירועים מייפל</div>';
 }
 
 function sanitizeMailAttachments(
@@ -30,57 +112,51 @@ function sanitizeMailAttachments(
   });
 }
 
-// תשתית להתחברות ל-Gmail
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'fake-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'fake-password',
-  },
-});
-
-function canSendRealMail(): boolean {
-  return !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
-}
-
-async function deliverMail(
+export async function deliverMail(
   mailOptions: nodemailer.SendMailOptions,
-  simulationLabel: string
-): Promise<boolean> {
+  simulationLabel: string,
+): Promise<MailDeliveryResult> {
   const safeOptions: nodemailer.SendMailOptions = {
     ...mailOptions,
     attachments: sanitizeMailAttachments(mailOptions.attachments),
   };
 
+  if (!canSendRealMail()) {
+    logger.info(`[MAILER SIMULATION] ${simulationLabel} → ${mailOptions.to}`);
+    return { ok: true, simulated: true };
+  }
+
   try {
-    if (canSendRealMail()) {
-      await transporter.sendMail(safeOptions);
-      console.log(`✅ ${simulationLabel} → ${mailOptions.to}`);
-    } else {
-      console.log(`[MAILER SIMULATION] ${simulationLabel} → ${mailOptions.to}`);
-    }
-    return true;
+    await getTransporter().sendMail(safeOptions);
+    logger.info(`${simulationLabel} → ${mailOptions.to}`);
+    return { ok: true };
   } catch (error) {
-    console.error(`שגיאה בשליחת מייל (${simulationLabel}):`, error);
-    return false;
+    const reason = classifyMailError(error);
+    logger.error(`שגיאה בשליחת מייל (${simulationLabel}):`, error);
+    return { ok: false, reason };
   }
 }
 
 // ==========================================
 // 1. הקפצת אופציה (Bump Option)
 // ==========================================
-export const sendBumpEmail = async (clientEmail: string, clientName: string, eventDate: string, deadline: Date) => {
+export const sendBumpEmail = async (
+  clientEmail: string,
+  clientName: string,
+  eventDate: string,
+  deadline: Date,
+): Promise<MailDeliveryResult> => {
   const deadlineStr = deadline.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' });
   const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
 
   const mailOptions = {
-    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
+    from: getFromAddress(),
     to: clientEmail,
     subject: `עדכון חשוב לגבי התאריך שלך במייפל (${dateStr}) ⏳`,
     html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #d97706;">
-          <img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px;" />
+          ${logoHeaderHtml()}
           <h2 style="color: #1f2937; margin: 15px 0 0 0;">החלטה דחופה נדרשת</h2>
         </div>
         <div style="padding: 25px;">
@@ -105,31 +181,29 @@ export const sendBumpEmail = async (clientEmail: string, clientName: string, eve
         </div>
       </div>
     `,
-    attachments: [{ filename: 'logo.png', path: './src/assets/logo.png', cid: 'mapleLogo' }]
+    attachments: optionalLogoAttachment(),
   };
 
-  try {
-    console.log(`[MAILER SIMULATION] מכין שליחת מייל הקפצת אופציה ל: ${clientEmail}...`);
-    // await transporter.sendMail(mailOptions);
-    return true;
-  } catch (error) {
-    console.error('שגיאה בשליחת המייל:', error);
-    return false;
-  }
+  const result = await deliverMail(mailOptions, `מייל הקפצת אופציה ל-${clientEmail}`);
+  return result;
 };
 
 // ==========================================
 // 2. התראה ללקוח על פרטים שחסרים לאירוע (נודניק)
 // ==========================================
-export const sendSelectionReminderEmail = async (clientEmail: string, clientName: string, missingItems: string[]) => {
+export const sendSelectionReminderEmail = async (
+  clientEmail: string,
+  clientName: string,
+  missingItems: string[],
+): Promise<boolean> => {
   const mailOptions = {
-    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
+    from: getFromAddress(),
     to: clientEmail,
     subject: `תזכורת: השלמת פרטים לאירוע הקרוב שלכם במייפל 🍁`,
     html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #6ee7b7;">
-          <img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px; margin-bottom: 10px;" />
+          ${logoHeaderHtml()}
           <h2 style="color: #1f2937; margin: 0;">מתכוננים לאירוע שלכם!</h2>
         </div>
         <div style="padding: 25px;">
@@ -139,7 +213,7 @@ export const sendSelectionReminderEmail = async (clientEmail: string, clientName
             שמנו לב שטרם סיימתם לבחור את הפרטים הבאים למערכת:
           </p>
           <ul style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 15px 35px; margin: 25px 0; color: #166534; font-size: 1.1rem; font-weight: bold;">
-            ${missingItems.map(item => `<li>${item}</li>`).join('')}
+            ${missingItems.map((item) => `<li>${item}</li>`).join('')}
           </ul>
           <p style="font-size: 1rem; margin-bottom: 30px;">
             אנא היכנסו למערכת או צרו איתנו קשר בהקדם כדי שנוכל להיערך מראש ולהפיק לכם אירוע מושלם.<br/><br/>
@@ -153,31 +227,28 @@ export const sendSelectionReminderEmail = async (clientEmail: string, clientName
         </div>
       </div>
     `,
-    attachments: [{ filename: 'logo.png', path: './src/assets/logo.png', cid: 'mapleLogo' }]
+    attachments: optionalLogoAttachment(),
   };
 
-  try {
-    console.log(`[MAILER SIMULATION] שולח תזכורת בחירות למייל: ${clientEmail}...`);
-    // await transporter.sendMail(mailOptions);
-    return true;
-  } catch (error) {
-    console.error('שגיאה בשליחת מייל תזכורת:', error);
-    return false;
-  }
+  const result = await deliverMail(mailOptions, `תזכורת בחירות ל-${clientEmail}`);
+  return result.ok;
 };
 
 // ==========================================
 // 3. התראה ללקוח על צ'ק ביטחון חסר (נודניק)
 // ==========================================
-export const sendSecurityCheckReminderEmail = async (clientEmail: string, clientName: string) => {
+export const sendSecurityCheckReminderEmail = async (
+  clientEmail: string,
+  clientName: string,
+): Promise<boolean> => {
   const mailOptions = {
-    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
+    from: getFromAddress(),
     to: clientEmail,
     subject: `תזכורת: מסירת צ'ק ביטחון לאירוע שלכם במייפל 🍁`,
     html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #fca5a5;">
-          <img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px; margin-bottom: 10px;" />
+          ${logoHeaderHtml()}
           <h2 style="color: #1f2937; margin: 0;">עדכון סטטוס הזמנה</h2>
         </div>
         <div style="padding: 25px;">
@@ -202,25 +273,24 @@ export const sendSecurityCheckReminderEmail = async (clientEmail: string, client
         </div>
       </div>
     `,
-    attachments: [{ filename: 'logo.png', path: './src/assets/logo.png', cid: 'mapleLogo' }]
+    attachments: optionalLogoAttachment(),
   };
 
-  try {
-    console.log(`[MAILER SIMULATION] שולח תזכורת צ'ק ביטחון למייל: ${clientEmail}...`);
-    // await transporter.sendMail(mailOptions);
-    return true;
-  } catch (error) {
-    console.error('שגיאה בשליחת מייל:', error);
-    return false;
-  }
+  const result = await deliverMail(mailOptions, `תזכורת צ'ק ביטחון ל-${clientEmail}`);
+  return result.ok;
 };
 
 // ==========================================
 // 4. התראה פנימית למנהל האולם
 // ==========================================
-export const sendManagerFinancialAlertEmail = async (managerEmail: string, alertType: string, clientName: string, details: string) => {
+export const sendManagerFinancialAlertEmail = async (
+  managerEmail: string,
+  alertType: string,
+  clientName: string,
+  details: string,
+): Promise<boolean> => {
   const mailOptions = {
-    from: '"מערכת התראות מייפל" <maple.events.il@gmail.com>',
+    from: `"מערכת התראות מייפל" <${getEmailUser() || 'maple.events.il@gmail.com'}>`,
     to: managerEmail,
     subject: `⚠️ התראת ניהול: ${alertType} - ${clientName}`,
     html: `
@@ -236,33 +306,31 @@ export const sendManagerFinancialAlertEmail = async (managerEmail: string, alert
           <p style="color: #ef4444; font-weight: bold;">נדרש טיפול מול הלקוח בהקדם.</p>
         </div>
       </div>
-    `
+    `,
   };
 
-  try {
-    console.log(`[MAILER SIMULATION] שולח התראת מנהל למייל: ${managerEmail}...`);
-    // await transporter.sendMail(mailOptions);
-    return true;
-  } catch (error) {
-    console.error('שגיאה בשליחת מייל מנהל:', error);
-    return false;
-  }
+  const result = await deliverMail(mailOptions, `התראת מנהל ל-${managerEmail}`);
+  return result.ok;
 };
 
 // ==========================================
-// 5. בקשת משוב לאחר סיום אירוע (חדש!)
+// 5. בקשת משוב לאחר סיום אירוע
 // ==========================================
-export const sendFeedbackRequestEmail = async (clientEmail: string, clientName: string | null, link: string) => {
+export const sendFeedbackRequestEmail = async (
+  clientEmail: string,
+  clientName: string | null,
+  link: string,
+): Promise<MailDeliveryResult> => {
   const name = clientName ? clientName.split(' ')[0] : 'לקוחות יקרים';
-  
+
   const mailOptions = {
-    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
+    from: getFromAddress(),
     to: clientEmail,
     subject: `איך היה האירוע שלכם? נשמח לשמוע! 🌟`,
     html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #d8a051;">
-          <img src="cid:mapleLogo" alt="לוגו מייפל" style="max-width: 150px; margin-bottom: 10px;" />
+          ${logoHeaderHtml()}
           <h2 style="color: #1f2937; margin: 0;">תודה שחגגתם איתנו! 🎉</h2>
         </div>
         <div style="padding: 25px;">
@@ -290,15 +358,11 @@ export const sendFeedbackRequestEmail = async (clientEmail: string, clientName: 
         </div>
       </div>
     `,
-    attachments: [{ filename: 'logo.png', path: './src/assets/logo.png', cid: 'mapleLogo' }]
+    attachments: optionalLogoAttachment(),
   };
 
-  try {
-    return deliverMail(mailOptions, `מייל משוב ל-${clientEmail}`);
-  } catch (error) {
-    console.error('שגיאה בשליחת מייל משוב:', error);
-    return false;
-  }
+  const result = await deliverMail(mailOptions, `מייל משוב ל-${clientEmail}`);
+  return result;
 };
 
 // ==========================================
@@ -315,13 +379,13 @@ export const sendOptionInterestEmail = async (
   clientName: string,
   eventDate: string,
   customMessage?: string,
-) => {
+): Promise<MailDeliveryResult> => {
   const bodyText = buildOptionInterestText(clientName, eventDate, customMessage);
   const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
   const escapedBody = bodyText.replace(/\n/g, '<br/>');
 
   const mailOptions = {
-    from: `"גן אירועים מייפל" <${process.env.EMAIL_USER || 'maple.events.il@gmail.com'}>`,
+    from: getFromAddress(),
     to: clientEmail,
     subject: `מתענינים בתאריך שלך במייפל (${dateStr}) 🍁`,
     html: `

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
-import { sendBumpEmail, sendOptionInterestEmail } from '../utils/mailer';
+import { mailFailureMessage, sendBumpEmail, sendOptionInterestEmail } from '../utils/mailer';
 import { sendBumpWhatsApp, sendOptionInterestWhatsApp } from '../utils/whatsapp';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AuthRequest } from '../middlewares/auth';
@@ -26,6 +27,7 @@ import {
   getBookableSlotsForDate,
   type TimeSlot,
 } from '../utils/timeSlot';
+import { paginationMeta, parsePagination } from '../utils/pagination';
 import {
   allocateEventCode,
   convertOptionCodeToEventCode,
@@ -67,6 +69,60 @@ async function releaseOptionDateInTx(tx: TxClient, dateId: string) {
 
 function hasOptionBookings(bookings: { isOption?: boolean }[]): boolean {
   return bookings.some((b) => b.isOption === true);
+}
+
+/** מסנכרן EventDate עם הזמנות אופציה — status ו-optionExpiresAt */
+async function syncEventDateWithOptionBookings(
+  tx: TxClient | typeof prisma,
+  eventDateId: string,
+): Promise<void> {
+  const eventDate = await tx.eventDate.findUnique({
+    where: { id: eventDateId },
+    include: { bookings: true },
+  });
+  if (!eventDate) return;
+
+  const optionBookings = eventDate.bookings.filter((b) => b.isOption);
+  const confirmedBookings = eventDate.bookings.filter((b) => !b.isOption);
+
+  if (optionBookings.length === 0) return;
+
+  const updatePayload: { status?: string; optionExpiresAt?: Date } = {};
+
+  if (confirmedBookings.length === 0 && eventDate.status !== 'OPTION') {
+    updatePayload.status = 'OPTION';
+  }
+
+  if (!eventDate.optionExpiresAt) {
+    const hours = optionBookings[0].optionDurationHours ?? 48;
+    const expiry = new Date();
+    expiry.setHours(expiry.getHours() + hours);
+    updatePayload.optionExpiresAt = expiry;
+  }
+
+  if (Object.keys(updatePayload).length > 0) {
+    await tx.eventDate.update({
+      where: { id: eventDateId },
+      data: updatePayload,
+    });
+  }
+}
+
+async function syncDesyncedOptionDates(): Promise<void> {
+  const desynced = await prisma.booking.findMany({
+    where: {
+      isOption: true,
+      eventDate: {
+        OR: [{ status: { not: 'OPTION' } }, { optionExpiresAt: null }],
+      },
+    },
+    select: { calendarDateId: true },
+    distinct: ['calendarDateId'],
+  });
+
+  for (const { calendarDateId } of desynced) {
+    await syncEventDateWithOptionBookings(prisma, calendarDateId);
+  }
 }
 
 function slotConflictMessage(
@@ -282,10 +338,11 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         const stillHasOptions = hasOptionBookings(eventDate.bookings ?? []);
         const updatePayload: Record<string, unknown> = {};
         if (newStatus === 'OPTION') {
-          if (eventDate.status !== 'BOOKED') {
+          const hasConfirmed = (eventDate.bookings ?? []).some((b) => !b.isOption);
+          if (!hasConfirmed) {
             updatePayload.status = newStatus;
-            updatePayload.optionExpiresAt = expiryDate;
           }
+          updatePayload.optionExpiresAt = expiryDate;
         } else if (newStatus === 'BOOKED' && !stillHasOptions) {
           updatePayload.status = 'BOOKED';
           updatePayload.optionExpiresAt = null;
@@ -390,6 +447,10 @@ export const createBooking = catchAsync(async (req: AuthRequest, res: Response) 
         throw createErr;
       }
       createdBookings.push(newBooking);
+
+      if (newStatus === 'OPTION') {
+        await syncEventDateWithOptionBookings(tx, eventDate.id);
+      }
       
       eventsToEmit.push({ dateId: eventDate.id, status: newStatus });
     }
@@ -470,9 +531,11 @@ export const getRelatedOptionBookings = catchAsync(async (req: Request, res: Res
     include: { eventDate: true },
   });
 
-  if (!booking || !booking.isOption || booking.eventDate?.status !== 'OPTION') {
+  if (!booking || !booking.isOption || !booking.eventDate) {
     return res.status(404).json({ success: false, message: 'אופציה לא נמצאה.' });
   }
+
+  await syncEventDateWithOptionBookings(prisma, booking.eventDate.id);
 
   const createdAtStart = new Date(booking.createdAt.getTime() - 120_000);
   const createdAtEnd = new Date(booking.createdAt.getTime() + 120_000);
@@ -484,7 +547,6 @@ export const getRelatedOptionBookings = catchAsync(async (req: Request, res: Res
       createdBy: booking.createdBy,
       isOption: true,
       createdAt: { gte: createdAtStart, lte: createdAtEnd },
-      eventDate: { status: 'OPTION' },
     },
     include: { eventDate: true },
     orderBy: { eventDate: { date: 'asc' } },
@@ -520,11 +582,7 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  if (
-    data.convertFromOption
-    && !booking.isOption
-    && booking.eventDate.status !== 'OPTION'
-  ) {
+  if (data.convertFromOption && !booking.isOption) {
     return res.status(400).json({ success: false, message: 'ההזמנה כבר אינה אופציה.' });
   }
 
@@ -665,10 +723,18 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
     }
 
     if (isConverting) {
-      await tx.eventDate.update({
-        where: { id: booking.eventDate.id },
-        data: { status: 'BOOKED', optionExpiresAt: null },
+      const remainingOptions = await tx.booking.count({
+        where: { calendarDateId: booking.eventDate.id, isOption: true, id: { not: id } },
       });
+
+      if (remainingOptions === 0) {
+        await tx.eventDate.update({
+          where: { id: booking.eventDate.id },
+          data: { status: 'BOOKED', optionExpiresAt: null },
+        });
+      } else {
+        await syncEventDateWithOptionBookings(tx, booking.eventDate.id);
+      }
 
       const releaseDateIds: string[] = Array.isArray(data.releaseDateIds) ? data.releaseDateIds : [];
       if (releaseDateIds.length > 0) {
@@ -680,13 +746,15 @@ export const updateBooking = catchAsync(async (req: Request, res: Response) => {
           where: { calendarDateId: { in: releaseDateIds } },
         });
       }
-    } else if (booking.eventDate.status === 'OPTION' && data.optionDurationHours) {
+    } else if (booking.isOption && data.optionDurationHours) {
       const expiryDate = new Date();
       expiryDate.setHours(expiryDate.getHours() + Number(data.optionDurationHours));
       await tx.eventDate.update({
         where: { id: booking.eventDate.id },
         data: { optionExpiresAt: expiryDate },
       });
+    } else if (booking.isOption) {
+      await syncEventDateWithOptionBookings(tx, booking.eventDate.id);
     }
     
     return updatedBooking;
@@ -989,11 +1057,48 @@ export const finalizeBooking = catchAsync(async (req: Request, res: Response) =>
 });
 
 export const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  const bookings = await prisma.booking.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { eventDate: true, eventForm: true, additions: true } 
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+  const status = typeof req.query.status === 'string' ? req.query.status.toUpperCase() : undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+  if (status === 'OPTION') {
+    await syncDesyncedOptionDates();
+  }
+
+  const where: Prisma.BookingWhereInput = {};
+
+  if (status === 'BOOKED') {
+    where.isOption = false;
+  } else if (status === 'OPTION') {
+    where.isOption = true;
+  }
+
+  if (search) {
+    where.OR = [
+      { clientAFullName: { contains: search, mode: 'insensitive' } },
+      { clientAIdNumber: { contains: search } },
+      { clientBFullName: { contains: search, mode: 'insensitive' } },
+      { clientBIdNumber: { contains: search } },
+      { eventCode: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { eventDate: { date: 'desc' } },
+      include: { eventDate: true, eventForm: true, additions: true },
+    }),
+    prisma.booking.count({ where }),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: bookings,
+    pagination: paginationMeta(page, limit, total),
   });
-  res.status(200).json({ success: true, count: bookings.length, data: bookings });
 });
 
 export const releaseOptions = catchAsync(async (req: Request, res: Response) => {
@@ -1028,29 +1133,112 @@ export const releaseOptions = catchAsync(async (req: Request, res: Response) => 
 });
 
 export const bumpOption = catchAsync(async (req: Request, res: Response) => {
-  const { dateId } = req.body;
+  let { dateId, bookingId } = req.body as { dateId?: string; bookingId?: string };
+  let targetBookingId = bookingId;
+
+  if (bookingId) {
+    const sourceBooking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { eventDate: true },
+    });
+    if (!sourceBooking?.isOption || !sourceBooking.eventDate) {
+      return res.status(400).json({ success: false, message: 'ההזמנה אינה אופציה פעילה.' });
+    }
+    dateId = sourceBooking.calendarDateId;
+  }
+
+  if (!dateId) {
+    return res.status(400).json({ success: false, message: 'חסר מזהה תאריך.' });
+  }
+
   const eventDate = await prisma.eventDate.findUnique({
     where: { id: dateId },
-    include: { bookings: true } 
+    include: { bookings: true },
   });
 
-  if (!eventDate || eventDate.status !== 'OPTION') return res.status(400).json({ success: false, message: 'התאריך אינו מוגדר כאופציה.' });
+  if (!eventDate) {
+    return res.status(400).json({ success: false, message: 'התאריך לא נמצא.' });
+  }
+
+  const optionBookings = eventDate.bookings.filter((b) => b.isOption);
+  if (optionBookings.length === 0) {
+    return res.status(400).json({ success: false, message: 'התאריך אינו מוגדר כאופציה.' });
+  }
+
+  const targets = targetBookingId
+    ? optionBookings.filter((b) => b.id === targetBookingId)
+    : optionBookings;
+
+  if (targets.length === 0) {
+    return res.status(400).json({ success: false, message: 'ההזמנה אינה אופציה פעילה.' });
+  }
+
+  await syncEventDateWithOptionBookings(prisma, dateId);
 
   const newDeadline = new Date();
   newDeadline.setHours(newDeadline.getHours() + 3);
   await prisma.eventDate.update({ where: { id: dateId }, data: { optionExpiresAt: newDeadline } });
 
-  for (const booking of eventDate.bookings) {
-      if (booking.clientAEmail) await sendBumpEmail(booking.clientAEmail, booking.clientAFullName, eventDate.date.toString(), newDeadline);
-      if (booking.clientAPhone) {
-          await sendBumpWhatsApp(booking.clientAPhone.split(' | ')[0].trim(), booking.clientAFullName, eventDate.date.toString(), newDeadline);
+  const skippedReasons: string[] = [];
+  let emailSent = false;
+  let whatsappSent = false;
+  let whatsappSimulated = false;
+  const eventDateStr = eventDate.date.toString();
+
+  for (const booking of targets) {
+    if (booking.clientAEmail) {
+      const emailResult = await sendBumpEmail(
+        booking.clientAEmail,
+        booking.clientAFullName,
+        eventDateStr,
+        newDeadline,
+      );
+      if (emailResult.ok && !emailResult.simulated) {
+        emailSent = true;
+      } else if (!emailResult.ok) {
+        skippedReasons.push(mailFailureMessage(emailResult.reason));
+      } else if (emailResult.simulated) {
+        skippedReasons.push('מייל: לא מוגדר בשרת (לא נשלח בפועל)');
       }
+    } else {
+      skippedReasons.push('לא הוזן אימייל ללקוח');
+    }
+
+    if (booking.clientAPhone) {
+      const phone = booking.clientAPhone.split(' | ')[0].trim();
+      const waResult = await sendBumpWhatsApp(
+        phone,
+        booking.clientAFullName,
+        eventDateStr,
+        newDeadline,
+      );
+      if (waResult.sent) whatsappSent = true;
+      if (waResult.simulated) whatsappSimulated = true;
+
+      if (waResult.hasWhatsApp === false) {
+        skippedReasons.push('למספר הטלפון אין וואטסאפ');
+      } else if (waResult.simulated) {
+        skippedReasons.push('וואטסאפ: לא מוגדר (לא נשלח בפועל)');
+      } else if (!waResult.sent) {
+        skippedReasons.push('שליחת הוואטסאפ נכשלה');
+      }
+    } else {
+      skippedReasons.push('לא הוזן טלפון ללקוח');
+    }
   }
 
   emitDateUpdated({ dateId, status: 'OPTION' });
   emitBookingUpdated();
 
-  res.status(200).json({ success: true, message: 'הדד-ליין קוצר.', newDeadline });
+  res.status(200).json({
+    success: true,
+    message: 'הדד-ליין עודכן ל-3 שעות מעכשיו.',
+    newDeadline,
+    emailSent,
+    whatsappSent,
+    whatsappSimulated,
+    skippedReasons: [...new Set(skippedReasons)],
+  });
 });
 
 export const notifyOptionInterest = catchAsync(async (req: Request, res: Response) => {
@@ -1073,6 +1261,8 @@ export const notifyOptionInterest = catchAsync(async (req: Request, res: Respons
     return res.status(400).json({ success: false, message: 'לא נמצא תאריך מקושר להזמנה.' });
   }
 
+  await syncEventDateWithOptionBookings(prisma, booking.eventDate.id);
+
   const eventDateStr = booking.eventDate.date.toString();
   const skippedReasons: string[] = [];
   let emailSent = false;
@@ -1080,14 +1270,17 @@ export const notifyOptionInterest = catchAsync(async (req: Request, res: Respons
   let whatsappSimulated = false;
 
   if (booking.clientAEmail) {
-    emailSent = await sendOptionInterestEmail(
+    const emailResult = await sendOptionInterestEmail(
       booking.clientAEmail,
       booking.clientAFullName,
       eventDateStr,
       message,
     );
-    if (!emailSent) {
-      skippedReasons.push('שליחת המייל נכשלה');
+    emailSent = emailResult.ok && !emailResult.simulated;
+    if (!emailResult.ok) {
+      skippedReasons.push(mailFailureMessage(emailResult.reason));
+    } else if (emailResult.simulated) {
+      skippedReasons.push('מייל: לא מוגדר בשרת (לא נשלח בפועל)');
     }
   } else {
     skippedReasons.push('לא הוזן אימייל ללקוח');
@@ -1116,9 +1309,12 @@ export const notifyOptionInterest = catchAsync(async (req: Request, res: Respons
   }
 
   if (!emailSent && !whatsappSent) {
+    const hasContact = !!(booking.clientAEmail || booking.clientAPhone);
     return res.status(400).json({
       success: false,
-      message: 'לא ניתן לשלוח — חסרים פרטי קשר או השליחה נכשלה.',
+      message: hasContact
+        ? 'שליחת ההודעה נכשלה — ראי פירוט למטה.'
+        : 'לא ניתן לשלוח — חסרים פרטי קשר ללקוח.',
       skippedReasons,
     });
   }

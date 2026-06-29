@@ -10,10 +10,9 @@ import styles from './BookingsManager.module.css';
 interface BookingDetailsModalProps {
   booking: any;
   onClose: () => void;
-  onAddAddition: () => void;
 }
 
-const BookingDetailsModal = ({ booking, onClose, onAddAddition }: BookingDetailsModalProps) => {
+const BookingDetailsModal = ({ booking, onClose }: BookingDetailsModalProps) => {
   const navigate = useNavigate();
 
   const eventDateStr = booking.eventDate?.date
@@ -218,10 +217,6 @@ const BookingDetailsModal = ({ booking, onClose, onAddAddition }: BookingDetails
                 </button>
               </>
             )}
-
-            <button type="button" className={styles.btnAddition} onClick={onAddAddition}>
-              + הוסף תוספת בזמן אירוע (בתשלום)
-            </button>
 
             {!editable && (
               <p className={styles.editBlockedMsg}>לא ניתן לערוך ביום האירוע או לאחריו</p>

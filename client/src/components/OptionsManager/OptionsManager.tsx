@@ -36,27 +36,54 @@ const OptionsManager = () => {
 
   const { data, isLoading: loading, refetch } = useBookingsQuery({ status: 'OPTION', limit: 100, page: 1 });
 
-  const options = (data?.data ?? []).filter((b: any) => {
-    if (!search) return true;
-    return (
-      b.clientAFullName?.includes(search) ||
-      b.clientAIdNumber?.includes(search) ||
-      b.clientBFullName?.includes(search) ||
-      b.clientBIdNumber?.includes(search)
-    );
-  });
+  const today = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
-  const handleBump = async (dateId: string) => {
+  const options = (data?.data ?? [])
+    .filter((b: any) => {
+      if (!b.isOption) return false;
+
+      if (b.eventDate?.date) {
+        const eventDay = new Date(b.eventDate.date);
+        eventDay.setHours(0, 0, 0, 0);
+        if (eventDay < today) return false;
+      }
+
+      if (!search) return true;
+      return (
+        b.clientAFullName?.includes(search) ||
+        b.clientAIdNumber?.includes(search) ||
+        b.clientBFullName?.includes(search) ||
+        b.clientBIdNumber?.includes(search)
+      );
+    })
+    .sort((a: any, b: any) => {
+      const da = a.eventDate?.date ? new Date(a.eventDate.date).getTime() : 0;
+      const db = b.eventDate?.date ? new Date(b.eventDate.date).getTime() : 0;
+      return da - db;
+    });
+
+  const handleBump = async (bookingId: string) => {
     if (!window.confirm('האם לשלוח ללקוח התראת דחיפות ולקצר את הדד-ליין ל-3 שעות?')) return;
     try {
       const res = await apiFetch(`${API_URL}/bookings/bump`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateId }),
+        body: JSON.stringify({ bookingId }),
       });
       const result = await res.json();
       if (result.success) {
-        alert('הלקוח הוקפץ! הדד-ליין עודכן ל-3 שעות מעכשיו.');
+        const lines = [result.message || 'הדד-ליין עודכן ל-3 שעות מעכשיו.'];
+        if (result.emailSent) lines.push('נשלח במייל ✓');
+        if (result.whatsappSent) lines.push('נשלח בוואטסאפ ✓');
+        if (result.skippedReasons?.length) {
+          lines.push('', 'שים לב:');
+          lines.push(...result.skippedReasons);
+        }
+        alert(lines.join('\n'));
         refetch();
       } else {
         alert(result.message);
@@ -110,7 +137,7 @@ const OptionsManager = () => {
                     >
                       שלח הודעת עניין
                     </button>
-                    <button type="button" onClick={() => handleBump(option.calendarDateId)} className={`${styles.btn} ${styles.bumpBtn}`}>
+                    <button type="button" onClick={() => handleBump(option.id)} className={`${styles.btn} ${styles.bumpBtn}`}>
                       הקפץ לקוח ⏱️
                     </button>
                   </div>

@@ -104,7 +104,12 @@ async function deliverWhatsApp(
 // ==========================================
 // 1. הקפצת אופציה (Bump Option)
 // ==========================================
-export const sendBumpWhatsApp = async (clientPhone: string, clientName: string, eventDate: string, deadline: Date) => {
+export const sendBumpWhatsApp = async (
+  clientPhone: string,
+  clientName: string,
+  eventDate: string,
+  deadline: Date,
+): Promise<WhatsAppSendResult> => {
   const deadlineStr = deadline.toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit' });
   const dateStr = new Date(eventDate).toLocaleDateString('he-IL');
 
@@ -122,7 +127,7 @@ export const sendBumpWhatsApp = async (clientPhone: string, clientName: string, 
     `🤖 _הודעה זו נשלחה אוטומטית מהמערכת._\n` +
     `_ניתן להשיב להודעה זו בכל שאלה ונציג יחזור אליכם._`;
 
-  return simulateWhatsApp(clientPhone, message, 'אופציה');
+  return deliverWhatsApp(clientPhone, message, 'הקפצת אופציה');
 };
 
 const simulateWhatsApp = async (phone: string, message: string, type: string): Promise<boolean> => {
@@ -180,7 +185,11 @@ export const sendManagerFinancialAlert = async (managerPhone: string, alertType:
 // ==========================================
 // 5. בקשת משוב לאחר סיום אירוע (חדש!)
 // ==========================================
-export const sendFeedbackRequestWhatsApp = async (clientPhone: string, clientName: string | null, link: string) => {
+export const sendFeedbackRequestWhatsApp = async (
+  clientPhone: string,
+  clientName: string | null,
+  link: string,
+): Promise<WhatsAppSendResult> => {
   const name = clientName ? clientName.split(' ')[0] : 'יקרים שלנו';
   const message = `היי *${name}*, תודה שחגגתם איתנו! 🎉\n\n` +
     `היה לנו לעונג לארח אתכם בגן האירועים *מייפל* 🍁.\n` +
@@ -191,7 +200,16 @@ export const sendFeedbackRequestWhatsApp = async (clientPhone: string, clientNam
     `--------------------------\n` +
     `🤖 _הודעה זו נשלחה אוטומטית מהמערכת._`;
 
-  return simulateWhatsApp(clientPhone, message, 'בקשת משוב');
+  return deliverWhatsApp(clientPhone, message, 'בקשת משוב');
+};
+
+export const sendGreetingWhatsApp = async (
+  clientPhone: string,
+  clientName: string,
+  message: string,
+): Promise<WhatsAppSendResult> => {
+  const formatted = `שלום *${clientName}*,\n\n${message}\n\n*צוות מייפל - גן אירועים*\nטלפון: 03-6777772\n--------------------------\n🤖 _הודעה זו נשלחה מהמערכת._`;
+  return deliverWhatsApp(clientPhone, formatted, 'ברכה ללקוח');
 };
 
 // ==========================================
