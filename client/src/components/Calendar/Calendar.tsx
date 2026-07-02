@@ -235,8 +235,20 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
               
               const dayNum = new Date(day.date + 'T12:00:00').getDate();
 
+              const bookingCount = day.bookings?.length ?? 0;
+              const ariaLabel = day.isCurrentMonth
+                ? `${dayNum} ${day.hebrewDate || ''}, ${bookingCount} אירועים${day.reason ? `, ${day.reason}` : ''}`
+                : `${dayNum}`;
+
               return (
-                <div key={day.date} className={cls} style={{ gridColumn: day.col, gridRow: day.row }} onClick={() => {
+                <button
+                  type="button"
+                  key={day.date}
+                  className={cls}
+                  style={{ gridColumn: day.col, gridRow: day.row }}
+                  aria-label={ariaLabel}
+                  disabled={!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast}
+                  onClick={() => {
                   if (!day.isCurrentMonth || day.status === 'BLOCKED' || day.status === 'FORBIDDEN' || isPast) return;
                   
                   if (day.bookings.length > 0) { setSelectedDay(day); return; }
@@ -293,7 +305,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {const getEventTitl
                       );
                     })}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

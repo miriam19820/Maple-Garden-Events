@@ -373,14 +373,14 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         const json = await res.json();
         if (!res.ok || !json.success) {
           alert(json.message || 'שגיאה בטעינת ההזמנה');
-          navigate('/');
+          navigate('/calendar');
           return;
         }
         const b = json.data;
         const isStillOption = b.isOption || b.eventDate?.status === 'OPTION';
         if (convertFromOption && !isStillOption) {
           alert('האופציה כבר הומרה להזמנה.');
-          navigate('/');
+          navigate('/calendar');
           return;
         }
         applyBookingToForm(b);
@@ -406,7 +406,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         }
       } catch {
         alert('שגיאה בטעינת ההזמנה');
-        navigate('/');
+        navigate('/calendar');
       } finally {
         setLoadingBooking(false);
       }
@@ -882,7 +882,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         if ((!isOption || convertFromOption) && contractSigned && savedId) {
           await promptPrintAfterClose(savedId);
         }
-        navigate('/');
+        navigate('/calendar');
       } else {
         const fieldErrors = Array.isArray(resData.errors)
           ? resData.errors.map((e: { message?: string }) => e.message).filter(Boolean).join('\n')
@@ -912,6 +912,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                   ? (isOption ? 'עריכת אופציה' : 'עריכת הזמנה')
                   : (isOption ? 'שמירת אופציה לאירוע' : 'סגירת הזמנת אירוע')}
             </h2>
+            <p className={styles.subtitle}>
+              {isOption
+                ? 'מילוי פרטי לקוח, תאריכי אופציה ושמירה'
+                : 'מילוי פרטי הזמנה, תשלום וחתימה על חוזה'}
+            </p>
           </div>
         </div>
 
@@ -951,6 +956,10 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                   <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder="לדוגמה: אלרגיות..." />
                 </div>
               )}
+              <div className={`${styles.sectionCard} ${styles.compactNotesWrap}`}>
+                <h3 className={styles.sectionHeader}>הערות פנימיות</h3>
+                <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder="הוסף הערה פנימית..." />
+              </div>
             </div>
 
             <div className={styles.formColumn}>
@@ -958,12 +967,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
             </div>
           </div>
 
-          <div className={`${styles.formBottomRow} ${isOption ? styles.formBottomRowCompact : ''}`}>
-            <div className={`${styles.sectionCard} ${styles.compactNotesWrap}`}>
-              <h3 className={styles.sectionHeader}>הערות פנימיות</h3>
-              <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder="הוסף הערה פנימית..." />
-            </div>
-
+          {(!isOption || convertFromOption) && (
+          <div className={styles.formBottomRow}>
             {((!isEditMode && !isOption) || convertFromOption) && (
               <div className={styles.contractBox}>
                 <label className={styles.contractCheckLabel}>
@@ -1032,6 +1037,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
               </div>
             )}
           </div>
+          )}
 
           <div className={styles.formFooter}>
             <button

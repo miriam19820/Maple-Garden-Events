@@ -190,7 +190,7 @@ const GreetingBlast = () => {
                 חזרה לרשימה
               </button>
             )}
-            <button type="button" className={styles.backBtn} onClick={() => navigate('/')}>
+            <button type="button" className={styles.backBtn} onClick={() => navigate('/calendar')}>
               חזרה ללוח
             </button>
           </div>

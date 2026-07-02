@@ -12,6 +12,7 @@
 
 .input {
   width: 100%;
+  min-height: 44px;
   padding: 11px 14px;
   border: 1px solid var(--maple-border-strong);
   border-radius: var(--maple-radius-sm);

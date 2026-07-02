@@ -1,5 +1,7 @@
 import { AppHeader } from '../AppHeader/AppHeader';
+import { AppSidebar } from '../AppSidebar/AppSidebar';
 import { NavigationProvider } from '../../context/NavigationContext';
+import { SidebarProvider } from '../../context/SidebarContext';
 import './AppLayout.css';
 
 export type AppLayoutMode = 'default' | 'viewportFill' | 'fullWidth';
@@ -36,28 +38,36 @@ export const AppLayout = ({
 
   return (
     <NavigationProvider>
-      <div
-        className={[
-          'app-layout',
-          fullHeight !== false ? 'app-layout-full' : '',
-          isViewportFill ? 'app-layout-viewport-fill' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        <AppHeader />
-        <main
+      <SidebarProvider>
+        <a href="#main-content" className="skip-link">
+          דלג לתוכן ראשי
+        </a>
+        <div
           className={[
-            'app-layout-main',
-            isViewportFill ? 'app-layout-main-fill' : '',
-            isFullWidth ? 'app-layout-main-fullwidth' : '',
+            'app-layout',
+            fullHeight !== false ? 'app-layout-full' : '',
+            isViewportFill ? 'app-layout-viewport-fill' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {isFullWidth ? <div className="page-content-full">{children}</div> : children}
-        </main>
-      </div>
+          <AppSidebar />
+          <AppHeader />
+          <main
+            id="main-content"
+            role="main"
+            className={[
+              'app-layout-main',
+              isViewportFill ? 'app-layout-main-fill' : '',
+              isFullWidth ? 'app-layout-main-fullwidth' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {isFullWidth ? <div className="page-content-full">{children}</div> : children}
+          </main>
+        </div>
+      </SidebarProvider>
     </NavigationProvider>
   );
 };

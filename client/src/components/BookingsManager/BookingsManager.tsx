@@ -3,9 +3,18 @@ import styles from './BookingsManager.module.css';
 import BookingDetailsModal from './BookingDetailsModal';
 import { useBookingsQuery } from '../../hooks/queries';
 import { PageLoader } from '../PageLoader/PageLoader';
-import { PageHeader } from '../ui/PageHeader';
-import { Input } from '../ui/Input';
-import { EmptyState } from '../ui/EmptyState';
+import {
+  PageHeader,
+  Input,
+  EmptyState,
+  SectionHeader,
+  DataTable,
+  EventCard,
+  Badge,
+  Button,
+  type DataTableColumn,
+  type EventCardData,
+} from '../ui';
 
 const startOfDay = (d: Date) => {
   const copy = new Date(d);
@@ -14,6 +23,25 @@ const startOfDay = (d: Date) => {
 };
 
 const getEventDay = (b: any) => (b.eventDate?.date ? startOfDay(new Date(b.eventDate.date)) : null);
+
+const dateStr = (b: any) =>
+  b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '—';
+
+const toEventCard = (b: any, status: 'confirmed' | 'past'): EventCardData => ({
+  id: b.id,
+  date: dateStr(b),
+  code: b.eventCode,
+  clientName: b.clientAFullName,
+  clientNameB: b.clientBFullName,
+  eventType: b.eventType,
+  timeOfDay: b.timeOfDay,
+  guestCount:
+    b.eventType === 'השכרת אולם בלי אוכל'
+      ? 'השכרת אולם (ללא מנות)'
+      : b.guestCount,
+  status,
+  statusLabel: status === 'confirmed' ? 'מאושר' : 'עבר',
+});
 
 const BookingsManager = () => {
   const [search, setSearch] = useState('');
@@ -55,28 +83,78 @@ const BookingsManager = () => {
     return { upcomingBookings: upcoming, pastBookings: past };
   }, [data]);
 
-  const dateStr = (b: any) => b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '';
-
   const closeSelected = () => setSelected(null);
 
-  const renderBookingCard = (b: any) => (
-    <div key={b.id} className={styles.card}>
-      <div className={styles.cardDate}>{dateStr(b)}</div>
-      {b.eventCode && <div className={styles.cardCode}>#{b.eventCode}</div>}
-      <div className={styles.cardName}>{b.clientAFullName}</div>
-      {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
-      <div className={styles.cardDetail}>סוג: {b.eventType} | {b.timeOfDay}</div>
-      <div className={styles.cardDetail}>
-        {b.eventType === 'השכרת אולם בלי אוכל' ? 'השכרת אולם (ללא מנות)' : `מוזמנים: ${b.guestCount}`}
+  const columns: DataTableColumn<any>[] = [
+    { key: 'date', header: 'תאריך', render: (b) => dateStr(b) },
+    { key: 'code', header: 'קוד', render: (b) => (b.eventCode ? `#${b.eventCode}` : '—') },
+    { key: 'client', header: 'לקוח', render: (b) => b.clientAFullName },
+    { key: 'type', header: 'סוג', render: (b) => b.eventType },
+    {
+      key: 'guests',
+      header: 'מוזמנים',
+      render: (b) =>
+        b.eventType === 'השכרת אולם בלי אוכל' ? '—' : (b.guestCount ?? '—'),
+    },
+    {
+      key: 'status',
+      header: 'סטטוס',
+      render: (b) => {
+        const today = startOfDay(new Date());
+        const day = getEventDay(b);
+        const isPast = day !== null && day < today;
+        return (
+          <Badge variant={isPast ? 'past' : 'confirmed'}>
+            {isPast ? 'עבר' : 'מאושר'}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: 'פעולות',
+      render: (b) => (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelected(b);
+          }}
+        >
+          פרטים
+        </Button>
+      ),
+    },
+  ];
+
+  const renderSection = (
+    title: string,
+    bookings: any[],
+    cardStatus: 'confirmed' | 'past',
+  ) => (
+    <section className={styles.section}>
+      <SectionHeader title={title} count={bookings.length} />
+      <div className={styles.tableWrap}>
+        <DataTable
+          caption={title}
+          columns={columns}
+          data={bookings}
+          rowKey={(b) => b.id}
+          onRowClick={(b) => setSelected(b)}
+        />
       </div>
-      <button
-        type="button"
-        className={styles.viewBtn}
-        onClick={() => setSelected(b)}
-      >
-        הצגת כל פרטי ההזמנה
-      </button>
-    </div>
+      <div className={styles.cardsWrap}>
+        {bookings.map((b) => (
+          <EventCard
+            key={b.id}
+            event={toEventCard(b, cardStatus)}
+            onView={() => setSelected(b)}
+            viewLabel="הצגת כל פרטי ההזמנה"
+          />
+        ))}
+      </div>
+    </section>
   );
 
   return (
@@ -88,6 +166,7 @@ const BookingsManager = () => {
         placeholder="חיפוש לפי שם או תעודת זהות..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
+        aria-label="חיפוש הזמנות"
       />
 
       {isLoading ? (
@@ -100,31 +179,15 @@ const BookingsManager = () => {
         />
       ) : (
         <>
-          {upcomingBookings.length > 0 && (
-            <section className={styles.section}>
-              <h3 className={styles.sectionTitle}>אירועים קרובים ({upcomingBookings.length})</h3>
-              <div className={styles.grid}>
-                {upcomingBookings.map(renderBookingCard)}
-              </div>
-            </section>
-          )}
-
-          {pastBookings.length > 0 && (
-            <section className={styles.section}>
-              <h3 className={styles.sectionTitle}>אירועים שעברו ({pastBookings.length})</h3>
-              <div className={styles.grid}>
-                {pastBookings.map(renderBookingCard)}
-              </div>
-            </section>
-          )}
+          {upcomingBookings.length > 0 &&
+            renderSection('אירועים קרובים', upcomingBookings, 'confirmed')}
+          {pastBookings.length > 0 &&
+            renderSection('אירועים שעברו', pastBookings, 'past')}
         </>
       )}
 
       {selected && (
-        <BookingDetailsModal
-          booking={selected}
-          onClose={closeSelected}
-        />
+        <BookingDetailsModal booking={selected} onClose={closeSelected} />
       )}
     </div>
   );

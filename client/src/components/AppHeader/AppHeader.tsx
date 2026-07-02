@@ -1,37 +1,23 @@
-import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useNavigationContext } from '../../context/NavigationContext';
+import { useSidebar } from '../../context/SidebarContext';
 import {
   resolveDefaultBackPath,
   resolveRouteTitle,
   shouldShowGlobalBack,
 } from '../../utils/appNavigation';
-import { NAV_ITEMS, isNavItemActive } from '../../utils/navConfig';
 import './AppHeader.css';
 
 export const AppHeader = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { override } = useNavigationContext();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { open } = useSidebar();
 
   const showBack = shouldShowGlobalBack(location.pathname) || !!override;
   const pageTitle = resolveRouteTitle(location.pathname);
 
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [menuOpen]);
-
-  const goTo = (path: string) => {
-    setMenuOpen(false);
-    navigate(path);
-  };
-
   const handleBack = () => {
-    setMenuOpen(false);
     if (override?.onBack) {
       override.onBack();
       return;
@@ -45,83 +31,48 @@ export const AppHeader = () => {
   };
 
   return (
-    <>
-      <header className="app-header">
-        <div className="app-header-start">
-          <button
-            type="button"
-            className="app-header-hamburger"
-            onClick={() => setMenuOpen(true)}
-            aria-label="פתיחת תפריט"
-            aria-expanded={menuOpen}
-          >
-            <span />
-            <span />
-            <span />
-          </button>
-
-          {showBack && (
-            <button
-              type="button"
-              className="app-header-back"
-              onClick={handleBack}
-              aria-label={pageTitle ? `חזרה — ${pageTitle}` : 'חזרה'}
-            >
-              <span className="app-header-back-icon" aria-hidden="true">
-                →
-              </span>
-              <span className="app-header-back-text">חזרה</span>
-            </button>
-          )}
-
-          {pageTitle && (
-            <p className="app-header-title" title={pageTitle}>
-              {pageTitle}
-            </p>
-          )}
-        </div>
-
+    <header className="app-header">
+      <div className="app-header-start">
         <button
           type="button"
-          className="app-header-brand"
-          onClick={() => goTo('/')}
-          aria-label="חזרה ללוח השנה"
+          className="app-header-hamburger"
+          onClick={open}
+          aria-label="פתיחת תפריט"
         >
-          <img src="/logo.png" alt="מיפל - גן אירועים בעיר" className="app-header-logo" />
+          <span />
+          <span />
+          <span />
         </button>
-      </header>
 
-      {menuOpen && (
-        <div className="nav-drawer-overlay" onClick={() => setMenuOpen(false)} aria-hidden="true" />
-      )}
-
-      <nav className={`nav-drawer ${menuOpen ? 'nav-drawer-open' : ''}`} aria-hidden={!menuOpen}>
-        <div className="nav-drawer-header">
-          <img src="/logo.png" alt="" className="nav-drawer-logo" />
+        {showBack && (
           <button
             type="button"
-            className="nav-drawer-close"
-            onClick={() => setMenuOpen(false)}
-            aria-label="סגירת תפריט"
+            className="app-header-back"
+            onClick={handleBack}
+            aria-label={pageTitle ? `חזרה — ${pageTitle}` : 'חזרה'}
           >
-            ✕
+            <span className="app-header-back-icon" aria-hidden="true">
+              →
+            </span>
+            <span className="app-header-back-text">חזרה</span>
           </button>
-        </div>
-        <ul className="nav-drawer-list">
-          {NAV_ITEMS.map((item) => (
-            <li key={item.path}>
-              <button
-                type="button"
-                className={`nav-drawer-item ${isNavItemActive(location.pathname, item.path) ? 'active' : ''}`}
-                onClick={() => goTo(item.path)}
-              >
-                {item.icon && <span className="nav-drawer-icon">{item.icon}</span>}
-                {item.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </>
+        )}
+
+        {pageTitle && (
+          <p className="app-header-title" title={pageTitle}>
+            {pageTitle}
+          </p>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className="app-header-brand"
+        onClick={() => navigate('/dashboard')}
+        aria-label="חזרה ללוח הבקרה"
+      >
+        <img src="/logo.png" alt="מיפל - גן אירועים בעיר" className="app-header-logo" />
+      </button>
+    </header>
   );
 };

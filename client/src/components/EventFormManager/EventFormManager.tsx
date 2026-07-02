@@ -21,6 +21,14 @@ import {
   useGlobalSettingsQuery,
   useKashrutQuery,
 } from '../../hooks/queries';
+import {
+  PageHeader,
+  Input,
+  EventCard,
+  SectionHeader,
+  EmptyState,
+  type EventCardData,
+} from '../ui';
 
 const EventFormPieChart = lazy(() => import('./EventFormPieChart'));
 
@@ -333,6 +341,17 @@ const EventFormManager = () => {
 
   const dateStr = (b: Booking) => b.eventDate?.date ? new Date(b.eventDate.date).toLocaleDateString('he-IL') : '';
 
+  const toEventCard = (b: Booking, hasForm: boolean): EventCardData => ({
+    id: b.id,
+    date: dateStr(b),
+    clientName: b.clientAFullName,
+    clientNameB: b.clientBFullName,
+    eventType: b.eventType,
+    guestCount: b.guestCount,
+    status: hasForm ? 'confirmed' : 'gold',
+    statusLabel: hasForm ? 'טופס קיים' : 'ממתין למילוי',
+  });
+
   const handleInputChange = (field: keyof EventFormData, value: any) => {
     if (field === 'menCount' || field === 'womenCount') {
       setFormData(prev => {
@@ -617,22 +636,28 @@ const EventFormManager = () => {
   return (
     <div className={`${styles.container} ${selected ? styles.containerFormMode : ''}`}>
       {!selected && (
-      <div className={styles.header}>
-        <h2 className={styles.title}>טופס הפקת אירוע</h2>
+      <div className={styles.listTop}>
+        <PageHeader
+          title="טופס הפקת אירוע"
+          subtitle="ניהול טפסי הפקה — חיפוש הזמנות, מילוי פרטים ושליחה ללקוח"
+        />
         <div className={styles.viewTabs}>
           <button
+            type="button"
             onClick={() => { setViewMode('bookings'); setShowPastEvents(false); }}
             className={`${styles.tabBtn} ${viewMode === 'bookings' ? styles.tabBtnActive : ''}`}
           >
             חיפוש הזמנה
           </button>
           <button
+            type="button"
             onClick={() => { setViewMode('forms'); setShowPastEvents(false); }}
             className={`${styles.tabBtn} ${viewMode === 'forms' ? styles.tabBtnActive : ''}`}
           >
             טפסים שמורים
           </button>
           <button
+            type="button"
             onClick={() => { setViewMode('stats'); setShowPastEvents(false); }}
             className={`${styles.tabBtn} ${styles.tabBtnStats} ${viewMode === 'stats' ? styles.tabBtnActive : ''}`}
           >
@@ -646,11 +671,12 @@ const EventFormManager = () => {
         <>
           {viewMode === 'bookings' && (
             <>
-              <input
-                className={styles.searchInput}
+              <Input
+                fieldClassName={styles.searchWrap}
                 placeholder="חיפוש לפי שם או תעודת זהות..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="חיפוש הזמנות לטופס הפקה"
               />
               <div className={styles.pastEventsBar}>
                 {showPastEvents ? (
@@ -659,7 +685,7 @@ const EventFormManager = () => {
                     className={styles.pastEventsBtn}
                     onClick={() => setShowPastEvents(false)}
                   >
-                    ← חזרה לאירועים קרובים
+                    חזרה לאירועים קרובים
                   </button>
                 ) : pastBookings.length > 0 ? (
                   <button
@@ -667,55 +693,51 @@ const EventFormManager = () => {
                     className={styles.pastEventsBtn}
                     onClick={() => setShowPastEvents(true)}
                   >
-                    📁 טפסי אירועים שעברו ({pastBookings.length})
+                    טפסי אירועים שעברו ({pastBookings.length})
                   </button>
                 ) : null}
               </div>
               {loading ? (
                 <p className={styles.empty}>טוען...</p>
               ) : displayedBookings.length === 0 ? (
-                <p className={styles.empty}>
-                  {search
-                    ? 'לא נמצאו תוצאות.'
-                    : showPastEvents
-                      ? 'אין טפסי אירועים שעברו.'
-                      : 'אין אירועים קרובים.'}
-                </p>
+                <EmptyState
+                  title={search ? 'לא נמצאו תוצאות' : showPastEvents ? 'אין טפסי אירועים שעברו' : 'אין אירועים קרובים'}
+                  message={search ? 'נסה לחפש בשם אחר או בתעודת זהות' : undefined}
+                />
               ) : (
                 <>
                   {displayedBookings.filter(b => !b.eventForm).length > 0 && (
                     <>
-                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitlePending}`}>
-                        {showPastEvents ? '📁 ממתינות למילוי (עבר)' : '⚠️ ממתינות למילוי טופס'} ({displayedBookings.filter(b => !b.eventForm).length})
-                      </p>
-                      <div className={styles.grid}>
+                      <SectionHeader
+                        title={showPastEvents ? 'ממתינות למילוי (עבר)' : 'ממתינות למילוי טופס'}
+                        count={displayedBookings.filter(b => !b.eventForm).length}
+                      />
+                      <div className={styles.cardsGrid}>
                         {displayedBookings.filter(b => !b.eventForm).map(b => (
-                          <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
-                            <div className={styles.cardDate}>{dateStr(b)}</div>
-                            <div className={styles.cardName}>{b.clientAFullName}</div>
-                            {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
-                            <div className={styles.cardDetail}>סוג: {b.eventType}</div>
-                            <div className={styles.cardDetail}>מוזמנים: {b.guestCount}</div>
-                          </div>
+                          <EventCard
+                            key={b.id}
+                            event={toEventCard(b, false)}
+                            onView={() => setSelected(b)}
+                            viewLabel="פתיחת טופס הפקה"
+                          />
                         ))}
                       </div>
                     </>
                   )}
                   {displayedBookings.filter(b => b.eventForm).length > 0 && (
                     <>
-                      <p className={`${styles.listSectionTitle} ${styles.listSectionTitleDone}`}>
-                        {showPastEvents ? '📁 טפסים שמורים (עבר)' : '✓ טפסים שמורים'} ({displayedBookings.filter(b => b.eventForm).length})
-                      </p>
-                      <div className={styles.grid}>
+                      <SectionHeader
+                        title={showPastEvents ? 'טפסים שמורים (עבר)' : 'טפסים שמורים'}
+                        count={displayedBookings.filter(b => b.eventForm).length}
+                      />
+                      <div className={styles.cardsGrid}>
                         {displayedBookings.filter(b => b.eventForm).map(b => (
-                          <div key={b.id} className={styles.card} onClick={() => setSelected(b)}>
-                            <div className={styles.cardDate}>{dateStr(b)}</div>
-                            <div className={styles.cardName}>{b.clientAFullName}</div>
-                            {b.clientBFullName && <div className={styles.cardName}>{b.clientBFullName}</div>}
-                            <div className={styles.cardDetail}>סוג: {b.eventType}</div>
-                            <div className={styles.cardDetail}>מוזמנים: {b.guestCount}</div>
-                            <div className={styles.cardStatus}>✓ טופס קיים</div>
-                          </div>
+                          <EventCard
+                            key={b.id}
+                            event={toEventCard(b, true)}
+                            onView={() => setSelected(b)}
+                            viewLabel="עריכת טופס הפקה"
+                          />
                         ))}
                       </div>
                     </>
@@ -727,11 +749,12 @@ const EventFormManager = () => {
 
           {viewMode === 'forms' && (
             <>
-              <input
-                className={styles.searchInput}
+              <Input
+                fieldClassName={styles.searchWrap}
                 placeholder="חיפוש לפי שם לקוח..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="חיפוש טפסים שמורים"
               />
               <div className={styles.pastEventsBar}>
                 {showPastEvents ? (
@@ -740,7 +763,7 @@ const EventFormManager = () => {
                     className={styles.pastEventsBtn}
                     onClick={() => setShowPastEvents(false)}
                   >
-                    ← חזרה לטפסים של אירועים קרובים
+                    חזרה לטפסים של אירועים קרובים
                   </button>
                 ) : pastForms.length > 0 ? (
                   <button
@@ -748,39 +771,44 @@ const EventFormManager = () => {
                     className={styles.pastEventsBtn}
                     onClick={() => setShowPastEvents(true)}
                   >
-                    📁 טפסי אירועים שעברו ({pastForms.length})
+                    טפסי אירועים שעברו ({pastForms.length})
                   </button>
                 ) : null}
               </div>
               <p className={styles.listCount}>
                 {showPastEvents
-                  ? `📁 טפסים של אירועים שעברו: ${displayedForms.length}`
-                  : `📊 טפסים של אירועים קרובים: ${displayedForms.length}`}
+                  ? `טפסים של אירועים שעברו: ${displayedForms.length}`
+                  : `טפסים של אירועים קרובים: ${displayedForms.length}`}
               </p>
               {displayedForms.length === 0 ? (
-                <p className={styles.empty}>
-                  {search
-                    ? 'לא נמצאו תוצאות.'
-                    : showPastEvents
-                      ? 'אין טפסי אירועים שעברו.'
-                      : 'אין טפסים של אירועים קרובים.'}
-                </p>
+                <EmptyState
+                  title={search ? 'לא נמצאו תוצאות' : showPastEvents ? 'אין טפסי אירועים שעברו' : 'אין טפסים של אירועים קרובים'}
+                  message={search ? 'נסה לחפש בשם לקוח אחר' : undefined}
+                />
               ) : (
                 <div className={styles.savedFormsGrid}>
                   {displayedForms.map((form) => (
                     <div
                       key={form.id}
                       className={styles.savedFormCard}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         if (form.booking) {
                           setSelected(form.booking as Booking);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && form.booking) {
+                          e.preventDefault();
+                          setSelected(form.booking as Booking);
+                        }
+                      }}
                     >
                       <h4>{form.booking?.clientAFullName || '—'}</h4>
-                      <p>📅 {form.booking?.eventDate?.date ? new Date(form.booking.eventDate.date).toLocaleDateString('he-IL') : '—'}</p>
-                      <p>👥 {form.finalGuestCount || '—'} מוזמנים</p>
-                      <p>💾 שמור: {form.createdAt ? new Date(form.createdAt).toLocaleString('he-IL') : '—'}</p>
+                      <p>תאריך: {form.booking?.eventDate?.date ? new Date(form.booking.eventDate.date).toLocaleDateString('he-IL') : '—'}</p>
+                      <p>מוזמנים: {form.finalGuestCount || '—'}</p>
+                      <p>נשמר: {form.createdAt ? new Date(form.createdAt).toLocaleString('he-IL') : '—'}</p>
                     </div>
                   ))}
                 </div>

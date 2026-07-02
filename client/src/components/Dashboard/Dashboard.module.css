@@ -1,0 +1,140 @@
+.dashboard {
+  display: grid;
+  gap: var(--maple-space-6);
+  grid-template-columns: 1fr;
+  padding: var(--maple-space-6);
+  max-width: var(--maple-content-max);
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.pageHeader {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--maple-space-4);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0 0 var(--maple-space-1);
+  font-size: var(--maple-heading);
+  font-weight: 700;
+  color: var(--maple-charcoal);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-muted);
+}
+
+.metrics {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--maple-space-4);
+  grid-template-columns: 1fr;
+}
+
+.upcoming {
+  grid-column: 1 / -1;
+}
+
+.miniCal {
+  grid-column: 1 / -1;
+}
+
+.activity {
+  grid-column: 1 / -1;
+}
+
+.emptyActivity {
+  text-align: center;
+  color: var(--maple-text-muted);
+  padding: var(--maple-space-6);
+  margin: 0;
+}
+
+.activityList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--maple-space-2);
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--maple-space-3);
+  padding: var(--maple-space-3) var(--maple-space-2);
+  border-radius: var(--maple-radius-sm);
+  transition: background var(--maple-transition);
+}
+
+.activityItem:hover {
+  background: var(--maple-surface-raised);
+}
+
+.activityInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activityName {
+  font-weight: 600;
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text);
+}
+
+.activityMeta {
+  font-size: var(--maple-text-xs);
+  color: var(--maple-text-muted);
+}
+
+@media (min-width: 480px) {
+  .metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .dashboard {
+    padding: var(--maple-space-8);
+  }
+}
+
+@media (min-width: 1024px) {
+  .metrics {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .dashboard {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-areas:
+      "header header header header"
+      "metrics metrics metrics metrics"
+      "upcoming upcoming miniCal miniCal"
+      "activity activity activity activity";
+  }
+
+  .pageHeader { grid-area: header; }
+  .metrics { grid-area: metrics; }
+  .upcoming { grid-area: upcoming; }
+  .miniCal { grid-area: miniCal; }
+  .activity { grid-area: activity; }
+}
+
+@media (max-width: 480px) {
+  .dashboard {
+    padding: var(--maple-space-4);
+  }
+}

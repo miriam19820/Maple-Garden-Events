@@ -1,28 +1,47 @@
 .app-layout {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: var(--maple-header-height) 1fr;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "header"
+    "main";
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
   direction: rtl;
   font-family: var(--maple-font);
   background: var(--maple-bg);
   color: var(--maple-text);
 }
 
+@media (min-width: 1024px) {
+  .app-layout {
+    grid-template-columns: var(--maple-sidebar-width) 1fr;
+    grid-template-rows: var(--maple-header-height) 1fr;
+    grid-template-areas:
+      "sidebar header"
+      "sidebar main";
+  }
+}
+
 .app-layout-full {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100dvh;
 }
 
 .app-layout-main {
+  grid-area: main;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .page-content {
   flex: 1;
   padding: var(--maple-page-padding);
-  max-width: 1200px;
+  max-width: var(--maple-content-max);
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
@@ -78,17 +97,21 @@
 
 @media (max-width: 1023px) {
   .app-layout-viewport-fill {
-    min-height: 100dvh;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .app-layout-main-fill {
     flex: 1;
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .app-layout-main-fullwidth {
     flex: 1;
     min-height: 0;
+    overflow-y: auto;
   }
 }

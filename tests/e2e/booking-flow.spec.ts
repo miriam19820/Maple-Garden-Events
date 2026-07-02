@@ -10,7 +10,7 @@ test.describe('Booking golden path', () => {
   test.beforeEach(async ({ page }) => {
     // TODO: Replace with your auth helper (Google OAuth mock, test cookie, or bypass route).
     // await loginAsTestUser(page);
-    await page.goto('/');
+    await page.goto('/calendar');
   });
 
   test('navigates from calendar to booking form', async ({ page }) => {
@@ -32,7 +32,7 @@ test.describe('Booking golden path', () => {
 
   test('submits a new booking event', async ({ page }) => {
     // --- Step 1: Open calendar and pick a date ---
-    await page.goto('/');
+    await page.goto('/calendar');
     // TODO: selector — pick a specific open date
     await page.locator('[data-testid="calendar-day-available"]').first().click();
     // TODO: selector — optional popup confirm

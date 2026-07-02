@@ -9,15 +9,18 @@
 }
 
 .interactive:hover {
-  border-color: var(--maple-green-muted);
+  border-color: var(--maple-gold);
   box-shadow: var(--maple-shadow);
-  transform: translateY(-1px);
 }
 
 .header {
   padding: 16px 20px;
   border-bottom: 1px solid var(--maple-border);
   background: var(--maple-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--maple-space-3);
 }
 
 .headerTitle {

@@ -22,48 +22,62 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: 20px;
+  gap: 12px;
   padding: 24px;
 }
 
 .formGrid {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .formColumn {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
 .formBottomRow {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+}
+
+.formBottomRow .contractBox {
+  margin-top: 0;
+}
+
+.compactNotesWrap {
+  padding: var(--maple-space-3) var(--maple-space-4);
+}
+
+.compactNotesWrap .sectionHeader {
+  margin-bottom: var(--maple-space-2);
+  padding-bottom: var(--maple-space-1);
 }
 
 .formFooter {
   display: flex;
   justify-content: flex-start;
-  gap: 12px;
-  padding: 14px 24px;
+  gap: var(--maple-space-3);
+  padding: var(--maple-space-4) var(--maple-space-6);
   border-top: 1px solid var(--maple-border);
   background: var(--maple-surface);
   flex-shrink: 0;
   position: sticky;
   bottom: 0;
   z-index: 10;
-  box-shadow: 0 -4px 12px rgba(45, 55, 72, 0.06);
+  box-shadow: 0 -2px 12px rgba(28, 31, 35, 0.06);
 }
 
 .contractBox {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--maple-green-light);
+  padding: var(--maple-space-3);
   border-radius: var(--maple-radius-sm);
-  padding: 12px 14px;
+  border: 1px solid var(--maple-green-muted);
+  margin-top: var(--maple-space-3);
   text-align: right;
 }
 
@@ -94,19 +108,19 @@
 }
 
 .akumBox {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--maple-gold-light);
+  border: 1px solid rgba(184, 149, 106, 0.4);
   border-radius: var(--maple-radius-sm);
-  padding: 12px 14px;
+  padding: var(--maple-space-3);
   text-align: right;
 }
 
 .akumTitle {
   display: block;
   font-weight: 700;
-  color: #92400e;
+  color: var(--maple-gold-deep);
   margin-bottom: 6px;
-  font-size: 0.9rem;
+  font-size: var(--maple-text-sm);
 }
 
 .akumCheckLabel {
@@ -115,53 +129,48 @@
   gap: 8px;
   margin-bottom: 8px;
   cursor: pointer;
-  color: #b45309;
+  color: var(--maple-gold-deep);
   font-weight: 500;
-  font-size: 0.88rem;
-}
-
-.akumCheckLabel input {
-  width: 15px;
-  height: 15px;
-  accent-color: #d97706;
+  font-size: var(--maple-text-sm);
 }
 
 .akumText {
-  font-size: 0.85rem;
-  color: #b45309;
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-secondary);
   display: block;
   margin-bottom: 8px;
 }
 
 .akumLink {
-  color: #d97706;
+  color: var(--maple-gold-deep);
   font-weight: 700;
   text-decoration: underline;
   display: inline-block;
   margin-bottom: 10px;
-  font-size: 0.85rem;
+  font-size: var(--maple-text-sm);
 }
 
 .akumInputLabel {
-  font-size: 0.82rem;
+  font-size: var(--maple-text-xs);
   font-weight: 700;
-  color: #92400e;
+  color: var(--maple-gold-deep);
 }
 
 .akumInput {
-  border-color: #fcd34d !important;
-  background-color: #fff !important;
+  border-color: rgba(184, 149, 106, 0.5) !important;
+  background-color: var(--maple-surface) !important;
   max-width: 100%;
 }
 
 .header {
-  background: linear-gradient(135deg, var(--maple-green) 0%, var(--maple-green-dark) 100%);
-  padding: 16px 24px;
-  color: #fff;
+  background: var(--maple-panel-header-bg);
+  padding: var(--maple-space-4) var(--maple-space-6);
+  color: var(--maple-panel-header-text);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--maple-space-3);
   flex-shrink: 0;
+  border-bottom: 3px solid var(--maple-gold);
 }
 
 .headerLogo {
@@ -178,10 +187,11 @@
 }
 
 .title {
-  font-size: 1.35rem;
-  font-weight: 600;
+  font-size: var(--maple-text-xl);
+  font-weight: 700;
   margin: 0;
   letter-spacing: -0.01em;
+  color: var(--maple-panel-header-text);
 }
 
 .titleAccent {
@@ -190,21 +200,20 @@
 }
 
 .overrideOptionBanner {
-  margin: 0 24px 0;
-  padding: 12px 16px;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: var(--maple-radius-sm);
-  color: #92400e;
-  font-size: 0.92rem;
+  margin: 0;
+  padding: var(--maple-space-3) var(--maple-space-6);
+  background: var(--maple-gold-light);
+  border-bottom: 1px solid rgba(184, 149, 106, 0.35);
+  color: var(--maple-gold-deep);
+  font-size: var(--maple-text-sm);
   font-weight: 600;
   line-height: 1.45;
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.88);
-  margin: 6px 0 0;
-  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.82);
+  margin: var(--maple-space-1) 0 0;
+  font-size: var(--maple-text-sm);
   line-height: 1.4;
 }
 
@@ -218,11 +227,12 @@
 .metaBar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
-  background: var(--maple-green-light);
-  padding: 16px 18px;
+  gap: var(--maple-space-3);
+  background: var(--maple-surface-raised);
+  padding: var(--maple-space-4) var(--maple-space-5);
   border-radius: var(--maple-radius);
-  border: 1px solid var(--maple-green-muted);
+  border: 1px solid var(--maple-border);
+  box-shadow: var(--maple-shadow-sm);
 }
 
 .metaBar .inputGroup {
@@ -240,23 +250,36 @@
 .sectionCard {
   background: var(--maple-surface);
   border: 1px solid var(--maple-border);
-  border-radius: var(--maple-radius-lg);
-  padding: 20px;
+  border-radius: var(--maple-radius);
+  padding: var(--maple-space-5);
   box-shadow: var(--maple-shadow-sm);
   transition: border-color var(--maple-transition), box-shadow var(--maple-transition);
 }
 
 .sectionCard:hover {
-  border-color: var(--maple-green-muted);
+  border-color: rgba(184, 149, 106, 0.45);
+  box-shadow: var(--maple-shadow);
 }
 
 .sectionHeader {
-  font-size: 1rem;
+  font-size: var(--maple-text-base);
   font-weight: 700;
-  color: var(--maple-text);
-  margin: 0 0 16px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid var(--maple-green-muted);
+  color: var(--maple-charcoal);
+  margin: 0 0 var(--maple-space-4);
+  padding-bottom: var(--maple-space-2);
+  border-bottom: 1px solid var(--maple-border);
+  display: flex;
+  align-items: center;
+  gap: var(--maple-space-2);
+}
+
+.sectionHeader::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: var(--maple-gold);
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .clientsSectionWedding {
@@ -277,37 +300,37 @@
 }
 
 .clientBlock {
-  background: var(--maple-bg);
+  background: var(--maple-surface-raised);
   border: 1px solid var(--maple-border);
   border-radius: var(--maple-radius-sm);
-  padding: 16px;
+  padding: var(--maple-space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--maple-space-3);
 }
 
 .sectionTitle {
-  font-size: 0.95rem;
-  color: var(--maple-green-dark);
-  border-bottom: 2px solid var(--maple-green-muted);
+  font-size: var(--maple-text-sm);
+  color: var(--maple-charcoal);
+  border-bottom: 1px solid var(--maple-border);
   padding-bottom: 6px;
   margin: 0 0 4px;
   font-weight: 700;
 }
 
 .sectionTitlePrimary {
-  font-size: 0.95rem;
+  font-size: var(--maple-text-sm);
   color: var(--maple-green-dark);
-  border-bottom: 2px solid var(--maple-green-muted);
+  border-bottom: 1px solid var(--maple-green-muted);
   padding-bottom: 6px;
   margin: 0 0 4px;
   font-weight: 700;
 }
 
 .sectionTitleSecondary {
-  font-size: 0.95rem;
+  font-size: var(--maple-text-sm);
   color: var(--maple-text-secondary);
-  border-bottom: 2px solid var(--maple-border-strong);
+  border-bottom: 1px solid var(--maple-border-strong);
   padding-bottom: 6px;
   margin: 0 0 4px;
   font-weight: 700;
@@ -360,6 +383,7 @@
 
 .input {
   width: 100%;
+  min-height: 44px;
   border: 1px solid var(--maple-border-strong);
   border-radius: var(--maple-radius-sm);
   padding: 10px 12px;
@@ -372,8 +396,8 @@
 }
 
 .input:focus {
-  border-color: var(--maple-green);
-  box-shadow: 0 0 0 3px rgba(140, 191, 142, 0.2);
+  border-color: var(--maple-gold);
+  box-shadow: 0 0 0 3px rgba(184, 149, 106, 0.2);
 }
 
 .selectPlaceholder {
@@ -428,18 +452,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--maple-green-light);
-  color: var(--maple-green-dark);
+  background: var(--maple-gold-light);
+  color: var(--maple-gold-deep);
   cursor: pointer;
   font-weight: 600;
-  border: 1px solid var(--maple-green-muted);
+  border: 1px solid rgba(184, 149, 106, 0.4);
   border-radius: var(--maple-radius-sm);
   padding: 10px 12px;
   transition: background var(--maple-transition);
+  font-family: var(--maple-font);
+  font-size: var(--maple-text-sm);
 }
 
 .menuLinkBtn:hover {
-  background: var(--maple-green-muted);
+  background: rgba(184, 149, 106, 0.2);
 }
 
 .menuOverlay {
@@ -618,18 +644,18 @@
 }
 
 .totalsBox {
-  margin-top: 18px;
+  margin-top: var(--maple-space-4);
   text-align: center;
-  background: var(--maple-green-light);
-  padding: 18px;
+  background: var(--maple-gold-light);
+  padding: var(--maple-space-5);
   border-radius: var(--maple-radius);
-  border: 1px solid var(--maple-green-muted);
+  border: 1px solid rgba(184, 149, 106, 0.35);
 }
 
 .totalsTitle {
   margin: 0;
-  color: var(--maple-green-dark);
-  font-size: 1.05rem;
+  color: var(--maple-gold-deep);
+  font-size: var(--maple-text-base);
   font-weight: 700;
 }
 
@@ -637,12 +663,12 @@
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  font-size: 0.9rem;
+  gap: var(--maple-space-2);
+  font-size: var(--maple-text-sm);
   color: var(--maple-text-secondary);
-  margin-top: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--maple-green-muted);
+  margin-top: var(--maple-space-2);
+  padding-bottom: var(--maple-space-2);
+  border-bottom: 1px solid rgba(184, 149, 106, 0.25);
 }
 
 .discountLine {
@@ -650,10 +676,10 @@
 }
 
 .totalsFinal {
-  margin: 10px 0 0;
-  font-size: 1.75rem;
+  margin: var(--maple-space-2) 0 0;
+  font-size: var(--maple-display);
   font-weight: 700;
-  color: var(--maple-green-deep);
+  color: var(--maple-charcoal);
 }
 
 .totalsNote {
@@ -685,7 +711,6 @@
 
 .submitBtn:hover:not(:disabled) {
   background: var(--maple-green-deep);
-  transform: translateY(-1px);
 }
 
 .submitBtn:disabled {
@@ -796,17 +821,15 @@
   .formGrid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: 10px;
+    align-items: start;
   }
 
   .formBottomRow {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .formBottomRowCompact {
-    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: start;
   }
 }
 
@@ -871,27 +894,25 @@
     flex: 0 1 auto;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: 10px;
     padding: 0 24px;
     align-content: start;
+    align-items: start;
     overflow: visible;
   }
 
   .formColumn {
     overflow: visible;
-    gap: 10px;
+    gap: 8px;
   }
 
   .formBottomRow {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-    padding: 10px 24px 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 8px 24px 0;
     flex-shrink: 0;
-  }
-
-  .formBottomRowCompact {
-    grid-template-columns: 1fr 1fr;
+    align-items: start;
   }
 
   .sectionCard {
@@ -1058,47 +1079,185 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: #fffbeb;
-  border: 2px solid #fbbf24;
+  background: var(--maple-gold-light);
+  border: 1px solid rgba(184, 149, 106, 0.45);
   border-radius: var(--maple-radius);
-  padding: 14px 16px;
+  padding: var(--maple-space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  gap: var(--maple-space-3);
+  box-shadow: var(--maple-shadow-sm);
+}
+
+.optionDatesBarHead strong {
+  font-size: var(--maple-text-base);
+  color: var(--maple-gold-deep);
+}
+
+.optionDatesBarHint {
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-secondary);
+}
+
+.optionDateChip {
+  display: flex;
+  align-items: stretch;
+  background: var(--maple-surface);
+  border: 1px solid rgba(184, 149, 106, 0.4);
+  border-radius: var(--maple-radius-sm);
+  overflow: hidden;
+  min-width: 200px;
+}
+
+.optionDateChipIndex {
+  font-size: var(--maple-text-xs);
+  font-weight: 700;
+  color: var(--maple-gold-deep);
+}
+
+.optionDateChipGreg {
+  font-size: var(--maple-text-lg);
+  font-weight: 700;
+  color: var(--maple-charcoal);
+  direction: ltr;
+  text-align: right;
+}
+
+.optionDateChipDow,
+.optionDateChipHeb {
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-muted);
+}
+
+.optionDateChipRemove {
+  border: none;
+  background: rgba(197, 48, 48, 0.08);
+  color: var(--maple-danger);
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.optionAddDateBtn {
+  align-self: flex-start;
+  background: var(--maple-gold-deep);
+  color: #fff;
+  border: none;
+  border-radius: var(--maple-radius-sm);
+  padding: 10px 18px;
+  font-size: var(--maple-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--maple-font);
+  transition: background var(--maple-transition);
+}
+
+.optionAddDateBtn:hover {
+  background: var(--maple-gold);
+}
+
+.optionDatesMaxMsg {
+  margin: 0;
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-muted);
+}
+
+.optionDatesOr {
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-muted);
+}
+
+.optionManualInput {
+  border: 1px solid var(--maple-border-strong);
+  border-radius: var(--maple-radius-sm);
+  padding: 9px 12px;
+  font-size: var(--maple-text-sm);
+  min-width: 160px;
+  direction: ltr;
+  font-family: var(--maple-font);
+}
+
+.optionManualInput:focus {
+  border-color: var(--maple-gold);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(184, 149, 106, 0.2);
+}
+
+.optionManualAddBtn {
+  background: var(--maple-surface);
+  color: var(--maple-gold-deep);
+  border: 1px solid var(--maple-gold);
+  border-radius: var(--maple-radius-sm);
+  padding: 9px 16px;
+  font-size: var(--maple-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--maple-font);
+}
+
+.optionManualAddBtn:hover:not(:disabled) {
+  background: var(--maple-gold-light);
+}
+
+.finalizeDateChoice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--maple-surface);
+  border: 2px solid rgba(184, 149, 106, 0.4);
+  border-radius: var(--maple-radius-sm);
+  padding: 10px 14px;
+  cursor: pointer;
+  min-width: 180px;
+  transition: border-color var(--maple-transition), background var(--maple-transition);
+}
+
+.finalizeDateChoiceSelected {
+  border-color: var(--maple-green-dark);
+  background: var(--maple-green-light);
+}
+
+.optionPickerModal {
+  background: var(--maple-surface);
+  border-radius: var(--maple-radius-lg);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--maple-space-4);
+  box-shadow: var(--maple-shadow-lg);
+  border: 1px solid var(--maple-border);
+}
+
+.optionPickerDay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(52px, 8vh, 72px);
+  border: 1px solid var(--maple-border);
+  border-radius: var(--maple-radius-sm);
+  background: var(--maple-surface);
+  cursor: pointer;
+  padding: clamp(6px, 1vh, 10px);
+  gap: 4px;
+  transition: border-color var(--maple-transition), background var(--maple-transition);
+}
+
+.optionPickerDay:hover:not(:disabled) {
+  border-color: var(--maple-gold);
+  background: var(--maple-gold-light);
 }
 
 .optionDatesBarHead {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
-}
-
-.optionDatesBarHead strong {
-  font-size: 1.05rem;
-  color: #92400e;
-}
-
-.optionDatesBarHint {
-  font-size: 0.85rem;
-  color: #b45309;
+  gap: var(--maple-space-3);
 }
 
 .optionDatesChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.optionDateChip {
-  display: flex;
-  align-items: stretch;
-  background: #fff;
-  border: 1px solid #fcd34d;
-  border-radius: 10px;
-  overflow: hidden;
-  min-width: 200px;
+  gap: var(--maple-space-3);
 }
 
 .optionDateChipMain {
@@ -1107,57 +1266,6 @@
   gap: 2px;
   padding: 10px 12px;
   flex: 1;
-}
-
-.optionDateChipIndex {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #d97706;
-}
-
-.optionDateChipGreg {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #1e293b;
-  direction: ltr;
-  text-align: right;
-}
-
-.optionDateChipDow,
-.optionDateChipHeb {
-  font-size: 0.82rem;
-  color: #64748b;
-}
-
-.optionDateChipRemove {
-  border: none;
-  background: #fef2f2;
-  color: #dc2626;
-  padding: 0 12px;
-  cursor: pointer;
-  font-size: 1rem;
-}
-
-.optionAddDateBtn {
-  align-self: flex-start;
-  background: #f59e0b;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.optionAddDateBtn:hover {
-  background: #d97706;
-}
-
-.optionDatesMaxMsg {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #92400e;
 }
 
 .optionDatesAddSection {
@@ -1170,36 +1278,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-}
-
-.optionDatesOr {
-  font-size: 0.9rem;
-  color: #92400e;
-}
-
-.optionManualInput {
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 0.95rem;
-  min-width: 160px;
-  direction: ltr;
-}
-
-.optionManualAddBtn {
-  background: #fff;
-  color: #92400e;
-  border: 2px solid #f59e0b;
-  border-radius: 8px;
-  padding: 9px 16px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.optionManualAddBtn:hover:not(:disabled) {
-  background: #fffbeb;
+  gap: var(--maple-space-3);
 }
 
 .optionManualAddBtn:disabled {
@@ -1209,68 +1288,64 @@
 
 .optionManualError {
   margin: 0;
-  font-size: 0.85rem;
-  color: #dc2626;
+  font-size: var(--maple-text-sm);
+  color: var(--maple-danger);
 }
 
 .optionPickerManual {
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: var(--maple-space-3);
+  padding-bottom: var(--maple-space-3);
+  border-bottom: 1px solid var(--maple-border);
 }
 
 .optionPickerManualLabel {
   display: block;
-  font-size: 0.85rem;
+  font-size: var(--maple-text-sm);
   font-weight: 600;
-  color: #64748b;
-  margin-bottom: 8px;
+  color: var(--maple-text-secondary);
+  margin-bottom: var(--maple-space-2);
 }
 
 .optionPickerOr {
   margin: 0 0 10px;
   text-align: center;
-  font-size: 0.85rem;
-  color: #94a3b8;
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-muted);
 }
 
 .optionPickerOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  z-index: 1000;
+  background: var(--maple-overlay);
+  z-index: var(--maple-z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-}
-
-.optionPickerModal {
-  background: #fff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 380px;
-  padding: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  padding: var(--maple-space-4);
 }
 
 .optionPickerHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--maple-space-3);
 }
 
 .optionPickerHeader h4 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--maple-text-base);
+  color: var(--maple-charcoal);
 }
 
 .optionPickerClose {
-  border: none;
-  background: transparent;
-  font-size: 1.2rem;
+  border: 1px solid var(--maple-border);
+  background: var(--maple-surface);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
   cursor: pointer;
+  color: var(--maple-text-muted);
 }
 
 .optionPickerNav {
@@ -1283,10 +1358,11 @@
 
 .optionPickerNav button {
   border: 1px solid var(--maple-border);
-  background: #fff;
-  border-radius: 6px;
+  background: var(--maple-surface);
+  border-radius: var(--maple-radius-sm);
   padding: 4px 12px;
   cursor: pointer;
+  font-family: var(--maple-font);
 }
 
 .optionPickerWeekdays {
@@ -1295,8 +1371,8 @@
   gap: clamp(4px, 0.8vh, 8px);
   margin-bottom: clamp(6px, 1vh, 10px);
   text-align: center;
-  font-size: clamp(0.75rem, 1.1vh, 0.88rem);
-  color: #64748b;
+  font-size: var(--maple-text-xs);
+  color: var(--maple-text-muted);
 }
 
 .optionPickerGrid {
@@ -1305,28 +1381,9 @@
   gap: clamp(4px, 0.9vh, 10px);
 }
 
-.optionPickerDay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: clamp(52px, 8vh, 72px);
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f0fdf4;
-  cursor: pointer;
-  padding: clamp(6px, 1vh, 10px);
-  gap: 4px;
-}
-
-.optionPickerDay:hover:not(:disabled) {
-  border-color: #22c55e;
-  background: #dcfce7;
-}
-
 .optionPickerDayDisabled {
-  background: #f1f5f9;
-  color: #94a3b8;
+  background: var(--maple-bg);
+  color: var(--maple-text-muted);
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -1338,7 +1395,7 @@
 
 .optionPickerDayHeb {
   font-size: clamp(0.65rem, 1vh, 0.78rem);
-  color: #64748b;
+  color: var(--maple-text-muted);
   line-height: 1.2;
   text-align: center;
 }
@@ -1349,35 +1406,18 @@
 
 .optionPickerLoading {
   text-align: center;
-  padding: 24px;
-  color: #64748b;
+  padding: var(--maple-space-6);
+  color: var(--maple-text-muted);
 }
 
 .finalizeDateChoices {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.finalizeDateChoice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #fff;
-  border: 2px solid #fcd34d;
-  border-radius: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  min-width: 180px;
-}
-
-.finalizeDateChoiceSelected {
-  border-color: #059669;
-  background: #ecfdf5;
+  gap: var(--maple-space-3);
 }
 
 .finalizeDateChoice input {
-  accent-color: #059669;
+  accent-color: var(--maple-green-dark);
 }
 
 .finalizeDateChoiceText {
@@ -1387,8 +1427,8 @@
 }
 
 .finalizeDateChoiceText strong {
-  font-size: 1.05rem;
-  color: #1e293b;
+  font-size: var(--maple-text-base);
+  color: var(--maple-charcoal);
   direction: ltr;
   text-align: right;
 }

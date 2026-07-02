@@ -1,52 +1,110 @@
 :root {
-  /* ירוק מיפל — מתאים ללוגו המקורי */
-  --maple-green: #8CBF8E;
-  --maple-green-dark: #6BA86E;
-  --maple-green-deep: #4F8F52;
-  --maple-green-light: #EDF7EE;
-  --maple-green-muted: #C5E4C7;
-
-  --maple-bg: #F7F8F6;
+  /* ── Surfaces ── */
+  --maple-bg: #F5F4F1;
   --maple-surface: #FFFFFF;
-  --maple-text: #2D3748;
-  --maple-text-secondary: #4A5568;
-  --maple-text-muted: #718096;
-  --maple-border: #E4E8E4;
-  --maple-border-strong: #CDD5CD;
+  --maple-surface-raised: #FAFAF8;
 
-  --maple-sidebar-bg: #FFFFFF;
-  --maple-sidebar-active: var(--maple-green-light);
-  --maple-accent-gradient: linear-gradient(135deg, #8CBF8E 0%, #6BA86E 100%);
+  /* ── Text ── */
+  --maple-charcoal: #1C1F23;
+  --maple-text: #2A2E33;
+  --maple-text-secondary: #4A5058;
+  --maple-text-muted: #6B7280;
+
+  /* ── Borders ── */
+  --maple-border: #E8E6E1;
+  --maple-border-strong: #D4D0C8;
+
+  /* ── Champagne gold accents ── */
+  --maple-gold: #B8956A;
+  --maple-gold-light: #F5EFE6;
+  --maple-gold-deep: #96784F;
+
+  /* ── Sage brand (refined green) ── */
+  --maple-green: #6B9E6E;
+  --maple-green-dark: #4F7F52;
+  --maple-green-deep: #3D6340;
+  --maple-green-light: #EEF4EF;
+  --maple-green-muted: #C5D9C7;
+
+  /* ── Sidebar (light) ── */
+  --maple-sidebar-bg: #F4F7F4;
+  --maple-sidebar-text: #4A5058;
+  --maple-sidebar-text-active: #3D6340;
+  --maple-sidebar-active: #EEF4EF;
+  --maple-sidebar-border: #E8E6E1;
+  --maple-sidebar-width: 260px;
+  --maple-sidebar-collapsed: 72px;
+
+  /* ── Panel headers & active tabs ── */
+  --maple-panel-header-bg: linear-gradient(135deg, #EEF4EF 0%, #F5EFE6 100%);
+  --maple-panel-header-text: #3D6340;
+  --maple-tab-active-bg: #4F7F52;
+  --maple-overlay: rgba(74, 80, 88, 0.22);
+
+  /* ── Gradients ── */
+  --maple-accent-gradient: linear-gradient(135deg, #6B9E6E 0%, #4F7F52 100%);
+
+  /* ── Semantic ── */
+  --maple-danger: #C53030;
+  --maple-warning: #C05621;
+  --maple-info: #3D6B9E;
+  --maple-success: #4F7F52;
+
+  /* ── Focus / a11y ── */
+  --maple-focus-ring: #B8956A;
+  --maple-focus-offset: 2px;
+  --maple-focus-width: 2px;
+
+  /* ── Spacing (4px grid) ── */
+  --maple-space-1: 4px;
+  --maple-space-2: 8px;
+  --maple-space-3: 12px;
+  --maple-space-4: 16px;
+  --maple-space-5: 20px;
+  --maple-space-6: 24px;
+  --maple-space-8: 32px;
+  --maple-space-10: 40px;
+  --maple-space-12: 48px;
+
+  /* ── Layout ── */
   --maple-page-padding: clamp(16px, 2vw, 32px);
-  --maple-sidebar-width: 240px;
-  --maple-header-height: 56px;
+  --maple-header-height: 60px;
+  --maple-content-max: 1440px;
 
+  /* ── Shape ── */
   --maple-radius: 10px;
   --maple-radius-lg: 14px;
   --maple-radius-sm: 6px;
-  --maple-shadow-sm: 0 1px 3px rgba(45, 55, 72, 0.06);
-  --maple-shadow: 0 4px 12px rgba(45, 55, 72, 0.08);
-  --maple-shadow-lg: 0 8px 24px rgba(45, 55, 72, 0.12);
+  --maple-radius-full: 9999px;
 
+  /* ── Shadows ── */
+  --maple-shadow-sm: 0 1px 3px rgba(28, 31, 35, 0.06);
+  --maple-shadow: 0 4px 12px rgba(28, 31, 35, 0.08);
+  --maple-shadow-lg: 0 8px 24px rgba(28, 31, 35, 0.12);
+
+  /* ── Typography ── */
   --maple-font: 'Heebo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  --maple-text-xs: 0.78rem;
-  --maple-text-sm: 0.875rem;
-  --maple-text-base: 1rem;
-  --maple-text-lg: 1.125rem;
-  --maple-text-xl: 1.4rem;
-  --maple-heading: 1.5rem;
-  --maple-transition: 0.18s ease;
+  --maple-text-xs: clamp(0.75rem, 0.7rem + 0.2vw, 0.8125rem);
+  --maple-text-sm: clamp(0.8125rem, 0.78rem + 0.15vw, 0.875rem);
+  --maple-text-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  --maple-text-lg: clamp(1.0625rem, 1rem + 0.3vw, 1.125rem);
+  --maple-text-xl: clamp(1.2rem, 1.1rem + 0.5vw, 1.375rem);
+  --maple-heading: clamp(1.35rem, 1.2rem + 0.7vw, 1.75rem);
+  --maple-display: clamp(1.75rem, 1.5rem + 1.2vw, 2.25rem);
 
-  --maple-danger: #E53E3E;
-  --maple-warning: #DD6B20;
-  --maple-info: #4A6FA5;
+  /* ── Motion ── */
+  --maple-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* ── Z-index ── */
   --maple-z-header: 200;
+  --maple-z-sidebar: 250;
   --maple-z-drawer: 300;
   --maple-z-panel: 500;
   --maple-z-modal: 1000;
   --maple-z-modal-top: 1100;
 }
+
+/* ── Global utilities ── */
 
 .maple-close-btn {
   width: 36px;
@@ -73,8 +131,8 @@
 .maple-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(26, 32, 44, 0.5);
-  backdrop-filter: blur(3px);
+  background: var(--maple-overlay);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -84,47 +142,49 @@
 }
 
 .maple-modal-header {
-  background: linear-gradient(135deg, var(--maple-green) 0%, var(--maple-green-dark) 100%);
-  color: #fff;
+  background: var(--maple-panel-header-bg);
+  color: var(--maple-panel-header-text);
   padding: 18px 22px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  border-bottom: 3px solid var(--maple-gold);
 }
 
 .maple-modal-header h3,
 .maple-modal-header h2 {
   margin: 0;
-  color: #fff;
-  font-size: 1.15rem;
+  color: var(--maple-panel-header-text);
+  font-size: var(--maple-text-lg);
   font-weight: 700;
 }
 
 .maple-modal-header .maple-close-btn {
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  border-color: var(--maple-border-strong);
+  background: var(--maple-surface);
+  color: var(--maple-text-muted);
 }
 
 .maple-modal-header .maple-close-btn:hover {
-  background: rgba(255, 255, 255, 0.28);
-  color: #fff;
+  background: var(--maple-bg);
+  color: var(--maple-text);
 }
 
 .maple-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--maple-space-2);
   padding: 10px 18px;
   border-radius: var(--maple-radius-sm);
-  font-size: 0.9rem;
+  font-size: var(--maple-text-sm);
   font-weight: 600;
   font-family: var(--maple-font);
   cursor: pointer;
   border: none;
-  transition: background var(--maple-transition), color var(--maple-transition), border-color var(--maple-transition);
+  transition: background var(--maple-transition), color var(--maple-transition),
+    border-color var(--maple-transition);
 }
 
 .maple-btn:disabled {
@@ -173,7 +233,7 @@
 
 .maple-empty-state {
   text-align: center;
-  padding: 48px 24px;
+  padding: var(--maple-space-12) var(--maple-space-6);
   color: var(--maple-text-muted);
-  font-size: 1rem;
+  font-size: var(--maple-text-base);
 }

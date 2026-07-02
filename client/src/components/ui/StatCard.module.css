@@ -1,0 +1,85 @@
+.card {
+  position: relative;
+  background: var(--maple-surface);
+  border: 1px solid var(--maple-border);
+  border-radius: var(--maple-radius);
+  padding: var(--maple-space-5);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--maple-space-4);
+  box-shadow: var(--maple-shadow-sm);
+  overflow: hidden;
+}
+
+.accent {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--maple-gold) 0%, var(--maple-gold-deep) 100%);
+}
+
+.iconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--maple-radius-sm);
+  background: var(--maple-green-light);
+  color: var(--maple-green-dark);
+  flex-shrink: 0;
+  margin-top: var(--maple-space-1);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  margin: 0 0 var(--maple-space-1);
+  font-size: var(--maple-text-sm);
+  color: var(--maple-text-muted);
+  font-weight: 500;
+}
+
+.value {
+  margin: 0;
+  font-size: var(--maple-display);
+  font-weight: 700;
+  color: var(--maple-charcoal);
+  line-height: 1.2;
+}
+
+.trend {
+  margin: var(--maple-space-1) 0 0;
+  font-size: var(--maple-text-xs);
+  color: var(--maple-text-muted);
+}
+
+.skeleton {
+  height: 2rem;
+  width: 60%;
+  border-radius: var(--maple-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--maple-border) 25%,
+    var(--maple-bg) 50%,
+    var(--maple-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--maple-border);
+  }
+}
