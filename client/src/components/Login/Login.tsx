@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
+import { getBrandConfig } from '@shared/brand/index';
 import { API_BASE } from '../../config/api';
 import { useTranslation } from '../../i18n/useTranslation';
 import './Login.css';
@@ -7,8 +8,6 @@ import './Login.css';
 interface LoginProps {
   onLoginSuccess: () => void;
 }
-
-import { getBrandConfig } from '../../../shared/brand/index';
 
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const { t, T } = useTranslation();

@@ -1,4 +1,4 @@
-import { getBrandConfig } from '../../../shared/brand/index';
+import { getBrandConfig } from '@shared/brand/index';
 
 export function buildDefaultOptionInterestMessage(
   clientName: string,
