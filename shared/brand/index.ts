@@ -21,16 +21,16 @@ export function getBrandConfig(): BrandConfig {
   let tenantName = tenantOverride;
   if (!tenantName && typeof process !== 'undefined' && process.env?.TENANT_NAME) {
     tenantName = process.env.TENANT_NAME;
+  } else if (typeof window !== 'undefined' && (window as Window & { __TENANT_NAME__?: string }).__TENANT_NAME__) {
+    tenantName = (window as Window & { __TENANT_NAME__?: string }).__TENANT_NAME__;
+    if (tenantName === '%VITE_TENANT_NAME%') {
+      tenantName = undefined;
+    }
   }
 
-  // Example for loading dynamic JSON config based on tenantName.
-  // In a real multi-tenant setup with many brands, this might read a JSON file 
-  // or fetch from a database at app startup. For now, we fallback to default.
   if (tenantName === 'maple' || !tenantName) {
     currentBrand = defaultBrand;
   } else {
-    // Fallback to default if tenant is not recognized
-    // Ideally we would load `${tenantName}.json` here.
     currentBrand = defaultBrand;
   }
 

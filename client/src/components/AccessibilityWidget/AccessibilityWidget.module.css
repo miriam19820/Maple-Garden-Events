@@ -39,7 +39,7 @@
 }
 
 .toggle[aria-expanded='true'] {
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.35), var(--brand-shadow-lg);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.15), var(--brand-shadow-lg);
 }
 
 .panel {
@@ -151,3 +151,4 @@
     height: 48px;
   }
 }
+
