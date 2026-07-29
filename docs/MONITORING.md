@@ -132,3 +132,9 @@ See `server/.env.example`, `client/.env.example`, `infra/env.*.example`.
 | React Query `QueryCache` / `MutationCache` `onError` | Automatic Sentry for failed queries/mutations |
 
 **Do not** rethrow routine API failures into the ErrorBoundary (would replace the whole UI).
+
+### HTTP route standardization (PR B)
+
+High-traffic controllers/routes use `catchAsync` so failures reach `errorHandler` (Sentry + alerts for unexpected / ≥500).
+
+`requestLogger` is a **safety net**: if a response finishes with status ≥500 and `res.locals.monitoringReported` was not set by `errorHandler`, it captures a Sentry exception. Prefer fixing the handler to throw/`next(err)` rather than relying on the safety net.
