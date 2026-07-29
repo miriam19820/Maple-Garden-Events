@@ -40,7 +40,7 @@ import ContractModal from './sections/ContractModal';
 import MetaBar from './sections/MetaBar';
 import OptionDatesBar from './sections/OptionDatesBar';
 import FinalizeOptionDatesBar from './sections/FinalizeOptionDatesBar';
-import { verifyAllOptionDates, normalizeOptionDate } from '../../utils/optionDateApi';
+import { verifyAllOptionDates, normalizeOptionDate, type OptionDateItem } from '../../utils/optionDateApi';
 import { calendarKeyFromDbDate } from '../../utils/dateLocal';
 import React, { Suspense } from 'react';
 import { API_URL } from '../../config/api';
@@ -55,9 +55,12 @@ import {
   type BookingDraftSnapshot,
 } from '../../utils/bookingDraft';
 
-export const DEFAULT_KOSHER_TYPE = 'machpud';
-export const DEFAULT_VAT_TYPE = 'included';
-export const DEFAULT_SERVING_STYLE = 'american';
+import {
+  DEFAULT_KOSHER_TYPE,
+  DEFAULT_VAT_TYPE,
+  DEFAULT_SERVING_STYLE,
+} from './bookingFormConstants';
+import type { RelatedBookingOption, LoadedBooking, BookingFormData } from './bookingFormTypes';
 
 import {
   buildUpgradesPricingFromSettings,
@@ -78,17 +81,10 @@ const DEFAULT_UPGRADES: Record<UpgradeKey, boolean> = {
   fireworks: false,
 };
 
-/** Placeholder payment links for external suppliers — replace with real URLs */
-export const EXTERNAL_SUPPLIER_LINKS: Record<string, string> = {
-  baseDesign: 'https://example.com/pay/design',
-  lighting: 'https://example.com/pay/lighting',
-  amplification: 'https://example.com/pay/sound',
-  screens: 'https://example.com/pay/screens',
-  fireworks: 'https://example.com/pay/fireworks',
-};
+type BookingInitialDate = string | OptionDateItem;
 
 interface BookingFormProps {
-  initialDates?: any[];
+  initialDates?: BookingInitialDate[];
   isOption?: boolean;
 }
 
@@ -204,19 +200,22 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingBooking, setLoadingBooking] = useState(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [relatedOptions, setRelatedOptions] = useState<any[]>([]);
+  const [relatedOptions, setRelatedOptions] = useState<RelatedBookingOption[]>([]);
   const [activeBookingId, setActiveBookingId] = useState(activeEditId || '');
   const [bookingUpdatedAt, setBookingUpdatedAt] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
 
-  let datesToProcess: any[] = [];
+  let datesToProcess: BookingInitialDate[] = [];
   if (initialDates && initialDates.length > 0) datesToProcess = initialDates;
-  else if (location.state?.selectedDates) datesToProcess = location.state.selectedDates;
-  else if (location.state?.selectedDate) datesToProcess = [location.state.selectedDate];
-  else if (location.state?.date) datesToProcess = [{ date: location.state.date, hebrewDate: location.state.hebrewDate || '' }];
+  else if (location.state?.selectedDates) datesToProcess = location.state.selectedDates as BookingInitialDate[];
+  else if (location.state?.selectedDate) datesToProcess = [location.state.selectedDate as BookingInitialDate];
+  else if (location.state?.date) datesToProcess = [{ date: location.state.date as string, hebrewDate: (location.state.hebrewDate as string) || '' }];
 
-  const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<any[]>(
+  const initialCalendarDateId = datesToProcess.length > 0
+    ? normalizeOptionDate(datesToProcess[0]).date
+    : ((location.state?.date as string) || '');
+  const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<OptionDateItem[]>(
     datesToProcess.map(normalizeOptionDate)
   );
   const isOptionMode = !convertFromOption && (forcedIsOption || location.state?.isOption);
@@ -233,12 +232,12 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       : '';
   const [optionDurationHours, setOptionDurationHours] = useState(48);
   const [orderNumber, setOrderNumber] = useState('');
-  const [optionDatesSlotWarning, setOptionDatesSlotWarning] = useState('');
+  const [asyncOptionDatesWarning, setAsyncOptionDatesWarning] = useState('');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<BookingFormData>({
     createdBy: '', clientAFirstName: '', clientALastName: '', clientAFullName: '', clientAIdNumber: '', clientAPhone: '', clientAPhone2: '', clientAEmail: '', clientACity: '', clientAAddress: '',
     clientBFullName: '', clientBIdNumber: '', clientBPhone: '', clientBPhone2: '', clientBEmail: '', clientBCity: '', clientBAddress: '',
-    calendarDateId: '', eventType: defaultEventTypeForForm, timeOfDay: initialTimeSlot, startTime: initialSlotHours.start, endTime: initialSlotHours.end,
+    calendarDateId: initialCalendarDateId, eventType: defaultEventTypeForForm, timeOfDay: initialTimeSlot, startTime: initialSlotHours.start, endTime: initialSlotHours.end,
     guestCount: '', minimumGuestCount: '', optionalGuestCount: '', finalPricePortion: '200', discountPercent: '', discountAmount: '', vatType: DEFAULT_VAT_TYPE, paymentTerms: '', leadSource: '', clientSignatureUrl: '',
    
     akumApprovalCode: '', hasMusic: false, hallRentalPrice: '',
@@ -259,12 +258,19 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [contractText, setContractText] = useState('');
   const [contractBaseText, setContractBaseText] = useState('');
-  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTermsTemplate[]>(DEFAULT_PAYMENT_TEMPLATES);
+  const [preloadedPaymentTemplates, setPreloadedPaymentTemplates] = useState<PaymentTermsTemplate[]>(DEFAULT_PAYMENT_TEMPLATES);
   const [paymentTemplateId, setPaymentTemplateId] = useState('50-50');
   const [paymentTermsCustom, setPaymentTermsCustom] = useState(false);
   const [paymentTermsText, setPaymentTermsText] = useState('');
-  const [vatRate, setVatRate] = useState(17);
   const { data: globalSettings } = useGlobalSettingsQuery();
+  const vatRate = globalSettings?.vatRate != null ? Number(globalSettings.vatRate) : 17;
+  const paymentTemplates = useMemo(() => {
+    if (globalSettings?.paymentTemplates) {
+      const meta = getPaymentTemplatesFromSettings(globalSettings);
+      if (meta.templates && meta.templates.length > 0) return meta.templates;
+    }
+    return preloadedPaymentTemplates;
+  }, [globalSettings, preloadedPaymentTemplates]);
   const upgradesPricing = useMemo(
     () => buildUpgradesPricingFromSettings(globalSettings),
     [globalSettings],
@@ -275,10 +281,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   );
 
   useEffect(() => {
-    if (globalSettings?.vatRate != null) setVatRate(Number(globalSettings.vatRate));
-  }, [globalSettings]);
-
-  useEffect(() => {
     getAuthUser().then((user) => {
       if (user?.email) setUserEmail(user.email);
     });
@@ -286,48 +288,56 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   useEffect(() => {
     if (isEditMode || !userEmail || draftRestored) return;
-    const draft = loadBookingDraft(userEmail, isOptionMode);
-    if (!draft) {
+    void Promise.resolve().then(() => {
+      const draft = loadBookingDraft(userEmail, isOptionMode);
+      if (!draft) {
+        setDraftRestored(true);
+        return;
+      }
+      const restore = window.confirm(t(T.BOOKING.FORM.DRAFT_RESTORE_CONFIRM));
+      if (restore) {
+        const draftEventType = String((draft.formData as { eventType?: string }).eventType || '').trim();
+        setFormData((prev) => ({
+          ...prev,
+          ...(draft.formData as typeof prev),
+          // Keep Wedding default on option drafts that were saved without an event type.
+          eventType:
+            draftEventType ||
+            (isOptionMode ? DEFAULT_EVENT_TYPE : prev.eventType),
+        }));
+        setMenuNotesList(draft.menuNotesList);
+        setInternalNotesList(draft.internalNotesList);
+        setServingStyle(draft.servingStyle);
+        setKosherType(draft.kosherType);
+        setUpgrades(draft.upgrades);
+        setDepositMethod(draft.depositMethod);
+        setContractSigned(draft.contractSigned);
+        setSelectedDatesDisplay(draft.selectedDatesDisplay as OptionDateItem[]);
+        setOptionDurationHours(draft.optionDurationHours);
+        setPaymentTemplateId(draft.paymentTemplateId);
+        setPaymentTermsCustom(draft.paymentTermsCustom);
+        setPaymentTermsText(draft.paymentTermsText);
+      } else {
+        clearBookingDraft(isOptionMode);
+      }
       setDraftRestored(true);
-      return;
-    }
-    const restore = window.confirm(t(T.BOOKING.FORM.DRAFT_RESTORE_CONFIRM));
-    if (restore) {
-      const draftEventType = String((draft.formData as { eventType?: string }).eventType || '').trim();
-      setFormData((prev) => ({
-        ...prev,
-        ...(draft.formData as typeof prev),
-        // Keep Wedding default on option drafts that were saved without an event type.
-        eventType:
-          draftEventType ||
-          (isOptionMode ? DEFAULT_EVENT_TYPE : prev.eventType),
-      }));
-      setMenuNotesList(draft.menuNotesList);
-      setInternalNotesList(draft.internalNotesList);
-      setServingStyle(draft.servingStyle);
-      setKosherType(draft.kosherType);
-      setUpgrades(draft.upgrades);
-      setDepositMethod(draft.depositMethod);
-      setContractSigned(draft.contractSigned);
-      setSelectedDatesDisplay(draft.selectedDatesDisplay as typeof selectedDatesDisplay);
-      setOptionDurationHours(draft.optionDurationHours);
-      setPaymentTemplateId(draft.paymentTemplateId);
-      setPaymentTermsCustom(draft.paymentTermsCustom);
-      setPaymentTermsText(draft.paymentTermsText);
-    } else {
-      clearBookingDraft(isOptionMode);
-    }
-    setDraftRestored(true);
-  }, [isEditMode, userEmail, draftRestored, isOptionMode]);
+    });
+  }, [isEditMode, userEmail, draftRestored, isOptionMode, t, T]);
 
-  // Hard guarantee: new option forms always show Wedding, even if a draft/filter raced.
-  useEffect(() => {
-    if (isEditMode || !isOptionMode) return;
-    if (formData.eventType) return;
-    setFormData((prev) => (prev.eventType ? prev : { ...prev, eventType: DEFAULT_EVENT_TYPE }));
-  }, [isEditMode, isOptionMode, formData.eventType]);
+  const updateSelectedDatesDisplay = (dates: OptionDateItem[]) => {
+    const firstDate = dates.length > 0 ? dates[0].date : '';
+    setSelectedDatesDisplay(dates);
+    setFormData(prev => ({ ...prev, calendarDateId: firstDate }));
+  };
 
-  const buildDraftSnapshot = (): BookingDraftSnapshot => ({
+  const effectiveSlotForWarning = normalizeTimeSlot(formData.timeOfDay as string);
+  const optionDatesSlotWarning = (!isOption || selectedDatesDisplay.length === 0)
+    ? ''
+    : !effectiveSlotForWarning
+      ? t(T.BOOKING.FORM.SELECT_TIME_BEFORE_DATES)
+      : asyncOptionDatesWarning;
+
+  const draftSnapshot = useMemo<BookingDraftSnapshot>(() => ({
     formData: { ...formData },
     menuNotesList,
     internalNotesList,
@@ -342,34 +352,15 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     paymentTemplateId,
     paymentTermsCustom,
     paymentTermsText,
-  });
+  }), [formData, menuNotesList, internalNotesList, servingStyle, kosherType, upgrades, depositMethod, contractSigned, selectedDatesDisplay, isOption, optionDurationHours, paymentTemplateId, paymentTermsCustom, paymentTermsText]);
 
   useEffect(() => {
     if (isEditMode || !userEmail || !draftRestored) return;
     const timer = setTimeout(() => {
-      saveBookingDraft(userEmail, isOptionMode, buildDraftSnapshot());
+      saveBookingDraft(userEmail, isOptionMode, draftSnapshot);
     }, 800);
     return () => clearTimeout(timer);
-  }, [
-    isEditMode,
-    userEmail,
-    draftRestored,
-    isOptionMode,
-    formData,
-    menuNotesList,
-    internalNotesList,
-    servingStyle,
-    kosherType,
-    upgrades,
-    depositMethod,
-    contractSigned,
-    selectedDatesDisplay,
-    isOption,
-    optionDurationHours,
-    paymentTemplateId,
-    paymentTermsCustom,
-    paymentTermsText,
-  ]);
+  }, [isEditMode, userEmail, draftRestored, isOptionMode, draftSnapshot]);
 
   useEffect(() => {
     apiFetch(`${API_URL}/bookings/contract-template`)
@@ -389,7 +380,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           setPaymentTemplateId(json.data.paymentTemplateId);
         }
         if (Array.isArray(json.data.paymentTemplates) && json.data.paymentTemplates.length > 0) {
-          setPaymentTemplates(json.data.paymentTemplates);
+          setPreloadedPaymentTemplates(json.data.paymentTemplates);
         }
       })
       .catch((error) => {
@@ -400,29 +391,9 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   }, []);
 
   useEffect(() => {
-    if (globalSettings?.paymentTemplates) {
-      const meta = getPaymentTemplatesFromSettings(globalSettings);
-      setPaymentTemplates(meta.templates);
-    }
-  }, [globalSettings]);
-
-  useEffect(() => {
-    if (selectedDatesDisplay.length > 0) {
-      const firstDate = typeof selectedDatesDisplay[0] === 'object' ? selectedDatesDisplay[0].date : selectedDatesDisplay[0];
-      setFormData(prev => ({ ...prev, calendarDateId: firstDate || '' }));
-    }
-  }, [selectedDatesDisplay]);
-
-  useEffect(() => {
-    if (!isOption || selectedDatesDisplay.length === 0) {
-      setOptionDatesSlotWarning('');
-      return;
-    }
+    if (!isOption || selectedDatesDisplay.length === 0) return;
     const slot = normalizeTimeSlot(formData.timeOfDay as string);
-    if (!slot) {
-      setOptionDatesSlotWarning(t(T.BOOKING.FORM.SELECT_TIME_BEFORE_DATES));
-      return;
-    }
+    if (!slot) return;
     let cancelled = false;
     verifyAllOptionDates(
       selectedDatesDisplay.map(normalizeOptionDate),
@@ -431,10 +402,10 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       t,
     ).then((verify) => {
       if (cancelled) return;
-      setOptionDatesSlotWarning(verify.ok ? '' : verify.error);
+      setAsyncOptionDatesWarning(verify.ok ? '' : verify.error);
     });
     return () => { cancelled = true; };
-  }, [isOption, formData.timeOfDay, formData.eventType, selectedDatesDisplay]);
+  }, [isOption, formData.timeOfDay, formData.eventType, selectedDatesDisplay, t]);
 
   useEffect(() => {
     // Existing bookings already have a code; convert-from-option uses the EVT peek below.
@@ -491,7 +462,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     }
   }, [convertFromOption, activeEditId]);
 
-  const applyBookingToForm = (b: any) => {
+  const applyBookingToForm = (b: LoadedBooking) => {
     const phoneA = parseCombinedPhone(b.clientAPhone);
     const phoneB = parseCombinedPhone(b.clientBPhone);
     const addrA = parseAddress(b.clientAAddress);
@@ -554,6 +525,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     if (b.kosherType) setKosherType(b.kosherType);
   };
 
+  const applyBookingToFormRef = useRef(applyBookingToForm);
+  const updateSelectedDatesDisplayRef = useRef(updateSelectedDatesDisplay);
+  useEffect(() => {
+    applyBookingToFormRef.current = applyBookingToForm;
+    updateSelectedDatesDisplayRef.current = updateSelectedDatesDisplay;
+  });
+
   useEffect(() => {
     if (!activeEditId) return;
     const loadBooking = async () => {
@@ -572,7 +550,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           navigate('/calendar');
           return;
         }
-        applyBookingToForm(b);
+        applyBookingToFormRef.current(b);
         setActiveBookingId(b.id);
         if (b.updatedAt) setBookingUpdatedAt(b.updatedAt);
         setIsOption(false);
@@ -596,15 +574,14 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           return [b];
         };
 
-        const applyRelatedOptionDates = (related: any[]) => {
-          setSelectedDatesDisplay(
-            related
-              .map((opt: any) => ({
-                date: opt.eventDate?.date ? calendarKeyFromDbDate(new Date(opt.eventDate.date)) : '',
-                hebrewDate: opt.eventDate?.hebrewDate || '',
-              }))
-              .filter((d) => d.date)
-          );
+        const applyRelatedOptionDates = (related: RelatedBookingOption[]) => {
+          const dates: OptionDateItem[] = related
+            .map((opt) => ({
+              date: opt.eventDate?.date ? calendarKeyFromDbDate(new Date(opt.eventDate.date)) : '',
+              hebrewDate: opt.eventDate?.hebrewDate || '',
+            }))
+            .filter((d) => d.date);
+          updateSelectedDatesDisplayRef.current(dates);
         };
 
         if (convertFromOption) {
@@ -623,7 +600,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       }
     };
     loadBooking();
-  }, [activeEditId, convertFromOption, navigate]);
+  }, [activeEditId, convertFromOption, navigate, t, T]);
 
   const handleSelectFinalizeDate = (bookingId: string) => {
     const selected = relatedOptions.find((o) => o.id === bookingId);
@@ -633,57 +610,55 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       ? calendarKeyFromDbDate(new Date(selected.eventDate.date))
       : '';
     if (eventDateStr) {
-      setSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: selected.eventDate?.hebrewDate || '' }]);
-      setFormData((prev) => ({ ...prev, calendarDateId: eventDateStr }));
+      updateSelectedDatesDisplay([{ date: eventDateStr, hebrewDate: selected.eventDate?.hebrewDate || '' }]);
     }
   };
 
-  useEffect(() => {
-    if (isEditMode) return;
-    const free = availableSlots;
-    const current = formData.timeOfDay as TimeSlot;
+  // Keep create-mode slot selection aligned with availability (same rules as former effects).
+  if (!isEditMode) {
+    const currentSlot = formData.timeOfDay as TimeSlot;
+    let desiredSlot: TimeSlot | null = null;
 
-    if (current && unavailableSlots.includes(current)) {
-      const next = getDefaultTimeSlot(free);
-      if (!next) return;
-      const hours = getSlotHours(next);
-      setFormData((prev) =>
-        prev.timeOfDay === next && prev.startTime === hours.start && prev.endTime === hours.end
-          ? prev
-          : { ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }
-      );
-    } else if (!current && free.length > 0) {
-      const next = getDefaultTimeSlot(free);
-      if (!next) return;
-      const hours = getSlotHours(next);
-      setFormData((prev) => ({ ...prev, timeOfDay: next, startTime: hours.start, endTime: hours.end }));
-    }
-  }, [isEditMode, unavailableSlots.join(','), availableSlots.join(','), formData.timeOfDay]);
-
-  useEffect(() => {
-    if (isEditMode) return;
     if (formData.eventType === DEFAULT_EVENT_TYPE) {
       const eveningOk = availableSlots.includes('evening') && !unavailableSlots.includes('evening');
-      if (eveningOk && formData.timeOfDay !== 'evening') {
-        const { start, end } = getSlotHours('evening');
-        setFormData((prev) => ({ ...prev, timeOfDay: 'evening', startTime: start, endTime: end }));
-        return;
+      if (eveningOk && currentSlot !== 'evening') {
+        desiredSlot = 'evening';
       }
     }
-    const slot = formData.timeOfDay as TimeSlot;
-    if (!slot || !SLOT_HOURS[slot]) return;
-    const { start, end } = getSlotHours(slot);
-    setFormData((prev) => {
-      if (prev.startTime === start && prev.endTime === end) return prev;
-      return { ...prev, startTime: start, endTime: end };
-    });
-  }, [formData.timeOfDay, formData.eventType, isEditMode, unavailableSlots.join(','), availableSlots.join(',')]);
 
-  useEffect(() => {
-    if (formData.eventType !== HALL_ONLY_EVENT_TYPE) {
-      setErrors((prev) => (prev.hallRentalPrice ? { ...prev, hallRentalPrice: '' } : prev));
+    if (desiredSlot == null) {
+      if (currentSlot && unavailableSlots.includes(currentSlot)) {
+        desiredSlot = getDefaultTimeSlot(availableSlots);
+      } else if (!currentSlot && availableSlots.length > 0) {
+        desiredSlot = getDefaultTimeSlot(availableSlots);
+      }
     }
-  }, [formData.eventType]);
+
+    if (desiredSlot) {
+      const hours = getSlotHours(desiredSlot);
+      if (
+        formData.timeOfDay !== desiredSlot
+        || formData.startTime !== hours.start
+        || formData.endTime !== hours.end
+      ) {
+        setFormData((prev) => ({
+          ...prev,
+          timeOfDay: desiredSlot,
+          startTime: hours.start,
+          endTime: hours.end,
+        }));
+      }
+    } else if (currentSlot && SLOT_HOURS[currentSlot]) {
+      const { start, end } = getSlotHours(currentSlot);
+      if (formData.startTime !== start || formData.endTime !== end) {
+        setFormData((prev) => (
+          prev.startTime === start && prev.endTime === end
+            ? prev
+            : { ...prev, startTime: start, endTime: end }
+        ));
+      }
+    }
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -695,11 +670,29 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         minimumGuestCount: value,
         optionalGuestCount: calcOptionalGuestCount(value),
       }));
+    } else if (name === 'timeOfDay') {
+      const slot = value as TimeSlot;
+      const hours = slot && SLOT_HOURS[slot] ? getSlotHours(slot) : null;
+      setFormData(prev => ({
+        ...prev,
+        timeOfDay: slot,
+        ...(hours ? { startTime: hours.start, endTime: hours.end } : {}),
+      }));
+    } else if (name === 'eventType' && !isEditMode && value === DEFAULT_EVENT_TYPE) {
+      const eveningOk = availableSlots.includes('evening') && !unavailableSlots.includes('evening');
+      if (eveningOk) {
+        const { start, end } = getSlotHours('evening');
+        setFormData(prev => ({ ...prev, eventType: value, timeOfDay: 'evening', startTime: start, endTime: end }));
+      } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+      }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
     if (name === 'hallRentalPrice') {
       setErrors(prev => ({ ...prev, hallRentalPrice: validateHallRentalPrice(value) }));
+    } else if (name === 'eventType' && value !== HALL_ONLY_EVENT_TYPE) {
+      setErrors(prev => (prev.hallRentalPrice ? { ...prev, hallRentalPrice: '' } : prev));
     } else if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -844,42 +837,52 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     setPaymentTermsText(text);
   };
 
-  useEffect(() => {
-    if (paymentTermsCustom || !contractBaseText) return;
+  const eventDateStr = selectedDatesDisplay.length > 0
+    ? selectedDatesDisplay[0].date
+    : (formData.calendarDateId || null);
+
+  const generatedPaymentTermsText = useMemo(() => {
+    if (paymentTermsCustom || !contractBaseText) return null;
     const template = findPaymentTemplate(paymentTemplates, paymentTemplateId);
-    if (!template) return;
-    const paragraph = renderPaymentTermsText(template, {
+    if (!template) return null;
+    return renderPaymentTermsText(template, {
       total: totals.hallTotal,
-      eventDate: getEventDateStr(),
+      eventDate: eventDateStr,
     });
-    setPaymentTermsText(paragraph);
   }, [
-    paymentTemplateId,
     paymentTermsCustom,
     contractBaseText,
     paymentTemplates,
+    paymentTemplateId,
     totals.hallTotal,
-    selectedDatesDisplay,
-    formData.calendarDateId,
+    eventDateStr,
   ]);
 
-  useEffect(() => {
-    if (!contractBaseText) return;
-    const lineItemOptions = {
-      upgrades,
-      kosherType,
-      guestCount: Number(formData.guestCount) || 0,
-      isHallOnly,
-      isFoodRelevant,
-      upgradesPricing,
-      upgradeKeys: visibleUpgradeKeys,
-    };
-    setContractText(resolveFullContractText({
+  const [prevGeneratedPaymentTerms, setPrevGeneratedPaymentTerms] = useState<string | null>(null);
+  if (
+    generatedPaymentTermsText !== null
+    && generatedPaymentTermsText !== prevGeneratedPaymentTerms
+  ) {
+    setPrevGeneratedPaymentTerms(generatedPaymentTermsText);
+    setPaymentTermsText(generatedPaymentTermsText);
+  }
+
+  const generatedContractText = useMemo(() => {
+    if (!contractBaseText) return null;
+    return resolveFullContractText({
       baseContract: contractBaseText,
       paymentTerms: paymentTermsText,
-      lineItemOptions,
+      lineItemOptions: {
+        upgrades,
+        kosherType,
+        guestCount: Number(formData.guestCount) || 0,
+        isHallOnly,
+        isFoodRelevant,
+        upgradesPricing,
+        upgradeKeys: visibleUpgradeKeys,
+      },
       menuNotes: menuNotesList,
-    }));
+    });
   }, [
     contractBaseText,
     paymentTermsText,
@@ -892,6 +895,15 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     upgradesPricing,
     visibleUpgradeKeys,
   ]);
+
+  const [prevGeneratedContractText, setPrevGeneratedContractText] = useState<string | null>(null);
+  if (
+    generatedContractText !== null
+    && generatedContractText !== prevGeneratedContractText
+  ) {
+    setPrevGeneratedContractText(generatedContractText);
+    setContractText(generatedContractText);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1008,7 +1020,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         return;
       }
       datesForSubmit = verify.dates;
-      setSelectedDatesDisplay(verify.dates);
+      updateSelectedDatesDisplay(verify.dates);
     }
 
     const selectedSlot = normalizeTimeSlot(formData.timeOfDay, formData.startTime);
@@ -1132,7 +1144,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         }));
         if (isMounted.current) setIsSubmitting(false);
       }
-    } catch (error) {
+    } catch {
       alert(t(T.BOOKING.ALERTS.SERVER_CONNECTION_ERROR));
       if (isMounted.current) setIsSubmitting(false);
     }
@@ -1182,7 +1194,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           {isOption && (
             <OptionDatesBar
               selectedDates={selectedDatesDisplay}
-              onChange={setSelectedDatesDisplay}
+              onChange={updateSelectedDatesDisplay}
               eventType={formData.eventType}
               timeSlot={formData.timeOfDay}
               slotWarning={optionDatesSlotWarning}

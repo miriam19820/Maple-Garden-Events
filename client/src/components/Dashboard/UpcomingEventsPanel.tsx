@@ -8,6 +8,7 @@ import {
   HALL_ONLY_EVENT_TYPE,
   translateByValue,
 } from '@shared/i18n/bookingLookups';
+import { type BookingApi } from '../../utils/bookingApi';
 import {
   SectionHeader,
   DataTable,
@@ -26,7 +27,7 @@ const startOfDay = (d: Date) => {
   return copy;
 };
 
-const getEventDay = (b: any) =>
+const getEventDay = (b: BookingApi) =>
   b.eventDate?.date ? startOfDay(new Date(b.eventDate.date)) : null;
 
 export function UpcomingEventsPanel() {
@@ -37,24 +38,24 @@ export function UpcomingEventsPanel() {
     limit: 500,
   });
 
-  const formatEventType = (value: string) =>
-    translateByValue(t, EVENT_TYPE_KEY_BY_VALUE, value);
+  const formatEventType = (value?: string) =>
+    translateByValue(t, EVENT_TYPE_KEY_BY_VALUE, value ?? '');
 
-  const dateStr = (b: any) =>
+  const dateStr = (b: BookingApi) =>
     b.eventDate?.date ? formatDate(b.eventDate.date, locale) : t(T.COMMON.LABELS.EM_DASH);
 
-  const toEventCard = (b: any): EventCardData => ({
+  const toEventCard = (b: BookingApi): EventCardData => ({
     id: b.id,
     date: dateStr(b),
     code: b.eventCode,
-    clientName: b.clientAFullName,
+    clientName: b.clientAFullName ?? '',
     clientNameB: b.clientBFullName,
     eventType: formatEventType(b.eventType),
-    timeOfDay: b.timeOfDay,
+    timeOfDay: b.timeOfDay ?? undefined,
     guestCount:
       b.eventType === HALL_ONLY_EVENT_TYPE
         ? t(T.STATUS.HALL_RENTAL_NO_PORTIONS)
-        : b.guestCount,
+        : (b.guestCount ?? undefined),
     status: 'confirmed',
     statusLabel: t(T.STATUS.CONFIRMED),
   });
@@ -62,16 +63,16 @@ export function UpcomingEventsPanel() {
   const upcoming = useMemo(() => {
     const today = startOfDay(new Date());
     return (data?.data ?? [])
-      .filter((b: any) => !b.isOption)
-      .filter((b: any) => {
+      .filter((b: BookingApi) => !b.isOption)
+      .filter((b: BookingApi) => {
         const day = getEventDay(b);
         return day !== null && day >= today;
       })
-      .sort((a: any, b: any) => getEventDay(a)!.getTime() - getEventDay(b)!.getTime())
+      .sort((a: BookingApi, b: BookingApi) => getEventDay(a)!.getTime() - getEventDay(b)!.getTime())
       .slice(0, 5);
   }, [data]);
 
-  const columns: DataTableColumn<any>[] = [
+  const columns: DataTableColumn<BookingApi>[] = [
     { key: 'date', header: t(T.COMMON.LABELS.DATE), render: (b) => dateStr(b) },
     {
       key: 'code',
@@ -120,11 +121,11 @@ export function UpcomingEventsPanel() {
               caption={t(T.DASHBOARD.UPCOMING_EVENTS)}
               columns={columns}
               data={upcoming}
-              rowKey={(b: any) => b.id}
+              rowKey={(b) => b.id}
             />
           </div>
           <div className={styles.cardsWrap}>
-            {upcoming.map((b: any) => (
+            {upcoming.map((b) => (
               <EventCard key={b.id} event={toEventCard(b)} />
             ))}
           </div>

@@ -14,7 +14,6 @@ export function reportClientError(error: unknown, options?: ReportClientErrorOpt
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.warn('[reportClientError]', error, options?.extra);
     }
     return;

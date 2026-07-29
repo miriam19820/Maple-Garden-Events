@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { T as TranslationDict, type TranslationKey } from '@shared/i18n';
 import { useTranslation } from '../../i18n/useTranslation';
 import { useDesignGalleryQuery } from '../../hooks/queries';
 import { apiFetch } from '../../services/api';
@@ -13,12 +14,12 @@ import {
   type DesignGalleryItemDto,
 } from '@shared/gallery';
 import { DesignImageLightbox } from '../DesignGallery/DesignImageLightbox';
-import { useToast } from '../ui/Toast/ToastProvider';
+import { useToast } from '../ui/Toast/ToastContext';
 import './DesignGalleryAdmin.css';
 
 function categoryLabel(
-  t: (key: any) => string,
-  T: any,
+  t: (key: TranslationKey) => string,
+  T: typeof TranslationDict,
   category: string,
 ): string {
   switch (category) {

@@ -6,8 +6,29 @@ import {
   EVENT_TYPE_KEY_BY_VALUE,
   translateByValue,
 } from '@shared/i18n/bookingLookups';
+import type { OptionDateItem } from '../../../utils/optionDateApi';
+import type { BookingFormChangeHandler, BookingFormData } from '../bookingFormTypes';
 
-const MetaBar = ({ formData, handleChange, isOption, orderNumber, optionDurationHours, setOptionDurationHours, calendarEventTypeFilter }: any) => {
+interface MetaBarProps {
+  formData: BookingFormData;
+  handleChange: BookingFormChangeHandler;
+  isOption: boolean;
+  orderNumber?: string;
+  optionDurationHours: number;
+  setOptionDurationHours: (hours: number) => void;
+  selectedDatesDisplay?: OptionDateItem[];
+  calendarEventTypeFilter?: string;
+}
+
+const MetaBar = ({
+  formData,
+  handleChange,
+  isOption,
+  orderNumber,
+  optionDurationHours,
+  setOptionDurationHours,
+  calendarEventTypeFilter,
+}: MetaBarProps) => {
   const { data: staffMembers = [] } = useStaffQuery();
   const { t, T, locale } = useTranslation();
 
