@@ -1,7 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
 import { useDesignGalleryQuery } from '../../hooks/queries';
-import { useToast } from '../ui/Toast/ToastProvider';
+import { useToast } from '../ui/Toast/ToastContext';
 import {
   DESIGN_CATEGORY_TO_FORM_FIELD,
   DESIGN_GALLERY_CATEGORIES,

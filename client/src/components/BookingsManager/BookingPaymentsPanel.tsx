@@ -7,7 +7,7 @@ import {
 } from '@shared/i18n/statusLookups';
 import { formatCurrency, formatDate } from '@shared/i18n/formatters';
 import { useTranslation } from '../../i18n/useTranslation';
-import { useToast } from '../ui/Toast/ToastProvider';
+import { useToast } from '../ui/Toast/ToastContext';
 import {
   useBookingPaymentsQuery,
   useCreateBookingPaymentMutation,

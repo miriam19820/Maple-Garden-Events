@@ -4,6 +4,7 @@ import { API_URL } from '../../config/api';
 import { useTranslation } from '../../i18n/useTranslation';
 import { formatDate } from '@shared/i18n/formatters';
 import { runUserAction } from '../../utils/runUserAction';
+import { buildDefaultOptionInterestMessage } from './buildDefaultOptionInterestMessage';
 import styles from './NotifyOptionModal.module.css';
 
 interface Props {
@@ -16,19 +17,6 @@ interface Props {
   eventDateStr: string;
   onClose: () => void;
   onSuccess?: () => void;
-}
-
-export function buildDefaultOptionInterestMessage(
-  translate: (key: string, params?: Record<string, string | number>) => string,
-  defaultKey: string,
-  clientName: string,
-  eventDateStr: string,
-  locale: string,
-): string {
-  const dateDisplay = eventDateStr.includes('-')
-    ? formatDate(eventDateStr, locale as 'he' | 'en')
-    : formatDate(new Date(eventDateStr), locale as 'he' | 'en');
-  return translate(defaultKey, { clientName, dateStr: dateDisplay });
 }
 
 const NotifyOptionModal = ({ booking, eventDateStr, onClose, onSuccess }: Props) => {
