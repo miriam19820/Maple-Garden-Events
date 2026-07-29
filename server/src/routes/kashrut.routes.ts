@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import prisma from '../config/prisma';
 import { requireAuth, type AuthRequest } from '../middlewares/auth';
 import { requireRole } from '../middlewares/requireRole';
@@ -6,7 +6,9 @@ import { RBAC } from '../config/rbac';
 import { validate } from '../middlewares/validate';
 import { updateKashrutSchema } from '../validators/kashrut.validator';
 import { emitSettingsUpdated } from '../utils/realtime';
-import { reportUnexpectedError } from '../utils/reportUnexpectedError';
+import { catchAsync } from '../middlewares/errorHandler';
+import { AppError } from '../utils/AppError';
+import { NotFoundError } from '../utils/httpErrors';
 
 const router = Router();
 
@@ -31,72 +33,55 @@ async function ensureTenantCertificate(tenantId: string) {
   return [created];
 }
 
-router.get('/', requireRole(...RBAC.MENU_READ), async (req: AuthRequest, res) => {
-  try {
+router.get(
+  '/',
+  requireRole(...RBAC.MENU_READ),
+  catchAsync(async (req: AuthRequest, res: Response) => {
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
-      res.status(403).json({ error: 'Tenant context is missing.' });
-      return;
+      throw AppError.forbidden('Tenant context is missing.');
     }
 
     const kashruts = await ensureTenantCertificate(tenantId);
     res.json(kashruts);
-  } catch (error) {
-    reportUnexpectedError(error, {
-      source: 'kashrut.list',
-      title: 'Kashrut list failed',
-      context: { tenantId: req.user?.tenantId },
-    });
-    res.status(500).json({ error: 'שגיאה בשליפת כשרויות' });
-  }
-});
+  }),
+);
 
 router.put(
   '/:id',
   requireRole(...RBAC.MENU_WRITE),
   validate(updateKashrutSchema),
-  async (req: AuthRequest, res) => {
+  catchAsync(async (req: AuthRequest, res: Response) => {
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
-      res.status(403).json({ error: 'Tenant context is missing.' });
-      return;
+      throw AppError.forbidden('Tenant context is missing.');
     }
 
     const { id } = req.params;
     const { imageUrl, validUntil } = req.body as { imageUrl?: string; validUntil?: string };
 
-    try {
-      const owned = await prisma.kashrutCertificate.findFirst({
-        where: { id: id as string, tenantId },
-      });
-      if (!owned) {
-        res.status(404).json({ error: 'תעודה לא נמצאה' });
-        return;
-      }
-
-      const updated = await prisma.kashrutCertificate.update({
-        where: { id: owned.id },
-        data: {
-          ...(imageUrl !== undefined ? { imageUrl } : {}),
-          ...(validUntil !== undefined && validUntil !== ''
-            ? { validUntil: new Date(validUntil) }
-            : validUntil === ''
-              ? { validUntil: null }
-              : {}),
-        },
-      });
-
-      res.json({ success: true, data: updated });
-      emitSettingsUpdated();
-    } catch (error) {
-      reportUnexpectedError(error, {
-        source: 'kashrut.update',
-        title: 'Kashrut update failed',
-        context: { tenantId, id },
-      });
-      res.status(500).json({ error: 'שגיאה בשמירה' });
+    const owned = await prisma.kashrutCertificate.findFirst({
+      where: { id: id as string, tenantId },
+    });
+    if (!owned) {
+      throw new NotFoundError('תעודה לא נמצאה');
     }
-  },
+
+    const updated = await prisma.kashrutCertificate.update({
+      where: { id: owned.id },
+      data: {
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+        ...(validUntil !== undefined && validUntil !== ''
+          ? { validUntil: new Date(validUntil) }
+          : validUntil === ''
+            ? { validUntil: null }
+            : {}),
+      },
+    });
+
+    res.json({ success: true, data: updated });
+    emitSettingsUpdated();
+  }),
 );
 
 export default router;

@@ -112,6 +112,8 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
       },
       error: err,
     });
+    // Prevent requestLogger from double-reporting the same 500.
+    res.locals.monitoringReported = true;
   }
 
   res.status(statusCode).json({

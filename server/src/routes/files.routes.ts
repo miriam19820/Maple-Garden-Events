@@ -9,16 +9,15 @@ import {
 import {
   assertAllowedS3ObjectKey,
   getPresignedDownloadUrl,
-  InvalidS3ObjectKeyError,
   isS3StorageEnabled,
   uploadPrivateFile,
 } from '../utils/s3Storage';
 import {
   assertBookingAccess,
-  BookingAccessDeniedError,
   extractBookingIdFromObjectKey,
 } from '../utils/bookingAccess';
-import { reportUnexpectedError } from '../utils/reportUnexpectedError';
+import { catchAsync } from '../middlewares/errorHandler';
+import { AppError } from '../utils/AppError';
 
 const router = Router();
 
@@ -31,61 +30,35 @@ function accessUserFromReq(req: AuthRequest) {
   };
 }
 
-router.get('/presigned', requireAuth, requireRole(...RBAC.MANAGEMENT), async (req: AuthRequest, res: Response) => {
-  const key = typeof req.query.key === 'string' ? req.query.key : '';
-  if (!key) {
-    res.status(400).json({ success: false, message: 'חסר פרמטר key' });
-    return;
-  }
-
-  if (!isS3StorageEnabled()) {
-    res.status(503).json({ success: false, message: 'אחסון S3 לא מוגדר' });
-    return;
-  }
-
-  let objectKey: string;
-  try {
-    objectKey = assertAllowedS3ObjectKey(key);
-  } catch (err) {
-    if (err instanceof InvalidS3ObjectKeyError) {
-      res.status(400).json({ success: false, message: 'מפתח קובץ לא חוקי' });
-      return;
+router.get(
+  '/presigned',
+  requireAuth,
+  requireRole(...RBAC.MANAGEMENT),
+  catchAsync(async (req: AuthRequest, res: Response) => {
+    const key = typeof req.query.key === 'string' ? req.query.key : '';
+    if (!key) {
+      throw AppError.badRequest('חסר פרמטר key');
     }
-    throw err;
-  }
 
-  const bookingId = extractBookingIdFromObjectKey(objectKey);
-  if (!bookingId) {
-    res.status(400).json({ success: false, message: 'מפתח קובץ לא חוקי' });
-    return;
-  }
+    if (!isS3StorageEnabled()) {
+      throw new AppError('אחסון S3 לא מוגדר', {
+        statusCode: 503,
+        code: 'S3_DISABLED',
+        isOperational: true,
+      });
+    }
 
-  try {
+    const objectKey = assertAllowedS3ObjectKey(key);
+    const bookingId = extractBookingIdFromObjectKey(objectKey);
+    if (!bookingId) {
+      throw AppError.badRequest('מפתח קובץ לא חוקי');
+    }
+
     await assertBookingAccess(accessUserFromReq(req), bookingId);
-  } catch (err) {
-    if (err instanceof BookingAccessDeniedError) {
-      res.status(403).json({ success: false, message: err.message });
-      return;
-    }
-    throw err;
-  }
-
-  try {
     const url = await getPresignedDownloadUrl(objectKey);
     res.json({ success: true, url, objectKey });
-  } catch (err) {
-    if (err instanceof InvalidS3ObjectKeyError) {
-      res.status(400).json({ success: false, message: 'מפתח קובץ לא חוקי' });
-      return;
-    }
-    reportUnexpectedError(err, {
-      source: 'files.presign',
-      title: 'S3 presign failed',
-      context: { objectKey },
-    });
-    res.status(500).json({ success: false, message: 'שגיאה ביצירת קישור זמני' });
-  }
-});
+  }),
+);
 
 router.post(
   '/upload',
@@ -93,10 +66,13 @@ router.post(
   requireRole(...RBAC.MANAGEMENT),
   upload.single('file'),
   assertUploadedFileMagicBytes,
-  async (req: AuthRequest, res: Response) => {
+  catchAsync(async (req: AuthRequest, res: Response) => {
     if (!isS3StorageEnabled()) {
-      res.status(503).json({ success: false, message: 'אחסון S3 לא מוגדר' });
-      return;
+      throw new AppError('אחסון S3 לא מוגדר', {
+        statusCode: 503,
+        code: 'S3_DISABLED',
+        isOperational: true,
+      });
     }
 
     const file = req.file;
@@ -104,40 +80,25 @@ router.post(
     const category = typeof req.body.category === 'string' ? req.body.category : 'documents';
 
     if (!file || !bookingId) {
-      res.status(400).json({ success: false, message: 'חסר קובץ או bookingId' });
-      return;
+      throw AppError.badRequest('חסר קובץ או bookingId');
     }
 
     const allowedCategories = ['contracts', 'checks', 'signatures', 'documents'];
     if (!allowedCategories.includes(category)) {
-      res.status(400).json({ success: false, message: 'קטגוריה לא חוקית' });
-      return;
+      throw AppError.badRequest('קטגוריה לא חוקית');
     }
 
-    try {
-      const storedKey = await uploadPrivateFile({
-        category,
-        bookingId,
-        fileName: file.originalname || 'upload.bin',
-        contentType: file.mimetype || 'application/octet-stream',
-        body: file.buffer,
-        accessUser: accessUserFromReq(req),
-      });
-      const url = await getPresignedDownloadUrl(storedKey);
-      res.json({ success: true, key: storedKey, url });
-    } catch (err) {
-      if (err instanceof BookingAccessDeniedError) {
-        res.status(403).json({ success: false, message: err.message });
-        return;
-      }
-      reportUnexpectedError(err, {
-        source: 'files.upload',
-        title: 'S3 upload failed',
-        context: { bookingId, category },
-      });
-      res.status(500).json({ success: false, message: 'שגיאה בהעלאת קובץ' });
-    }
-  },
+    const storedKey = await uploadPrivateFile({
+      category,
+      bookingId,
+      fileName: file.originalname || 'upload.bin',
+      contentType: file.mimetype || 'application/octet-stream',
+      body: file.buffer,
+      accessUser: accessUserFromReq(req),
+    });
+    const url = await getPresignedDownloadUrl(storedKey);
+    res.json({ success: true, key: storedKey, url });
+  }),
 );
 
 export default router;

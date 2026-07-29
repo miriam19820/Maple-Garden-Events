@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 import { recordHttpRequest } from '../utils/apmMetrics';
-import { captureMessage } from '../config/sentry';
+import { captureException, captureMessage } from '../config/sentry';
 
 const slowRequestMs = Number(process.env.SLOW_REQUEST_MS ?? 2000);
 
@@ -28,6 +28,13 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
     if (res.statusCode >= 500) {
       logger.error('HTTP request failed', entry);
+      // Safety net: handlers that return 500 without going through errorHandler.
+      if (!res.locals.monitoringReported) {
+        captureException(new Error(`HTTP ${res.statusCode} ${req.method} ${req.originalUrl}`), {
+          ...entry,
+          source: 'requestLogger.safetyNet',
+        });
+      }
     } else if (res.statusCode >= 400) {
       logger.warn('HTTP client error', entry);
     } else if (durationMs >= slowRequestMs) {
