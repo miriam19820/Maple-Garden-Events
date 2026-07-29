@@ -27,6 +27,9 @@ import {
   resolveLocaleFromRequest,
   T,
 } from '../i18n/getServerTranslation';
+import { catchAsync } from '../middlewares/errorHandler';
+import { AppError } from '../utils/AppError';
+import { NotFoundError } from '../utils/httpErrors';
 
 const FEEDBACK_ALREADY_SUBMITTED_CODE = 'ALREADY_SUBMITTED';
 const MANAGER_PHONE = process.env.MANAGER_PHONE || '0501234567';
@@ -225,553 +228,510 @@ function buildAdminGroup(
 }
 
 export const feedbackController = {
-  async verifyToken(req: Request, res: Response) {
+  verifyToken: catchAsync(async (req: Request, res: Response) => {
     const locale = resolveLocaleFromRequest(req, DEFAULT_LOCALE);
     const { t } = getServerTranslation(locale);
-    try {
-      const token = req.params.token as string;
+    const token = req.params.token as string;
 
-      const feedback = await prisma.feedback.findUnique({
-        where: { token },
-      });
+    const feedback = await prisma.feedback.findUnique({
+      where: { token },
+    });
 
-      if (!feedback) {
-        return res.status(404).json({
-          success: false,
-          message: t(T.SERVER.ERRORS.FEEDBACK.INVALID_LINK),
-        });
-      }
+    if (!feedback) {
+      throw new NotFoundError(t(T.SERVER.ERRORS.FEEDBACK.INVALID_LINK));
+    }
 
-      if (feedback.isCompleted) {
-        return res.status(409).json({
-          success: false,
-          code: FEEDBACK_ALREADY_SUBMITTED_CODE,
-          message: t(T.SERVER.ERRORS.FEEDBACK.ALREADY_SUBMITTED),
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        clientName: feedback.clientName,
-        clientSide: feedback.clientSide,
-      });
-    } catch (error) {
-      logger.error('Error verifying feedback token', { error });
-      res.status(500).json({
-        success: false,
-        message: t(T.SERVER.ERRORS.FEEDBACK.LINK_CHECK_FAILED),
+    if (feedback.isCompleted) {
+      throw new AppError(t(T.SERVER.ERRORS.FEEDBACK.ALREADY_SUBMITTED), {
+        statusCode: 409,
+        code: FEEDBACK_ALREADY_SUBMITTED_CODE,
       });
     }
-  },
 
-  async submitFeedback(req: Request, res: Response) {
+    res.status(200).json({
+      success: true,
+      clientName: feedback.clientName,
+      clientSide: feedback.clientSide,
+    });
+  }),
+
+  submitFeedback: catchAsync(async (req: Request, res: Response) => {
     const locale = resolveLocaleFromRequest(req, DEFAULT_LOCALE);
     const { t } = getServerTranslation(locale);
-    try {
-      const token = req.params.token as string;
-      const { foodRating, serviceRating, venueRating, comments } = req.body;
+    const token = req.params.token as string;
+    const { foodRating, serviceRating, venueRating, comments } = req.body;
 
-      const scores = [foodRating, serviceRating, venueRating].filter(
-        (val): val is number => typeof val === 'number',
-      );
-      const averageScore =
-        scores.length > 0
-          ? Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
-          : null;
-
-      const txResult = await prisma.$transaction(async (tx) => {
-        const existing = await tx.feedback.findUnique({
-          where: { token },
-          include: { booking: true },
-        });
-
-        if (!existing) {
-          return { kind: 'not_found' as const };
-        }
-        if (existing.isCompleted) {
-          return { kind: 'already' as const };
-        }
-
-        const claimed = await tx.feedback.updateMany({
-          where: { token, isCompleted: false },
-          data: {
-            foodRating,
-            serviceRating,
-            venueRating,
-            comments,
-            averageScore,
-            isCompleted: true,
-            completedAt: new Date(),
-          },
-        });
-
-        if (claimed.count === 0) {
-          return { kind: 'already' as const };
-        }
-
-        const updated = await tx.feedback.findUniqueOrThrow({ where: { token } });
-        const siblings = await tx.feedback.findMany({
-          where: { bookingId: existing.bookingId },
-        });
-
-        return {
-          kind: 'ok' as const,
-          updated,
-          siblings,
-          bookingId: existing.bookingId,
-          clientName: existing.clientName,
-          clientSide: existing.clientSide,
-        };
-      });
-
-      if (txResult.kind === 'not_found') {
-        return res.status(404).json({
-          success: false,
-          message: t(T.SERVER.ERRORS.FEEDBACK.INVALID_LINK),
-        });
-      }
-
-      if (txResult.kind === 'already') {
-        return res.status(409).json({
-          success: false,
-          code: FEEDBACK_ALREADY_SUBMITTED_CODE,
-          message: t(T.SERVER.ERRORS.FEEDBACK.ALREADY_SUBMITTED),
-        });
-      }
-
-      const { updated, siblings, bookingId, clientName, clientSide } = txResult;
-      const combinedAverage = computeCombinedAverage(
-        siblings.map((fb) => (fb.id === updated.id ? averageScore : fb.averageScore)),
-      );
-
-      const completedSides = siblings.filter((fb) => fb.isCompleted);
-      const sideA = completedSides.find((fb) => fb.clientSide === 'A');
-      const sideB = completedSides.find((fb) => fb.clientSide === 'B');
-      const bothSidesComplete = Boolean(sideA && sideB);
-
-      if (bothSidesComplete && sideA && sideB) {
-        const anomaly = detectFeedbackDiscrepancy(sideA, sideB);
-        if (anomaly.hasAnomaly) {
-          const dashboardUrl = getFeedbackDashboardUrl(bookingId);
-          const details =
-            `${anomaly.reasons.join('; ')}\n`
-            + `ממוצע משולב: ${combinedAverage ?? '—'}\n`
-            + `לוח משובים: ${dashboardUrl}`;
-          const brand = getBrandConfig();
-          const managerEmail =
-            process.env.MANAGER_EMAIL || brand.messaging.managerAlertEmail;
-          const managerPhone = process.env.MANAGER_PHONE || MANAGER_PHONE;
-
-          logger.warn('Feedback discrepancy / critical low scores', {
-            bookingId,
-            reasons: anomaly.reasons,
-            dashboardUrl,
-          });
-
-          await Promise.allSettled([
-            sendManagerFinancialAlert(
-              managerPhone,
-              'פער/משוב נמוך בין צדדים',
-              clientName || 'לקוח',
-              details,
-              locale,
-            ),
-            managerEmail
-              ? sendManagerFinancialAlertEmail(
-                  managerEmail,
-                  'פער/משוב נמוך בין צדדים',
-                  clientName || 'לקוח',
-                  details,
-                )
-              : Promise.resolve(),
-          ]);
-        }
-      } else if (averageScore != null && averageScore < 3) {
-        // Single-side critical average before the other side responds
-        const managerEmail =
-          process.env.MANAGER_EMAIL || getBrandConfig().messaging.managerAlertEmail;
-        if (managerEmail) {
-          await sendManagerFinancialAlertEmail(
-            managerEmail,
-            'משוב נמוך מאירוע',
-            clientName || 'לקוח',
-            `צד ${clientSide}, ממוצע ${averageScore}. ממוצע משולב: ${combinedAverage ?? 'טרם הושלם'}`,
-          );
-        }
-      }
-
-      emitFeedbackUpdated({ bookingId });
-
-      res.status(200).json({
-        success: true,
-        message: t(T.SERVER.ERRORS.FEEDBACK.SAVED_SUCCESS),
-        combinedAverage,
-      });
-    } catch (error) {
-      logger.error('Error submitting feedback', { error });
-      res.status(500).json({
-        success: false,
-        message: t(T.SERVER.ERRORS.FEEDBACK.SAVE_FAILED),
-      });
-    }
-  },
-
-  /** יצירת משובים ו/או שליחת קישורים ידנית */
-  async sendAdmin(req: Request, res: Response) {
-    try {
-      const { bookingId, clientSide, sendNotifications = true } = req.body as {
-        bookingId: string;
-        clientSide?: 'A' | 'B';
-        sendNotifications?: boolean;
-      };
-
-      const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { eventDate: true },
-      });
-
-      if (!booking) {
-        return res.status(404).json({ success: false, message: 'ההזמנה לא נמצאה.' });
-      }
-
-      if (booking.isOption) {
-        return res.status(400).json({ success: false, message: 'לא ניתן לשלוח משוב לאופציה — רק לאירוע סגור.' });
-      }
-
-      if (booking.eventDate?.status !== 'BOOKED') {
-        return res.status(400).json({ success: false, message: 'האירוע אינו בסטטוס סגור (BOOKED).' });
-      }
-
-      const records = await ensureFeedbackRecordsForBooking(booking);
-      if (records.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'לא נמצאו פרטי קשר (מייל/טלפון) לשליחת משוב.',
-        });
-      }
-
-      let targets = records;
-      if (clientSide) {
-        targets = records.filter((r) => r.clientSide === clientSide);
-      } else {
-        targets = records.filter((r) => !r.isCompleted);
-      }
-
-      if (targets.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: clientSide ? 'לא נמצא צד מתאים לשליחה.' : 'כל המשובים כבר מולאו.',
-        });
-      }
-
-      const results = [];
-      for (const record of targets) {
-        const contact = contactForSide(booking, record.clientSide);
-        if (sendNotifications) {
-          results.push(await sendFeedbackLinkForRecord(record, contact));
-        } else {
-          results.push({
-            clientSide: record.clientSide,
-            clientName: record.clientName,
-            token: record.token,
-            link: getClientFeedbackUrl(record.token),
-            emailSent: false,
-            whatsappSent: false,
-            skippedReasons: [],
-          });
-        }
-      }
-
-      const anySent = results.some((r) => r.emailSent || r.whatsappSent);
-      const allSkipped = sendNotifications && results.every((r) => !r.emailSent && !r.whatsappSent);
-      const localhostLinkWarning = isLocalClientUrl()
-        ? 'הקישור במייל מצביע ל-localhost — לקוחות חיצוניים לא יוכלו לפתוח אותו. הגדר CLIENT_URL לכתובת ציבורית (ראה .env).'
+    const scores = [foodRating, serviceRating, venueRating].filter(
+      (val): val is number => typeof val === 'number',
+    );
+    const averageScore =
+      scores.length > 0
+        ? Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
         : null;
 
-      emitFeedbackUpdated({ bookingId });
-
-      res.status(200).json({
-        success: true,
-        message: sendNotifications
-          ? (anySent
-            ? 'קישורי המשוב נשלחו.'
-            : 'לא נשלח — ראה פירוט בשדות skippedReasons.')
-          : 'קישורי המשוב נוצרו.',
-        results,
-        emailSent: results.some((r) => r.emailSent),
-        whatsappSent: results.some((r) => r.whatsappSent),
-        skippedReasons: [
-          ...new Set([
-            ...results.flatMap((r) => r.skippedReasons),
-            ...(localhostLinkWarning ? [localhostLinkWarning] : []),
-          ]),
-        ],
-        ...(allSkipped && !anySent ? { warning: true } : {}),
-        ...(localhostLinkWarning ? { warning: true } : {}),
+    const txResult = await prisma.$transaction(async (tx) => {
+      const existing = await tx.feedback.findUnique({
+        where: { token },
+        include: { booking: true },
       });
-    } catch (error) {
-      logger.error('Error sending feedback admin', { error });
-      res.status(500).json({ success: false, message: 'שגיאה בשליחת משוב.' });
+
+      if (!existing) {
+        return { kind: 'not_found' as const };
+      }
+      if (existing.isCompleted) {
+        return { kind: 'already' as const };
+      }
+
+      const claimed = await tx.feedback.updateMany({
+        where: { token, isCompleted: false },
+        data: {
+          foodRating,
+          serviceRating,
+          venueRating,
+          comments,
+          averageScore,
+          isCompleted: true,
+          completedAt: new Date(),
+        },
+      });
+
+      if (claimed.count === 0) {
+        return { kind: 'already' as const };
+      }
+
+      const updated = await tx.feedback.findUniqueOrThrow({ where: { token } });
+      const siblings = await tx.feedback.findMany({
+        where: { bookingId: existing.bookingId },
+      });
+
+      return {
+        kind: 'ok' as const,
+        updated,
+        siblings,
+        bookingId: existing.bookingId,
+        clientName: existing.clientName,
+        clientSide: existing.clientSide,
+      };
+    });
+
+    if (txResult.kind === 'not_found') {
+      throw new NotFoundError(t(T.SERVER.ERRORS.FEEDBACK.INVALID_LINK));
     }
-  },
+
+    if (txResult.kind === 'already') {
+      throw new AppError(t(T.SERVER.ERRORS.FEEDBACK.ALREADY_SUBMITTED), {
+        statusCode: 409,
+        code: FEEDBACK_ALREADY_SUBMITTED_CODE,
+      });
+    }
+
+    const { updated, siblings, bookingId, clientName, clientSide } = txResult;
+    const combinedAverage = computeCombinedAverage(
+      siblings.map((fb) => (fb.id === updated.id ? averageScore : fb.averageScore)),
+    );
+
+    const completedSides = siblings.filter((fb) => fb.isCompleted);
+    const sideA = completedSides.find((fb) => fb.clientSide === 'A');
+    const sideB = completedSides.find((fb) => fb.clientSide === 'B');
+    const bothSidesComplete = Boolean(sideA && sideB);
+
+    if (bothSidesComplete && sideA && sideB) {
+      const anomaly = detectFeedbackDiscrepancy(sideA, sideB);
+      if (anomaly.hasAnomaly) {
+        const dashboardUrl = getFeedbackDashboardUrl(bookingId);
+        const details =
+          `${anomaly.reasons.join('; ')}\n`
+          + `ממוצע משולב: ${combinedAverage ?? '—'}\n`
+          + `לוח משובים: ${dashboardUrl}`;
+        const brand = getBrandConfig();
+        const managerEmail =
+          process.env.MANAGER_EMAIL || brand.messaging.managerAlertEmail;
+        const managerPhone = process.env.MANAGER_PHONE || MANAGER_PHONE;
+
+        logger.warn('Feedback discrepancy / critical low scores', {
+          bookingId,
+          reasons: anomaly.reasons,
+          dashboardUrl,
+        });
+
+        await Promise.allSettled([
+          sendManagerFinancialAlert(
+            managerPhone,
+            'פער/משוב נמוך בין צדדים',
+            clientName || 'לקוח',
+            details,
+            locale,
+          ),
+          managerEmail
+            ? sendManagerFinancialAlertEmail(
+                managerEmail,
+                'פער/משוב נמוך בין צדדים',
+                clientName || 'לקוח',
+                details,
+              )
+            : Promise.resolve(),
+        ]);
+      }
+    } else if (averageScore != null && averageScore < 3) {
+      // Single-side critical average before the other side responds
+      const managerEmail =
+        process.env.MANAGER_EMAIL || getBrandConfig().messaging.managerAlertEmail;
+      if (managerEmail) {
+        await sendManagerFinancialAlertEmail(
+          managerEmail,
+          'משוב נמוך מאירוע',
+          clientName || 'לקוח',
+          `צד ${clientSide}, ממוצע ${averageScore}. ממוצע משולב: ${combinedAverage ?? 'טרם הושלם'}`,
+        );
+      }
+    }
+
+    emitFeedbackUpdated({ bookingId });
+
+    res.status(200).json({
+      success: true,
+      message: t(T.SERVER.ERRORS.FEEDBACK.SAVED_SUCCESS),
+      combinedAverage,
+    });
+  }),
+
+  /** יצירת משובים ו/או שליחת קישורים ידנית */
+  sendAdmin: catchAsync(async (req: Request, res: Response) => {
+    const { bookingId, clientSide, sendNotifications = true } = req.body as {
+      bookingId: string;
+      clientSide?: 'A' | 'B';
+      sendNotifications?: boolean;
+    };
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { eventDate: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundError('ההזמנה לא נמצאה.');
+    }
+
+    if (booking.isOption) {
+      throw AppError.badRequest('לא ניתן לשלוח משוב לאופציה — רק לאירוע סגור.');
+    }
+
+    if (booking.eventDate?.status !== 'BOOKED') {
+      throw AppError.badRequest('האירוע אינו בסטטוס סגור (BOOKED).');
+    }
+
+    const records = await ensureFeedbackRecordsForBooking(booking);
+    if (records.length === 0) {
+      throw AppError.badRequest('לא נמצאו פרטי קשר (מייל/טלפון) לשליחת משוב.');
+    }
+
+    let targets = records;
+    if (clientSide) {
+      targets = records.filter((r) => r.clientSide === clientSide);
+    } else {
+      targets = records.filter((r) => !r.isCompleted);
+    }
+
+    if (targets.length === 0) {
+      throw AppError.badRequest(
+        clientSide ? 'לא נמצא צד מתאים לשליחה.' : 'כל המשובים כבר מולאו.',
+      );
+    }
+
+    const results = [];
+    for (const record of targets) {
+      const contact = contactForSide(booking, record.clientSide);
+      if (sendNotifications) {
+        results.push(await sendFeedbackLinkForRecord(record, contact));
+      } else {
+        results.push({
+          clientSide: record.clientSide,
+          clientName: record.clientName,
+          token: record.token,
+          link: getClientFeedbackUrl(record.token),
+          emailSent: false,
+          whatsappSent: false,
+          skippedReasons: [],
+        });
+      }
+    }
+
+    const anySent = results.some((r) => r.emailSent || r.whatsappSent);
+    const allSkipped = sendNotifications && results.every((r) => !r.emailSent && !r.whatsappSent);
+    const localhostLinkWarning = isLocalClientUrl()
+      ? 'הקישור במייל מצביע ל-localhost — לקוחות חיצוניים לא יוכלו לפתוח אותו. הגדר CLIENT_URL לכתובת ציבורית (ראה .env).'
+      : null;
+
+    emitFeedbackUpdated({ bookingId });
+
+    res.status(200).json({
+      success: true,
+      message: sendNotifications
+        ? (anySent
+          ? 'קישורי המשוב נשלחו.'
+          : 'לא נשלח — ראה פירוט בשדות skippedReasons.')
+        : 'קישורי המשוב נוצרו.',
+      results,
+      emailSent: results.some((r) => r.emailSent),
+      whatsappSent: results.some((r) => r.whatsappSent),
+      skippedReasons: [
+        ...new Set([
+          ...results.flatMap((r) => r.skippedReasons),
+          ...(localhostLinkWarning ? [localhostLinkWarning] : []),
+        ]),
+      ],
+      ...(allSkipped && !anySent ? { warning: true } : {}),
+      ...(localhostLinkWarning ? { warning: true } : {}),
+    });
+  }),
 
   /** רשימת משובים למנהל — כולל אירועים שהסתיימו ללא משוב */
-  async listAdmin(req: Request, res: Response) {
-    try {
-      const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
-      const now = new Date();
+  listAdmin: catchAsync(async (req: Request, res: Response) => {
+    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+    const now = new Date();
 
-      const endOfToday = new Date(now);
-      endOfToday.setHours(23, 59, 59, 999);
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
 
-      const candidates = await prisma.booking.findMany({
-        where: {
-          isOption: false,
-          eventDate: {
-            status: 'BOOKED',
-            date: { lte: endOfToday },
-          },
+    const candidates = await prisma.booking.findMany({
+      where: {
+        isOption: false,
+        eventDate: {
+          status: 'BOOKED',
+          date: { lte: endOfToday },
         },
-        include: {
-          eventDate: true,
-          eventForm: { select: { eventTime: true } },
-          feedbacks: { orderBy: { createdAt: 'asc' } },
-        },
-        orderBy: { eventDate: { date: 'desc' } },
-      });
+      },
+      include: {
+        eventDate: true,
+        eventForm: { select: { eventTime: true } },
+        feedbacks: { orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { eventDate: { date: 'desc' } },
+    });
 
-      const finishedBookings = candidates.filter(
-        (booking) => booking.eventDate && hasEventEnded(booking, booking.eventDate.date, booking.eventForm, now),
-      );
+    const finishedBookings = candidates.filter(
+      (booking) => booking.eventDate && hasEventEnded(booking, booking.eventDate.date, booking.eventForm, now),
+    );
 
-      const data = finishedBookings.map((booking) => buildAdminGroup(booking, booking.feedbacks));
-      const total = data.length;
-      const pageData = data.slice(skip, skip + limit);
+    const data = finishedBookings.map((booking) => buildAdminGroup(booking, booking.feedbacks));
+    const total = data.length;
+    const pageData = data.slice(skip, skip + limit);
 
-      res.status(200).json({
-        success: true,
-        data: pageData,
-        pagination: paginationMeta(page, limit, total),
-      });
-    } catch (error) {
-      logger.error('Error listing feedback', { error });
-      res.status(500).json({ success: false, message: 'שגיאה בטעינת המשובים.' });
-    }
-  },
+    res.status(200).json({
+      success: true,
+      data: pageData,
+      pagination: paginationMeta(page, limit, total),
+    });
+  }),
 
   /** סטטיסטיקות וחישובים על משובי לקוחות */
-  async statsAdmin(req: Request, res: Response) {
-    try {
-      const period = parseStatsPeriod(req.query as Record<string, unknown>);
-      const dateRange = eventDateFilter(period);
-      const now = new Date();
-      const availableYears = await getAvailableFeedbackYears();
+  statsAdmin: catchAsync(async (req: Request, res: Response) => {
+    const period = parseStatsPeriod(req.query as Record<string, unknown>);
+    const dateRange = eventDateFilter(period);
+    const now = new Date();
+    const availableYears = await getAvailableFeedbackYears();
 
-      const completedFeedbacksRaw = await prisma.feedback.findMany({
-        where: {
-          isCompleted: true,
-          booking: {
-            isOption: false,
-            eventDate: {
-              status: 'BOOKED',
-              ...(dateRange ? { date: dateRange } : {}),
-            },
-          },
-        },
-        include: {
-          booking: {
-            include: { eventDate: true },
-          },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-
-      const completedFeedbacks = period.allYears && period.month
-        ? completedFeedbacksRaw.filter(
-            (f) => f.booking.eventDate && eventMonthMatches(f.booking.eventDate.date, period.month),
-          )
-        : completedFeedbacksRaw;
-
-      const averages = {
-        combined: avgNumbers(completedFeedbacks.map((f) => f.averageScore)),
-        food: avgNumbers(completedFeedbacks.map((f) => f.foodRating)),
-        service: avgNumbers(completedFeedbacks.map((f) => f.serviceRating)),
-        venue: avgNumbers(completedFeedbacks.map((f) => f.venueRating)),
-      };
-
-      const lowScore = completedFeedbacks.filter(
-        (f) => f.averageScore != null && f.averageScore <= 3,
-      ).length;
-      const excellent = completedFeedbacks.filter(
-        (f) => f.averageScore != null && f.averageScore >= 4.5,
-      ).length;
-
-      const byTypeMap = new Map<string, number[]>();
-      for (const fb of completedFeedbacks) {
-        const eventType = fb.booking.eventType;
-        if (!byTypeMap.has(eventType)) byTypeMap.set(eventType, []);
-        if (fb.averageScore != null) byTypeMap.get(eventType)!.push(fb.averageScore);
-      }
-      const byEventType = [...byTypeMap.entries()]
-        .map(([eventType, scores]) => ({
-          eventType,
-          average: avgNumbers(scores),
-          count: scores.length,
-        }))
-        .sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
-
-      let byMonth: { month: number; label: string; average: number | null; count: number }[] = [];
-      let byYear: { year: number; average: number | null; count: number }[] = [];
-
-      if (!period.month && period.allYears) {
-        const byYearMap = new Map<number, number[]>();
-        for (const fb of completedFeedbacks) {
-          if (fb.averageScore == null || !fb.booking.eventDate) continue;
-          const y = new Date(fb.booking.eventDate.date).getFullYear();
-          if (!byYearMap.has(y)) byYearMap.set(y, []);
-          byYearMap.get(y)!.push(fb.averageScore);
-        }
-        byYear = [...byYearMap.entries()]
-          .sort(([a], [b]) => a - b)
-          .map(([y, scores]) => ({
-            year: y,
-            average: avgNumbers(scores),
-            count: scores.length,
-          }));
-      } else if (!period.month && period.year != null) {
-        const byMonthMap = new Map<number, number[]>();
-        for (const fb of completedFeedbacks) {
-          if (fb.averageScore == null || !fb.booking.eventDate) continue;
-          const m = new Date(fb.booking.eventDate.date).getMonth() + 1;
-          if (!byMonthMap.has(m)) byMonthMap.set(m, []);
-          byMonthMap.get(m)!.push(fb.averageScore);
-        }
-        byMonth = [...byMonthMap.entries()]
-          .sort(([a], [b]) => a - b)
-          .map(([m, scores]) => ({
-            month: m,
-            label: MONTH_LABELS[m - 1],
-            average: avgNumbers(scores),
-            count: scores.length,
-          }));
-      }
-
-      const categoryComparison = [
-        { category: 'אוכל', average: averages.food },
-        { category: 'שירות', average: averages.service },
-        { category: 'אולם', average: averages.venue },
-      ].filter((c) => c.average != null);
-
-      const candidatesRaw = await prisma.booking.findMany({
-        where: {
+    const completedFeedbacksRaw = await prisma.feedback.findMany({
+      where: {
+        isCompleted: true,
+        booking: {
           isOption: false,
           eventDate: {
             status: 'BOOKED',
             ...(dateRange ? { date: dateRange } : {}),
           },
         },
-        include: {
-          eventDate: true,
-          eventForm: { select: { eventTime: true } },
-          feedbacks: true,
+      },
+      include: {
+        booking: {
+          include: { eventDate: true },
         },
-      });
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
 
-      const candidates = period.allYears && period.month
-        ? candidatesRaw.filter(
-            (b) => b.eventDate && eventMonthMatches(b.eventDate.date, period.month),
-          )
-        : candidatesRaw;
+    const completedFeedbacks = period.allYears && period.month
+      ? completedFeedbacksRaw.filter(
+          (f) => f.booking.eventDate && eventMonthMatches(f.booking.eventDate.date, period.month),
+        )
+      : completedFeedbacksRaw;
 
-      const finishedBookings = candidates.filter(
-        (b) => b.eventDate && hasEventEnded(b, b.eventDate.date, b.eventForm, now),
-      );
+    const averages = {
+      combined: avgNumbers(completedFeedbacks.map((f) => f.averageScore)),
+      food: avgNumbers(completedFeedbacks.map((f) => f.foodRating)),
+      service: avgNumbers(completedFeedbacks.map((f) => f.serviceRating)),
+      venue: avgNumbers(completedFeedbacks.map((f) => f.venueRating)),
+    };
 
-      let expectedSides = 0;
-      let pendingFeedbacks = 0;
-      let notSentEvents = 0;
+    const lowScore = completedFeedbacks.filter(
+      (f) => f.averageScore != null && f.averageScore <= 3,
+    ).length;
+    const excellent = completedFeedbacks.filter(
+      (f) => f.averageScore != null && f.averageScore >= 4.5,
+    ).length;
 
-      for (const booking of finishedBookings) {
-        const sides = buildFeedbackSides(booking);
-        expectedSides += sides.length;
-        if (sides.length === 0) continue;
+    const byTypeMap = new Map<string, number[]>();
+    for (const fb of completedFeedbacks) {
+      const eventType = fb.booking.eventType;
+      if (!byTypeMap.has(eventType)) byTypeMap.set(eventType, []);
+      if (fb.averageScore != null) byTypeMap.get(eventType)!.push(fb.averageScore);
+    }
+    const byEventType = [...byTypeMap.entries()]
+      .map(([eventType, scores]) => ({
+        eventType,
+        average: avgNumbers(scores),
+        count: scores.length,
+      }))
+      .sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
 
-        const hasAnySent = booking.feedbacks.some((f) => f.lastNotifiedAt);
+    let byMonth: { month: number; label: string; average: number | null; count: number }[] = [];
+    let byYear: { year: number; average: number | null; count: number }[] = [];
 
-        if (booking.feedbacks.length === 0 || !hasAnySent) {
-          notSentEvents++;
-        }
+    if (!period.month && period.allYears) {
+      const byYearMap = new Map<number, number[]>();
+      for (const fb of completedFeedbacks) {
+        if (fb.averageScore == null || !fb.booking.eventDate) continue;
+        const y = new Date(fb.booking.eventDate.date).getFullYear();
+        if (!byYearMap.has(y)) byYearMap.set(y, []);
+        byYearMap.get(y)!.push(fb.averageScore);
+      }
+      byYear = [...byYearMap.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([y, scores]) => ({
+          year: y,
+          average: avgNumbers(scores),
+          count: scores.length,
+        }));
+    } else if (!period.month && period.year != null) {
+      const byMonthMap = new Map<number, number[]>();
+      for (const fb of completedFeedbacks) {
+        if (fb.averageScore == null || !fb.booking.eventDate) continue;
+        const m = new Date(fb.booking.eventDate.date).getMonth() + 1;
+        if (!byMonthMap.has(m)) byMonthMap.set(m, []);
+        byMonthMap.get(m)!.push(fb.averageScore);
+      }
+      byMonth = [...byMonthMap.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([m, scores]) => ({
+          month: m,
+          label: MONTH_LABELS[m - 1],
+          average: avgNumbers(scores),
+          count: scores.length,
+        }));
+    }
 
-        for (const side of sides) {
-          const fb = booking.feedbacks.find((f) => f.clientSide === side.side);
-          if (fb && !fb.isCompleted && fb.lastNotifiedAt) pendingFeedbacks++;
-        }
+    const categoryComparison = [
+      { category: 'אוכל', average: averages.food },
+      { category: 'שירות', average: averages.service },
+      { category: 'אולם', average: averages.venue },
+    ].filter((c) => c.average != null);
+
+    const candidatesRaw = await prisma.booking.findMany({
+      where: {
+        isOption: false,
+        eventDate: {
+          status: 'BOOKED',
+          ...(dateRange ? { date: dateRange } : {}),
+        },
+      },
+      include: {
+        eventDate: true,
+        eventForm: { select: { eventTime: true } },
+        feedbacks: true,
+      },
+    });
+
+    const candidates = period.allYears && period.month
+      ? candidatesRaw.filter(
+          (b) => b.eventDate && eventMonthMatches(b.eventDate.date, period.month),
+        )
+      : candidatesRaw;
+
+    const finishedBookings = candidates.filter(
+      (b) => b.eventDate && hasEventEnded(b, b.eventDate.date, b.eventForm, now),
+    );
+
+    let expectedSides = 0;
+    let pendingFeedbacks = 0;
+    let notSentEvents = 0;
+
+    for (const booking of finishedBookings) {
+      const sides = buildFeedbackSides(booking);
+      expectedSides += sides.length;
+      if (sides.length === 0) continue;
+
+      const hasAnySent = booking.feedbacks.some((f) => f.lastNotifiedAt);
+
+      if (booking.feedbacks.length === 0 || !hasAnySent) {
+        notSentEvents++;
       }
 
-      const responseRate =
-        expectedSides > 0
-          ? Number(((completedFeedbacks.length / expectedSides) * 100).toFixed(1))
-          : null;
-
-      const recentLow = completedFeedbacks
-        .filter((f) => f.averageScore != null && f.averageScore <= 3)
-        .sort((a, b) => (a.averageScore ?? 0) - (b.averageScore ?? 0))
-        .slice(0, 5)
-        .map((f) => ({
-          eventCode: f.booking.eventCode,
-          eventDate: f.booking.eventDate?.date
-            ? calendarKeyFromDbDate(new Date(f.booking.eventDate.date))
-            : null,
-          eventType: f.booking.eventType,
-          clients: [f.booking.clientAFullName, f.booking.clientBFullName].filter(Boolean).join(' · '),
-          clientSide: f.clientSide,
-          score: f.averageScore!,
-          comment: f.comments,
-        }));
-
-      const recentComments = completedFeedbacks
-        .filter((f) => f.comments?.trim())
-        .slice(0, 5)
-        .map((f) => ({
-          eventCode: f.booking.eventCode,
-          eventDate: f.booking.eventDate?.date
-            ? calendarKeyFromDbDate(new Date(f.booking.eventDate.date))
-            : null,
-          comment: f.comments!.trim(),
-          score: f.averageScore,
-        }));
-
-      res.status(200).json({
-        success: true,
-        data: {
-          period: {
-            year: period.allYears ? null : period.year,
-            month: period.month,
-            allYears: period.allYears,
-          },
-          availableYears,
-          averages,
-          counts: {
-            completedFeedbacks: completedFeedbacks.length,
-            totalEventsFinished: finishedBookings.length,
-            pendingFeedbacks,
-            notSentEvents,
-            lowScore,
-            excellent,
-            expectedSides,
-          },
-          responseRate,
-          byEventType,
-          byMonth,
-          byYear,
-          categoryComparison,
-          recentLow,
-          recentComments,
-        },
-      });
-    } catch (error) {
-      logger.error('Error loading feedback stats', { error });
-      res.status(500).json({ success: false, message: 'שגיאה בטעינת סטטיסטיקות משוב.' });
+      for (const side of sides) {
+        const fb = booking.feedbacks.find((f) => f.clientSide === side.side);
+        if (fb && !fb.isCompleted && fb.lastNotifiedAt) pendingFeedbacks++;
+      }
     }
-  },
+
+    const responseRate =
+      expectedSides > 0
+        ? Number(((completedFeedbacks.length / expectedSides) * 100).toFixed(1))
+        : null;
+
+    const recentLow = completedFeedbacks
+      .filter((f) => f.averageScore != null && f.averageScore <= 3)
+      .sort((a, b) => (a.averageScore ?? 0) - (b.averageScore ?? 0))
+      .slice(0, 5)
+      .map((f) => ({
+        eventCode: f.booking.eventCode,
+        eventDate: f.booking.eventDate?.date
+          ? calendarKeyFromDbDate(new Date(f.booking.eventDate.date))
+          : null,
+        eventType: f.booking.eventType,
+        clients: [f.booking.clientAFullName, f.booking.clientBFullName].filter(Boolean).join(' · '),
+        clientSide: f.clientSide,
+        score: f.averageScore!,
+        comment: f.comments,
+      }));
+
+    const recentComments = completedFeedbacks
+      .filter((f) => f.comments?.trim())
+      .slice(0, 5)
+      .map((f) => ({
+        eventCode: f.booking.eventCode,
+        eventDate: f.booking.eventDate?.date
+          ? calendarKeyFromDbDate(new Date(f.booking.eventDate.date))
+          : null,
+        comment: f.comments!.trim(),
+        score: f.averageScore,
+      }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        period: {
+          year: period.allYears ? null : period.year,
+          month: period.month,
+          allYears: period.allYears,
+        },
+        availableYears,
+        averages,
+        counts: {
+          completedFeedbacks: completedFeedbacks.length,
+          totalEventsFinished: finishedBookings.length,
+          pendingFeedbacks,
+          notSentEvents,
+          lowScore,
+          excellent,
+          expectedSides,
+        },
+        responseRate,
+        byEventType,
+        byMonth,
+        byYear,
+        categoryComparison,
+        recentLow,
+        recentComments,
+      },
+    });
+  }),
 };
