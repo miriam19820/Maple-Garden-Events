@@ -3,6 +3,7 @@ import { sendPDFToClient } from '../Services/emailService';
 import { notifyEventFormViaWhatsApp } from '../Services/whatsappDealNotify.service';
 import { buildBookingPdfData, generateEventProductionPDF } from './pdfGenerator';
 import { DEFAULT_LOCALE, getServerTranslation, T, type Locale } from '../i18n/getServerTranslation';
+import { reportUnexpectedError } from './reportUnexpectedError';
 
 export const EVENT_FORM_EMAIL_COOLDOWN_MS = 60 * 1000;
 
@@ -84,7 +85,16 @@ export async function sendEventFormEmailIfAllowed(
 
     return { sent: true };
   } catch (e) {
-    await prisma.eventForm.update({ where: { bookingId }, data: { contractSentAt: null } }).catch(() => {});
+    await prisma.eventForm
+      .update({ where: { bookingId }, data: { contractSentAt: null } })
+      .catch((rollbackErr: unknown) => {
+        reportUnexpectedError(rollbackErr, {
+          source: 'eventFormEmail.rollback',
+          title: 'Failed to rollback contractSentAt after send error',
+          context: { bookingId },
+          alert: false,
+        });
+      });
     throw e;
   }
 }

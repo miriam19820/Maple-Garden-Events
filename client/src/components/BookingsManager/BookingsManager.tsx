@@ -114,7 +114,16 @@ const BookingsManager = () => {
     return sorted;
   };
 
-  const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteBookingsQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteBookingsQuery({
     status: 'BOOKED',
     limit: 100, // Reduced from 500 to leverage cursor pagination effectively
     search: debouncedSearch || undefined,
@@ -238,6 +247,16 @@ const BookingsManager = () => {
 
       {isLoading ? (
         <PageLoader />
+      ) : isError ? (
+        <EmptyState
+          title={t(T.BOOKINGS.LOAD_ERROR)}
+          message={error instanceof Error ? error.message : t(T.BOOKINGS.LOAD_ERROR)}
+          action={
+            <Button variant="secondary" onClick={() => void refetch()}>
+              {t(T.COMMON.ACTIONS.RETRY)}
+            </Button>
+          }
+        />
       ) : upcomingBookings.length === 0 && pastBookings.length === 0 ? (
         <EmptyState
           icon="📋"

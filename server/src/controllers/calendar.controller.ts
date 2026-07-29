@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { calendarService } from '../Services/calendar.service';
-import { logger } from '../utils/logger';
 import { invalidateCache } from '../middlewares/cacheMiddleware';
+import { reportUnexpectedError } from '../utils/reportUnexpectedError';
 
 export const calendarController = {
 
@@ -28,7 +28,11 @@ export const calendarController = {
       );
       res.json(dates);
     } catch (error) {
-      logger.error('getAllDates failed', { error });
+      reportUnexpectedError(error, {
+        source: 'calendar.getAllDates',
+        title: 'Calendar getAllDates failed',
+        context: { start: req.query.start, end: req.query.end },
+      });
       res.status(500).json({ error: 'שגיאה בשליפת התאריכים' });
     }
   },
@@ -53,6 +57,11 @@ export const calendarController = {
       await invalidateCache('calendar');
       res.json(result);
     } catch (error) {
+      reportUnexpectedError(error, {
+        source: 'calendar.releaseDate',
+        title: 'Calendar releaseDate failed',
+        context: { dateStr: req.params.dateStr },
+      });
       res.status(500).json({ error: 'שגיאה בשחרור התאריך' });
     }
   },
@@ -65,6 +74,11 @@ export const calendarController = {
       await invalidateCache('calendar');
       res.json(result);
     } catch (error) {
+      reportUnexpectedError(error, {
+        source: 'calendar.createOption',
+        title: 'Calendar createOption failed',
+        context: { dateId: req.params.dateId },
+      });
       res.status(500).json({ error: 'שגיאה ביצירת אופציה' });
     }
   },

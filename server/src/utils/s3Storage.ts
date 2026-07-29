@@ -11,6 +11,7 @@ import {
   type BookingAccessUser,
 } from './bookingAccess';
 import { getS3Client } from './s3Client';
+import { AppError } from './AppError';
 
 const S3_KEY_PREFIX = 's3:';
 const DEFAULT_PRESIGN_TTL = Number(process.env.S3_PRESIGN_TTL_SECONDS || 3600);
@@ -25,9 +26,9 @@ const ALLOWED_S3_OBJECT_KEY_RE = new RegExp(
   'i',
 );
 
-export class InvalidS3ObjectKeyError extends Error {
+export class InvalidS3ObjectKeyError extends AppError {
   constructor(message = 'INVALID_S3_KEY') {
-    super(message);
+    super(message, { statusCode: 400, code: 'INVALID_S3_KEY', isOperational: true });
     this.name = 'InvalidS3ObjectKeyError';
   }
 }

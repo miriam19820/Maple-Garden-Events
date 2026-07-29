@@ -16,6 +16,7 @@ import { getPaymentTemplatesFromSettings } from '../../utils/paymentTerms';
 import { syncBookingPaymentMetadata } from '../paymentDeadlineService';
 import { sendPDFToClient } from '../emailService';
 import { notifyContractClosedViaWhatsApp } from '../whatsappDealNotify.service';
+import { reportUnexpectedError } from '../../utils/reportUnexpectedError';
 import {
   emitBookingUpdated,
   emitDateUpdated,
@@ -244,7 +245,12 @@ export async function generateContractPdfForBooking(
         'Content-Disposition': `inline; filename="contract_${booking.eventCode || booking.id}.pdf"`,
       },
     };
-  } catch {
+  } catch (error) {
+    reportUnexpectedError(error, {
+      source: 'bookingContract.generatePdf',
+      title: 'Contract PDF generation failed',
+      context: { bookingId: booking.id, eventCode: booking.eventCode },
+    });
     return {
       status: 500,
       body: {

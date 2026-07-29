@@ -1225,6 +1225,7 @@
     "EMPTY_STATE_MESSAGE": "לא נמצאו פריטים להצגה",
     "ERROR_TITLE": "משהו השתבש",
     "ERROR_MESSAGE": "השגיאה נשלחה לצוות הפיתוח. ניתן לנסות שוב.",
+    "ERROR_REPORT": "דיווח על הבעיה",
     "SECTION_ITEMS": "{count} פריטים",
     "STAT_LOADING": "טוען",
     "BACK": "חזרה",

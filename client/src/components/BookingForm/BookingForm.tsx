@@ -13,6 +13,7 @@ import {
 } from '@shared/i18n/bookingLookups';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch, getAuthUser } from '../../services/api';
+import { reportClientError } from '../../utils/reportError';
 import { useGlobalSettingsQuery } from '../../hooks/queries';
 import {
   DEFAULT_PAYMENT_TEMPLATES,
@@ -391,7 +392,11 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           setPaymentTemplates(json.data.paymentTemplates);
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        reportClientError(error, {
+          tags: { source: 'BookingForm', step: 'contract-template-preload' },
+        });
+      });
   }, []);
 
   useEffect(() => {
@@ -456,8 +461,12 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         setOrderNumber(
           codes.length === 1 ? codes[0] : `${codes[0]} – ${codes[codes.length - 1]}`,
         );
-      } catch {
+      } catch (error) {
         // Keep empty; MetaBar shows "assigned on save" placeholder.
+        reportClientError(error, {
+          tags: { source: 'BookingForm', step: 'next-event-code' },
+          level: 'warning',
+        });
       }
     };
     loadNextCode();
@@ -473,7 +482,12 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         .then(json => {
           if (json.success && json.data?.code) setOrderNumber(json.data.code);
         })
-        .catch(() => {});
+        .catch((error) => {
+          reportClientError(error, {
+            tags: { source: 'BookingForm', step: 'convert-option-next-code' },
+            level: 'warning',
+          });
+        });
     }
   }, [convertFromOption, activeEditId]);
 
@@ -572,7 +586,13 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 return relatedJson.data;
               }
             }
-          } catch {}
+          } catch (error) {
+            reportClientError(error, {
+              tags: { source: 'BookingForm', step: 'related-options' },
+              extra: { bookingId },
+              level: 'warning',
+            });
+          }
           return [b];
         };
 

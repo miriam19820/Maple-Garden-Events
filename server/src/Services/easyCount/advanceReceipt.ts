@@ -7,6 +7,7 @@ import prisma from '../../config/prisma';
 import { logger } from '../../utils/logger';
 import { emitBookingUpdated } from '../../utils/realtime';
 import { recordAdvancePayment } from '../bookingPayment.service';
+import { reportSideEffectFailure, reportUnexpectedError } from '../../utils/reportUnexpectedError';
 import {
   easyCountFetch,
   getDocumentApiBaseUrl,
@@ -265,6 +266,14 @@ export async function issueAdvanceReceipt(input: EasyCountReceiptInput): Promise
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown EZCount error';
     logger.error('[EZCount] createDoc error', { eventCode: input.eventCode, mode, message });
+    if (mode === 'live') {
+      reportUnexpectedError(error, {
+        source: 'easyCount.createDoc',
+        title: 'EasyCount live receipt failed',
+        context: { eventCode: input.eventCode, mode, amount: input.amount },
+        severity: 'error',
+      });
+    }
     return {
       status: 'FAILED',
       docId: null,
@@ -344,12 +353,16 @@ export async function issueEasyCountReceiptForBooking(
       amount: booking.advancePaid,
       depositMethod: booking.depositMethod,
     }).catch((ledgerError) => {
-      logger.error('שגיאה ברישום מקדמה ליומן תשלומים:', ledgerError);
+      reportSideEffectFailure('advance-ledger', ledgerError, {
+        bookingId,
+        step: 'easyCount.skipped',
+      });
     });
     return null;
   }
 
-  const message = formatEasyCountUserMessage(result, getEasyCountMeta().mode);
+  const modeMeta = getEasyCountMeta().mode;
+  const message = formatEasyCountUserMessage(result, modeMeta);
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -361,6 +374,20 @@ export async function issueEasyCountReceiptForBooking(
     },
   });
 
+  if (result.status === 'FAILED' && modeMeta === 'live') {
+    reportUnexpectedError(new Error(result.error || message), {
+      source: 'easyCount.receiptFailed',
+      title: 'EasyCount live receipt status FAILED',
+      context: {
+        bookingId,
+        eventCode: booking.eventCode,
+        mode: modeMeta,
+        advancePaid: booking.advancePaid,
+      },
+      severity: 'error',
+    });
+  }
+
   if (result.status === 'ISSUED' || result.status === 'SIMULATED') {
     await recordAdvancePayment({
       bookingId,
@@ -369,7 +396,11 @@ export async function issueEasyCountReceiptForBooking(
       depositMethod: booking.depositMethod,
       easycountDocId: result.docId,
     }).catch((ledgerError) => {
-      logger.error('שגיאה ברישום מקדמה ליומן תשלומים:', ledgerError);
+      reportSideEffectFailure('advance-ledger', ledgerError, {
+        bookingId,
+        step: 'easyCount.issued',
+        easycountDocId: result.docId,
+      });
     });
   }
 

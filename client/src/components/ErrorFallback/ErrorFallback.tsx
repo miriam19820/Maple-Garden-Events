@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Sentry from '@sentry/react';
 import { useTranslation } from '../../i18n/useTranslation';
 import styles from './ErrorFallback.module.css';
 
@@ -23,11 +24,22 @@ export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetError,
       {import.meta.env.DEV && error && (
         <pre>{error.stack || error.message}</pre>
       )}
-      {resetError && (
-        <button type="button" onClick={resetError} className="maple-btn maple-btn-primary">
-          {t(T.COMMON.ACTIONS.RETRY)}
-        </button>
-      )}
+      <div className={styles.errorActions}>
+        {resetError && (
+          <button type="button" onClick={resetError} className="maple-btn maple-btn-primary">
+            {t(T.COMMON.ACTIONS.RETRY)}
+          </button>
+        )}
+        {eventId && import.meta.env.VITE_SENTRY_DSN ? (
+          <button
+            type="button"
+            className="maple-btn maple-btn-secondary"
+            onClick={() => Sentry.showReportDialog({ eventId })}
+          >
+            {t(T.UI.ERROR_REPORT)}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 };

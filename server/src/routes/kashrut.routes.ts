@@ -6,6 +6,7 @@ import { RBAC } from '../config/rbac';
 import { validate } from '../middlewares/validate';
 import { updateKashrutSchema } from '../validators/kashrut.validator';
 import { emitSettingsUpdated } from '../utils/realtime';
+import { reportUnexpectedError } from '../utils/reportUnexpectedError';
 
 const router = Router();
 
@@ -40,7 +41,12 @@ router.get('/', requireRole(...RBAC.MENU_READ), async (req: AuthRequest, res) =>
 
     const kashruts = await ensureTenantCertificate(tenantId);
     res.json(kashruts);
-  } catch {
+  } catch (error) {
+    reportUnexpectedError(error, {
+      source: 'kashrut.list',
+      title: 'Kashrut list failed',
+      context: { tenantId: req.user?.tenantId },
+    });
     res.status(500).json({ error: 'שגיאה בשליפת כשרויות' });
   }
 });
@@ -82,7 +88,12 @@ router.put(
 
       res.json({ success: true, data: updated });
       emitSettingsUpdated();
-    } catch {
+    } catch (error) {
+      reportUnexpectedError(error, {
+        source: 'kashrut.update',
+        title: 'Kashrut update failed',
+        context: { tenantId, id },
+      });
       res.status(500).json({ error: 'שגיאה בשמירה' });
     }
   },

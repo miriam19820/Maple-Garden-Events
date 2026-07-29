@@ -267,8 +267,14 @@ export function useEventFormsQuery() {
     queryKey: ['event-forms'],
     queryFn: async () => {
       const res = await apiFetch(`${API_URL}/event-forms`);
+      if (!res.ok) {
+        throw new Error(`event-forms ${res.status}`);
+      }
       const data = await res.json();
-      return Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        throw new Error('event-forms: unexpected response shape');
+      }
+      return data;
     },
   });
 }

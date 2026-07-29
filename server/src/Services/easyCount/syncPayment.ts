@@ -7,6 +7,7 @@ import {
 } from '../bookingPayment.service';
 import { randomUUID } from 'crypto';
 import type { EasyCountWebhookEvent } from './apiClient';
+import { reportSideEffectFailure } from '../../utils/reportUnexpectedError';
 
 function roundMoney(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -123,7 +124,13 @@ export async function applyHallInvoicePayment(event: EasyCountWebhookEvent): Pro
       remainingBalance: roundMoney(Math.max(0, hallAmount - totalPaid)),
     };
   }).then(async (result) => {
-    await syncBookingPaymentMetadata(result.bookingId).catch(() => undefined);
+    await syncBookingPaymentMetadata(result.bookingId).catch((err: unknown) => {
+      reportSideEffectFailure('payment-metadata-sync', err, {
+        bookingId: result.bookingId,
+        invoiceId: result.invoiceId,
+        step: 'easyCountWebhook',
+      });
+    });
     return result;
   });
 }

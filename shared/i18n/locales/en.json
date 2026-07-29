@@ -1225,6 +1225,7 @@
     "EMPTY_STATE_MESSAGE": "No items found",
     "ERROR_TITLE": "Something went wrong",
     "ERROR_MESSAGE": "The error was sent to the development team. You can try again.",
+    "ERROR_REPORT": "Report this issue",
     "SECTION_ITEMS": "{count} items",
     "STAT_LOADING": "Loading",
     "BACK": "Back",

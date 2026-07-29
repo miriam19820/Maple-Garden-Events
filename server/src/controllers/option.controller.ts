@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { allocateEventCode } from '../utils/eventCode';
+import { reportUnexpectedError } from '../utils/reportUnexpectedError';
 
 /** @deprecated Prefer POST /api/bookings with isOption: true */
 export const createNewOption = async (req: Request, res: Response) => {
@@ -37,6 +38,11 @@ export const createNewOption = async (req: Request, res: Response) => {
     });
     res.status(201).json({ success: true, data: newOption });
   } catch (error) {
+    reportUnexpectedError(error, {
+      source: 'option.createNewOption',
+      title: 'Create option failed',
+      context: { tenantId },
+    });
     res.status(500).json({ success: false, message: 'שגיאה בשמירת האופציה' });
   }
 };

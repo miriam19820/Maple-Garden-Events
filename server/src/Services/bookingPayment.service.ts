@@ -10,6 +10,7 @@ import { getHallBillableAmount } from '../utils/hallBilling';
 import { resolvePaymentStatus } from './easyCount/helpers';
 import { syncBookingPaymentMetadata } from './paymentDeadlineService';
 import { createServerError, T } from '../i18n/getServerTranslation';
+import { reportSideEffectFailure } from '../utils/reportUnexpectedError';
 
 export type PaymentSource = 'ADVANCE' | 'EASYCOUNT_INVOICE' | 'MANUAL';
 
@@ -184,7 +185,12 @@ export async function recordPayment(
   });
 
   if (!options?.skipMetadataSync) {
-    await syncBookingPaymentMetadata(input.bookingId).catch(() => undefined);
+    await syncBookingPaymentMetadata(input.bookingId).catch((err: unknown) => {
+      reportSideEffectFailure('payment-metadata-sync', err, {
+        bookingId: input.bookingId,
+        step: 'recordPayment',
+      });
+    });
   }
 
   return result;
@@ -246,7 +252,12 @@ export async function recordAdvancePayment(params: {
     await applyPaidAggregates(tx, params.bookingId, totalPaid);
   });
 
-  await syncBookingPaymentMetadata(params.bookingId).catch(() => undefined);
+  await syncBookingPaymentMetadata(params.bookingId).catch((err: unknown) => {
+    reportSideEffectFailure('payment-metadata-sync', err, {
+      bookingId: params.bookingId,
+      step: 'recordAdvancePayment',
+    });
+  });
 }
 
 export async function listBookingPayments(bookingId: string) {

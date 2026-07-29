@@ -30,6 +30,7 @@ import {
   calendarKeyFromDbDate,
 } from '../../utils/dateLocal';
 import { logger } from '../../utils/logger';
+import { reportSideEffectFailure } from '../../utils/reportUnexpectedError';
 import {
   normalizeTimeSlot,
   formatStoredTimeOfDay,
@@ -415,7 +416,9 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
     emitBookingUpdated(createdBookings[0].id);
     if (!isOption) {
       syncBookingPaymentMetadata(createdBookings[0].id).catch((err: unknown) => {
-        logger.error(`Background payment sync failed for booking ${createdBookings[0].id}`, { error: err });
+        reportSideEffectFailure('payment-metadata-sync', err, {
+          bookingId: createdBookings[0].id,
+        });
       });
     }
   }
@@ -456,7 +459,10 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
         );
       }
     } catch (pdfError) {
-      logger.error("שגיאה בהפקת או שליחת החוזה הראשוני למייל:", pdfError);
+      reportSideEffectFailure('contract-pdf-email-whatsapp', pdfError, {
+        bookingId: createdBookings[0]?.id,
+        step: 'createBooking.initialContract',
+      });
     }
   }
 
@@ -466,10 +472,16 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
       try {
         easycountResult = await issueEasyCountReceiptForBooking(savedBooking.id);
       } catch (easycountError) {
-        logger.error('שגיאה בהפקת קבלת EZCount:', easycountError);
+        reportSideEffectFailure('easycount-receipt', easycountError, {
+          bookingId: savedBooking.id,
+          step: 'createBooking',
+        });
       }
       await ensureAdvanceOnLedger(savedBooking.id).catch((ledgerError: unknown) => {
-        logger.error('שגיאה ברישום מקדמה ליומן תשלומים:', ledgerError);
+        reportSideEffectFailure('advance-ledger', ledgerError, {
+          bookingId: savedBooking.id,
+          step: 'createBooking',
+        });
       });
     }
   }
@@ -843,7 +855,10 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
           contractPdfBuffer,
         );
       } catch (pdfError) {
-        logger.error('שגיאה בהפקת או שליחת חוזה ה-PDF:', pdfError);
+        reportSideEffectFailure('contract-pdf-email-whatsapp', pdfError, {
+          bookingId: updated.id,
+          step: 'updateBooking.closeEvent',
+        });
       }
     }
 
@@ -852,10 +867,16 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
       try {
         easycountResult = await issueEasyCountReceiptForBooking(updated.id);
       } catch (easycountError) {
-        logger.error('שגיאה בהפקת קבלת EZCount:', easycountError);
+        reportSideEffectFailure('easycount-receipt', easycountError, {
+          bookingId: updated.id,
+          step: 'updateBooking.closeEvent',
+        });
       }
       await ensureAdvanceOnLedger(updated.id).catch((ledgerError: unknown) => {
-        logger.error('שגיאה ברישום מקדמה ליומן תשלומים:', ledgerError);
+        reportSideEffectFailure('advance-ledger', ledgerError, {
+          bookingId: updated.id,
+          step: 'updateBooking.closeEvent',
+        });
       });
     }
 
@@ -880,10 +901,16 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
     try {
       easycountResult = await issueEasyCountReceiptForBooking(updated.id);
     } catch (easycountError) {
-      logger.error('שגיאה בהפקת קבלת EZCount:', easycountError);
+      reportSideEffectFailure('easycount-receipt', easycountError, {
+        bookingId: updated.id,
+        step: 'updateBooking',
+      });
     }
     await ensureAdvanceOnLedger(updated.id).catch((ledgerError: unknown) => {
-      logger.error('שגיאה ברישום מקדמה ליומן תשלומים:', ledgerError);
+      reportSideEffectFailure('advance-ledger', ledgerError, {
+        bookingId: updated.id,
+        step: 'updateBooking',
+      });
     });
   }
 
@@ -1008,7 +1035,10 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
         contractPdfBuffer,
       );
     } catch (pdfError) {
-      logger.error("שגיאה בהפקת או שליחת חוזה ה-PDF:", pdfError);
+      reportSideEffectFailure('contract-pdf-email-whatsapp', pdfError, {
+        bookingId,
+        step: 'finalizeBooking',
+      });
     }
   }
 
@@ -1017,10 +1047,16 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
     try {
       easycountResult = await issueEasyCountReceiptForBooking(bookingId);
     } catch (easycountError) {
-      logger.error('שגיאה בהפקת קבלת EZCount:', easycountError);
+      reportSideEffectFailure('easycount-receipt', easycountError, {
+        bookingId,
+        step: 'finalizeBooking',
+      });
     }
     await ensureAdvanceOnLedger(bookingId).catch((ledgerError: unknown) => {
-      logger.error('שגיאה ברישום מקדמה ליומן תשלומים:', ledgerError);
+      reportSideEffectFailure('advance-ledger', ledgerError, {
+        bookingId,
+        step: 'finalizeBooking',
+      });
     });
   }
 

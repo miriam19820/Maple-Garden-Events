@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
 import { catchAsync } from '../middlewares/errorHandler';
+import { reportUnexpectedError } from '../utils/reportUnexpectedError';
 import {
   formatPhoneForWhatsAppCloud,
   resolveManagerWhatsAppPhone,
@@ -227,7 +228,14 @@ export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Respon
           where: { waMessageId: msg.messageId },
           data: { forwardedToManager: true },
         })
-        .catch(() => undefined);
+        .catch((err: unknown) => {
+          reportUnexpectedError(err, {
+            source: 'whatsapp.inbound.forwardFlag',
+            title: 'Failed to mark WhatsApp inbound as forwarded',
+            context: { messageId: msg.messageId },
+            alert: false,
+          });
+        });
     }
 
     logger.info('WhatsApp inbound message processed', {

@@ -20,6 +20,7 @@ import {
 } from '../utils/galleryLocalStorage';
 import { createGalleryThumbnail } from '../utils/galleryThumbnails';
 import { logger } from '../utils/logger';
+import { reportUnexpectedError } from '../utils/reportUnexpectedError';
 import type { DesignGalleryCategory } from '@maple/shared/gallery';
 
 const IMAGE_MIME_TYPES = new Set([
@@ -184,6 +185,11 @@ export const designGalleryController = {
       if (err instanceof UploadValidationError) {
         return res.status(err.statusCode).json({ success: false, message: err.message });
       }
+      reportUnexpectedError(err, {
+        source: 'designGallery.create',
+        title: 'Design gallery image upload failed',
+        context: { tenantId },
+      });
       return res.status(500).json({ success: false, message: 'שגיאה בהעלאת התמונה' });
     }
 
@@ -249,7 +255,12 @@ export const designGalleryController = {
           removeStoredImage(existing.imageUrl),
           removeStoredImage(existing.thumbnailUrl),
         ]);
-      } catch {
+      } catch (err) {
+        reportUnexpectedError(err, {
+          source: 'designGallery.update',
+          title: 'Design gallery image replace failed',
+          context: { tenantId, id },
+        });
         return res.status(500).json({ success: false, message: 'שגיאה בהעלאת התמונה' });
       }
     }

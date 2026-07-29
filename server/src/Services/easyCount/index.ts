@@ -15,6 +15,7 @@ import {
   computeHallBalanceBreakdown,
 } from './hallBalance';
 import { syncBookingPaymentMetadata } from '../paymentDeadlineService';
+import { reportSideEffectFailure } from '../../utils/reportUnexpectedError';
 import type { EasyCountInvoiceRequest, EasyCountInvoiceResult } from './types';
 
 export type { EasyCountInvoiceRequest, EasyCountInvoiceResult } from './types';
@@ -141,7 +142,12 @@ export async function createHallInvoice(
   });
 
   void hallAmount;
-  void syncBookingPaymentMetadata(booking.id);
+  void syncBookingPaymentMetadata(booking.id).catch((err: unknown) => {
+    reportSideEffectFailure('payment-metadata-sync', err, {
+      bookingId: booking.id,
+      step: 'createHallInvoice',
+    });
+  });
 
   return {
     id: stored.id,

@@ -109,3 +109,26 @@ See `server/.env.example`, `client/.env.example`, `infra/env.*.example`.
 3. Point App Runner / LB **liveness** at `/api/health/live` and **readiness** at `/api/health/ready`.
 4. Confirm smoke test uses readiness (deploy workflow already does).
 5. Optionally tune `SLOW_QUERY_MS` / `SLOW_REQUEST_MS` after a week of staging traffic.
+
+## Application error reporting (PR A)
+
+### Backend
+
+| Helper | When to use |
+|--------|-------------|
+| `AppError` / subclasses (`ForbiddenError`, …) | Throw from routes/services for **expected** business failures (`isOperational: true`, usually 4xx) |
+| `AppError.internal(...)` | Unexpected bugs — `isOperational: false` → Sentry + alert via `errorHandler` |
+| `errorHandler` + `catchAsync` | Preferred HTTP path; reports when `shouldReportToMonitoring(err, statusCode)` |
+| `reportUnexpectedError` / `reportSideEffectFailure` | Failures **outside** Express (post-commit PDF/EasyCount/email, fire-and-forget sync, silent local 500 handlers) |
+
+**Do not** swallow payment / EasyCount / ledger side effects with empty `.catch()`. Soft-fail the HTTP response if needed, but always call `reportSideEffectFailure`.
+
+### Frontend
+
+| Helper | When to use |
+|--------|-------------|
+| `Sentry.ErrorBoundary` | Render-time crashes only (shows `eventId` + optional report dialog) |
+| `reportClientError` | Async handlers / preload `.catch` — toast/alert for UX **and** Sentry |
+| React Query `QueryCache` / `MutationCache` `onError` | Automatic Sentry for failed queries/mutations |
+
+**Do not** rethrow routine API failures into the ErrorBoundary (would replace the whole UI).

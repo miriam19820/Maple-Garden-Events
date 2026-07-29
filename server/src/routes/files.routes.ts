@@ -18,6 +18,7 @@ import {
   BookingAccessDeniedError,
   extractBookingIdFromObjectKey,
 } from '../utils/bookingAccess';
+import { reportUnexpectedError } from '../utils/reportUnexpectedError';
 
 const router = Router();
 
@@ -77,6 +78,11 @@ router.get('/presigned', requireAuth, requireRole(...RBAC.MANAGEMENT), async (re
       res.status(400).json({ success: false, message: 'מפתח קובץ לא חוקי' });
       return;
     }
+    reportUnexpectedError(err, {
+      source: 'files.presign',
+      title: 'S3 presign failed',
+      context: { objectKey },
+    });
     res.status(500).json({ success: false, message: 'שגיאה ביצירת קישור זמני' });
   }
 });
@@ -124,6 +130,11 @@ router.post(
         res.status(403).json({ success: false, message: err.message });
         return;
       }
+      reportUnexpectedError(err, {
+        source: 'files.upload',
+        title: 'S3 upload failed',
+        context: { bookingId, category },
+      });
       res.status(500).json({ success: false, message: 'שגיאה בהעלאת קובץ' });
     }
   },

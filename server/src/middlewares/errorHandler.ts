@@ -3,9 +3,12 @@ import multer from 'multer';
 import { captureException } from '../config/sentry';
 import { logger } from '../utils/logger';
 import { notifyCriticalAlert } from '../Services/criticalAlert.service';
+import { AppError, shouldReportToMonitoring } from '../utils/AppError';
 import { HmacVerificationError } from '../utils/hmac';
 import { BookingAccessDeniedError } from '../utils/bookingAccess';
 import { ForbiddenError, NotFoundError } from '../utils/httpErrors';
+import { InvalidS3ObjectKeyError } from '../utils/s3Storage';
+import { CheckScanError } from '../Services/checkScan.service';
 import { UploadValidationError } from './uploadMiddleware';
 import {
   DEFAULT_LOCALE,
@@ -41,9 +44,15 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
   const locale = resolveLocaleFromRequest(req, DEFAULT_LOCALE);
   let statusCode = 500;
   let message: string = T.SERVER.ERROR.INTERNAL;
+  let errorCode: string | undefined = typeof err?.code === 'string' ? err.code : undefined;
 
   if (err instanceof multer.MulterError) {
     ({ statusCode, message } = resolveMulterError(err));
+    errorCode = err.code;
+  } else if (err instanceof AppError) {
+    statusCode = err.statusCode;
+    message = err.message || message;
+    errorCode = err.code ?? errorCode;
   } else if (err instanceof HmacVerificationError) {
     statusCode = 401;
     message = 'חתימת webhook לא תקינה.';
@@ -53,9 +62,12 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
   } else if (err instanceof NotFoundError) {
     statusCode = 404;
     message = err.message;
-  } else if (err instanceof UploadValidationError) {
+  } else if (err instanceof UploadValidationError || err instanceof CheckScanError) {
     statusCode = err.statusCode || 400;
     message = err.message;
+  } else if (err instanceof InvalidS3ObjectKeyError) {
+    statusCode = 400;
+    message = 'מפתח קובץ לא חוקי';
   } else if (typeof err?.statusCode === 'number') {
     statusCode = err.statusCode;
     message = err.message || message;
@@ -65,6 +77,8 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
 
   message = resolveServerMessage(locale, message, err?.i18nParams);
 
+  const appContext = err instanceof AppError ? err.context : undefined;
+
   logger.error('Unhandled error', {
     message,
     statusCode,
@@ -72,14 +86,17 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
     method: req.method,
     url: req.originalUrl,
     name: err?.name,
-    code: err?.code,
+    code: errorCode,
+    context: appContext,
   });
 
-  if (statusCode >= 500) {
+  if (shouldReportToMonitoring(err, statusCode)) {
     captureException(err, {
       statusCode,
       method: req.method,
       url: req.originalUrl,
+      code: errorCode,
+      ...appContext,
     });
     void notifyCriticalAlert({
       title: `HTTP ${statusCode} ${req.method} ${req.originalUrl}`,
@@ -90,6 +107,8 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
         statusCode,
         method: req.method,
         url: req.originalUrl,
+        code: errorCode,
+        ...appContext,
       },
       error: err,
     });
@@ -98,6 +117,7 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
   res.status(statusCode).json({
     success: false,
     message,
+    code: errorCode,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };

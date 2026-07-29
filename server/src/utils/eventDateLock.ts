@@ -4,6 +4,7 @@
  */
 
 import prisma from '../config/prisma';
+import { AppError } from './AppError';
 import { validateSlotAvailability } from './bookingDateValidation';
 import {
   getBookableSlotsForDate,
@@ -17,12 +18,14 @@ import {
 
 export type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
-export class HttpError extends Error {
-  statusCode: number;
-
+export class HttpError extends AppError {
   constructor(message: string, statusCode: number) {
-    super(message);
-    this.statusCode = statusCode;
+    super(message, {
+      statusCode,
+      code: 'HTTP_ERROR',
+      isOperational: statusCode >= 400 && statusCode < 500,
+    });
+    this.name = 'HttpError';
   }
 }
 
