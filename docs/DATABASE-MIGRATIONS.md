@@ -35,7 +35,7 @@ On push to `miriam` / `miryami` (staging) or `main` (production):
 3. **`bash scripts/db-migrate-deploy.sh`** (`prisma migrate deploy`) against the target RDS URL **before** App Runner rolls tasks  
 4. **App Runner** deploy new image  
 5. **Container entrypoint** runs the same migrate script again (idempotent safety net), then `node dist/server.js`  
-6. Health check `/api/health`
+6. Health check `/api/health/ready` (deep readiness; see `docs/MONITORING.md`)
 
 So the effective production command sequence is:
 

@@ -28,9 +28,16 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
           <ToastProvider>
-            <Sentry.ErrorBoundary fallback={({ error, resetError }) => (
-              <ErrorFallback error={error instanceof Error ? error : undefined} resetError={resetError} />
-            )}>
+            <Sentry.ErrorBoundary
+              fallback={({ error, resetError, eventId }) => (
+                <ErrorFallback
+                  error={error instanceof Error ? error : undefined}
+                  resetError={resetError}
+                  eventId={eventId}
+                />
+              )}
+              showDialog={false}
+            >
               <App />
             </Sentry.ErrorBoundary>
           </ToastProvider>

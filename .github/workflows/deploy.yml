@@ -72,6 +72,8 @@ jobs:
           docker build \
             --build-arg VITE_GOOGLE_CLIENT_ID="${{ secrets.VITE_GOOGLE_CLIENT_ID }}" \
             --build-arg VITE_API_URL="" \
+            --build-arg VITE_SENTRY_DSN="${{ secrets.VITE_SENTRY_DSN }}" \
+            --build-arg VITE_SENTRY_TRACES_SAMPLE_RATE="${{ secrets.VITE_SENTRY_TRACES_SAMPLE_RATE || '0.1' }}" \
             -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
             -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
             .
@@ -129,8 +131,9 @@ jobs:
             echo "HEALTH_URL not configured — skipping smoke test"
             exit 0
           fi
+          # Readiness: HTTP 200 means DB is up (degraded deps still pass; DB down → 503).
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -sf "$HEALTH_URL/api/health" | grep -q '"status":"ok"'; then
+            if curl -sf "$HEALTH_URL/api/health/ready?metrics=0" >/dev/null; then
               echo "✅ Health check passed"
               exit 0
             fi

@@ -31,12 +31,42 @@ import designGalleryRoutes from './routes/designGallery.routes';
 import { getGalleryUploadDir } from './utils/galleryLocalStorage';
 import fs from 'fs';
 
+import {
+  getLivenessReport,
+  getReadinessReport,
+  readinessHttpStatus,
+} from './Services/health.service';
+import { getApmSnapshot } from './utils/apmMetrics';
+
 validateEnv();
 
 const app = express();
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+/** Cheap process liveness — always 200 if the Node process is up. */
+app.get('/api/health/live', (_req, res) => {
+  res.json(getLivenessReport());
+});
+
+/**
+ * Deep readiness health (DB required; Redis/S3/email optional/degraded).
+ * Also available as GET /api/health for App Runner / Docker compatibility.
+ */
+async function sendReadiness(req: express.Request, res: express.Response) {
+  const includeMetrics = req.query.metrics !== '0';
+  const report = await getReadinessReport({ includeMetrics });
+  res.status(readinessHttpStatus(report)).json(report);
+}
+
+app.get('/api/health', (req, res) => {
+  void sendReadiness(req, res);
+});
+app.get('/api/health/ready', (req, res) => {
+  void sendReadiness(req, res);
+});
+
+/** Lightweight in-process APM counters (ops / debugging). */
+app.get('/api/health/metrics', (_req, res) => {
+  res.json({ success: true, data: getApmSnapshot() });
 });
 
 app.use(

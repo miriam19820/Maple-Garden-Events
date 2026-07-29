@@ -12,8 +12,12 @@ COPY shared ./shared
 COPY client ./client
 ARG VITE_GOOGLE_CLIENT_ID=
 ARG VITE_API_URL=
+ARG VITE_SENTRY_DSN=
+ARG VITE_SENTRY_TRACES_SAMPLE_RATE=0.1
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+ENV VITE_SENTRY_TRACES_SAMPLE_RATE=$VITE_SENTRY_TRACES_SAMPLE_RATE
 RUN npm run build -w client
 
 # --- Server build ---
@@ -74,7 +78,8 @@ WORKDIR /app/server
 
 EXPOSE 5000
 
+# Cheap liveness only — deep readiness is GET /api/health (DB required).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["bash", "./scripts/docker-entrypoint.sh"]

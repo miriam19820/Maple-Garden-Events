@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { captureException } from '../config/sentry';
 import { logger } from '../utils/logger';
+import { notifyCriticalAlert } from '../Services/criticalAlert.service';
 import { HmacVerificationError } from '../utils/hmac';
 import { BookingAccessDeniedError } from '../utils/bookingAccess';
 import { ForbiddenError, NotFoundError } from '../utils/httpErrors';
@@ -79,6 +80,18 @@ export const errorHandler = (err: ServerError & { code?: string }, req: Request,
       statusCode,
       method: req.method,
       url: req.originalUrl,
+    });
+    void notifyCriticalAlert({
+      title: `HTTP ${statusCode} ${req.method} ${req.originalUrl}`,
+      message: typeof message === 'string' ? message : 'Internal server error',
+      severity: 'critical',
+      source: 'express.errorHandler',
+      context: {
+        statusCode,
+        method: req.method,
+        url: req.originalUrl,
+      },
+      error: err,
     });
   }
 

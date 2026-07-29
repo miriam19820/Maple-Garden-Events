@@ -38,4 +38,27 @@ export function captureException(error: unknown, context?: Record<string, unknow
   });
 }
 
+export function captureMessage(
+  message: string,
+  level: Sentry.SeverityLevel = 'error',
+  context?: Record<string, unknown>,
+): void {
+  if (!enabled) return;
+  Sentry.withScope((scope) => {
+    scope.setTag('tenant', tenantTag);
+    if (context) scope.setContext('details', context);
+    Sentry.captureMessage(message, level);
+  });
+}
+
+/** Flush pending Sentry events (use before process.exit on fatal errors). */
+export async function flushSentry(timeoutMs = 2000): Promise<void> {
+  if (!enabled) return;
+  try {
+    await Sentry.flush(timeoutMs);
+  } catch {
+    // ignore flush failures during shutdown
+  }
+}
+
 export { Sentry };

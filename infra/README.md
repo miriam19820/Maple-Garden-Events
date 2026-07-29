@@ -91,12 +91,15 @@ aws apprunner create-service \
   }' \
   --health-check-configuration '{
     "Protocol": "HTTP",
-    "Path": "/api/health",
+    "Path": "/api/health/live",
     "Interval": 20,
     "Timeout": 5,
     "HealthyThreshold": 1,
     "UnhealthyThreshold": 5
   }'
+# Prefer /api/health/live for App Runner liveness (process up).
+# Use GET /api/health/ready for deploy smoke / deep readiness (DB required).
+# See docs/MONITORING.md.
 ```
 
 ## 6. GitHub Secrets (for deploy.yml)
@@ -111,6 +114,12 @@ aws apprunner create-service \
 | `APP_RUNNER_SERVICE_ARN_PRODUCTION` | Production service ARN |
 | `DATABASE_URL_STAGING` | RDS URL — GitHub Actions runs `scripts/db-migrate-deploy.sh` before App Runner deploy |
 | `DATABASE_URL_PRODUCTION` | Same for production |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client id (Docker build-arg) |
+| `VITE_SENTRY_DSN` | Optional frontend Sentry DSN (Docker build-arg) |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | Optional; defaults to `0.1` in Dockerfile |
+| `STAGING_HEALTH_URL` / `PRODUCTION_HEALTH_URL` | Base URL for deploy smoke (`/api/health/ready`) |
+
+Ops monitoring env (runtime Secrets Manager): `SENTRY_DSN`, `ALERT_WEBHOOK_URL`, thresholds — see [`docs/MONITORING.md`](../docs/MONITORING.md).
 
 ### Database migrations
 
