@@ -20,7 +20,7 @@ import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
 import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
-import { hasEventEnded } from '../../utils/eventStart';
+import { hasEventEnded, type EventFormTime } from '../../utils/eventStart';
 import { todayCalendarKey } from '../../utils/dateLocal';
 import { API_URL } from '../../config/api';
 import { secureFetch, getAuthUser } from '../../services/api';
@@ -68,7 +68,7 @@ interface Booking {
   guestCount: number;
   eventType: string;
   timeOfDay: string;
-  eventForm?: any;
+  eventForm?: EventFormTime | null;
   akumApprovalCode?: string;
   kosherType?: string | null;
   depositCheckUrl?: string | null;
@@ -212,12 +212,14 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const location = useLocation();
   const [search, setSearch] = useState('');
 
+  const seatingSeparateLabel = t(T.EVENT_FORM.SEATING_SEPARATE);
+  const seatingMixedLabel = t(T.EVENT_FORM.SEATING_MIXED);
   const separateMixedOptions = useMemo(
     () => [
-      { value: 'separate', label: t(T.EVENT_FORM.SEATING_SEPARATE) },
-      { value: 'mixed', label: t(T.EVENT_FORM.SEATING_MIXED) },
+      { value: 'separate', label: seatingSeparateLabel },
+      { value: 'mixed', label: seatingMixedLabel },
     ],
-    [t],
+    [seatingSeparateLabel, seatingMixedLabel],
   );
 
   const formatEventType = (value: string) => translateByValue(t, EVENT_TYPE_KEY_BY_VALUE, value);
@@ -253,7 +255,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const [notesList, setNotesList] = useState<string[]>(designExport?.notesList ?? []);
   const [newNote, setNewNote] = useState('');
 
-  const [kashrutImage, setKashrutImage] = useState<string | null>(null);
+  const kashrutImage = kashruts[0]?.imageUrl ?? null;
   const [isKashrutModalOpen, setIsKashrutModalOpen] = useState(false);
   
   const [selectedMenu, setSelectedMenu] = useState<Record<string, string[]> | null>(designExport?.selectedMenu ?? null);
@@ -311,6 +313,24 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     return Math.round((sections.filter(Boolean).length / sections.length) * 100);
   }, [formData, hasEntertainers, depositCheckFile, selectedMenu, selected?.eventType, showEntertainersSection]);
 
+  const resetEditorState = useCallback(() => {
+    setFormData({});
+    setNotesList([]);
+    setHasHonorTable(null);
+    setHasEntertainers(null);
+    setShowCamera(false);
+  }, []);
+
+  const clearSelected = useCallback(() => {
+    setSelected(null);
+    resetEditorState();
+  }, [resetEditorState]);
+
+  const selectBooking = useCallback((booking: Booking) => {
+    setShowCamera(false);
+    setSelected(booking);
+  }, []);
+
   const handleStepBack = useCallback(() => {
     if (showCamera) {
       setShowCamera(false);
@@ -337,9 +357,9 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       return;
     }
     if (selected) {
-      setSelected(null);
+      clearSelected();
     }
-  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, isDesignGalleryOpen, isTableLayoutModalOpen, selected]);
+  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, isDesignGalleryOpen, isTableLayoutModalOpen, selected, clearSelected]);
 
   const navigationOverride = useMemo(() => {
     const inSubStep =
@@ -356,7 +376,9 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   useNavigationOverride(navigationOverride);
 
   const prepareFormDataForSave = (data: EventFormData): EventFormData => {
-    const { menCount, womenCount, ...rest } = data;
+    const rest: EventFormData = { ...data };
+    delete rest.menCount;
+    delete rest.womenCount;
     const clearEntertainers = !showEntertainersSection || hasEntertainers === false;
     return {
       ...rest,
@@ -405,28 +427,19 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   };
 
   useEffect(() => {
-    if (kashruts.length > 0 && kashruts[0].imageUrl) {
-      setKashrutImage(kashruts[0].imageUrl);
-    }
-  }, [kashruts]);
-
-  useEffect(() => {
     if (designExport) return;
+    if (!selected) return;
 
-    if (!selected) {
-      setFormData({});
-      setNotesList([]);
-      setHasHonorTable(null);
-      setHasEntertainers(null);
-      setShowCamera(false);
-      return;
-    }
-    setShowCamera(false);
     secureFetch(`${API_URL}/event-forms/${selected.id}`, { credentials: 'include' })
       .then(r => r.json())
       .then(async (form) => {
         if (form && form.id) {
-          const { id, createdAt, updatedAt, booking, bookingId, tables, ...cleanForm } = form;
+          const { booking, tables, ...restForm } = form;
+          const cleanForm = { ...restForm };
+          delete cleanForm.id;
+          delete cleanForm.createdAt;
+          delete cleanForm.updatedAt;
+          delete cleanForm.bookingId;
           const bookingSource: Booking = {
             ...selected,
             kosherType: selected.kosherType ?? booking?.kosherType,
@@ -494,26 +507,31 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   }, [selected, designExport]);
 
   // Restore the open booking after returning from Gallery (or other sub-routes).
-  useEffect(() => {
-    if (designExport || selected || loading) return;
-    const state = location.state as { bookingId?: string; restoreEventForm?: boolean } | null;
-    const bookingId =
-      state?.bookingId ||
-      (typeof sessionStorage !== 'undefined'
-        ? sessionStorage.getItem(EVENT_FORM_RETURN_BOOKING_KEY)
-        : null);
-    if (!bookingId || bookings.length === 0) return;
-    const match = bookings.find((b) => b.id === bookingId);
-    if (match) {
-      setSelected(match);
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.removeItem(EVENT_FORM_RETURN_BOOKING_KEY);
-      }
-      if (state?.bookingId) {
-        navigate(location.pathname, { replace: true, state: {} });
-      }
+  const locationState = location.state as { bookingId?: string; restoreEventForm?: boolean } | null;
+  const returnBookingId =
+    !designExport && !loading && !selected
+      ? locationState?.bookingId ||
+        (typeof sessionStorage !== 'undefined'
+          ? sessionStorage.getItem(EVENT_FORM_RETURN_BOOKING_KEY)
+          : null)
+      : null;
+  const restoredBooking =
+    returnBookingId && bookings.length > 0
+      ? bookings.find((b) => b.id === returnBookingId) ?? null
+      : null;
+
+  if (restoredBooking && selected?.id !== restoredBooking.id) {
+    setSelected(restoredBooking);
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(EVENT_FORM_RETURN_BOOKING_KEY);
     }
-  }, [bookings, selected, loading, location.state, location.pathname, navigate, designExport]);
+  }
+
+  useEffect(() => {
+    if (!restoredBooking || !locationState?.bookingId) return;
+    if (selected?.id !== restoredBooking.id) return;
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [restoredBooking, selected?.id, locationState?.bookingId, location.pathname, navigate]);
 
   useEffect(() => {
     if (!selected || actionBusy) return;
@@ -613,14 +631,18 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     statusLabel: hasForm ? t(T.EVENT_FORM.STATUS_EXISTS) : t(T.EVENT_FORM.STATUS_PENDING),
   });
 
-  const handleInputChange = (field: keyof EventFormData, value: any) => {
+  const handleInputChange = (
+    field: keyof EventFormData,
+    value: EventFormData[keyof EventFormData] | string,
+  ) => {
     if (field === 'menCount' || field === 'womenCount') {
       setFormData(prev => {
+        const raw = typeof value === 'string' || typeof value === 'number' ? value : 0;
         const menCount = field === 'menCount'
-          ? Math.max(0, parseInt(value, 10) || 0)
+          ? Math.max(0, parseInt(String(raw), 10) || 0)
           : (prev.menCount || 0);
         const womenCount = field === 'womenCount'
-          ? Math.max(0, parseInt(value, 10) || 0)
+          ? Math.max(0, parseInt(String(raw), 10) || 0)
           : (prev.womenCount || 0);
         const { menPercent, womenPercent } = computePercentSplit(menCount, womenCount);
         return { ...prev, menCount, womenCount, menPercent, womenPercent };
@@ -628,7 +650,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     } else {
       setFormData(prev => ({
         ...prev,
-        [field]: value
+        [field]: value as EventFormData[typeof field],
       }));
     }
   };
@@ -819,7 +841,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
         clearEventFormDraft(selected.id);
         setDepositCheckFile(null);
         showEmailSaveMessage(result);
-        setSelected(null);
+        clearSelected();
         return;
       } else {
         alert(`${t(T.UI.SAVE_ERROR)}: ${result.error || t(T.COMMON.ERRORS.GENERIC)}`);
@@ -1001,7 +1023,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                           <EventCard
                             key={b.id}
                             event={toEventCard(b, false)}
-                            onView={() => setSelected(b)}
+                            onView={() => selectBooking(b)}
                             viewLabel={t(T.EVENT_FORM.OPEN_FORM)}
                           />
                         ))}
@@ -1019,7 +1041,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                           <EventCard
                             key={b.id}
                             event={toEventCard(b, true)}
-                            onView={() => setSelected(b)}
+                            onView={() => selectBooking(b)}
                             viewLabel={t(T.EVENT_FORM.EDIT_FORM)}
                           />
                         ))}
@@ -1079,13 +1101,13 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                       tabIndex={0}
                       onClick={() => {
                         if (form.booking) {
-                          setSelected(form.booking as Booking);
+                          selectBooking(form.booking as Booking);
                         }
                       }}
                       onKeyDown={(e) => {
                         if ((e.key === 'Enter' || e.key === ' ') && form.booking) {
                           e.preventDefault();
-                          setSelected(form.booking as Booking);
+                          selectBooking(form.booking as Booking);
                         }
                       }}
                     >
@@ -1126,7 +1148,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
               <span className="maple-meta-chip">{t(T.EVENT_FORM.META_KASHRUT, { value: formData.kashrut ? formatKashrut(formData.kashrut) : t(T.COMMON.LABELS.EM_DASH) })}</span>
             </div>
             {!designExport && (
-              <button type="button" onClick={() => setSelected(null)} className="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-3">✕ {t(T.UI.CLOSE)}</button>
+              <button type="button" onClick={() => clearSelected()} className="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-3">✕ {t(T.UI.CLOSE)}</button>
             )}
           </div>
 
@@ -1797,7 +1819,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
             </p>
 
             <div className="card-footer maple-form-footer d-flex flex-wrap gap-2 justify-content-between">
-                <button onClick={() => setSelected(null)} className="btn btn-outline-secondary">{t(T.EVENT_FORM.CANCEL)}</button>
+                <button onClick={() => clearSelected()} className="btn btn-outline-secondary">{t(T.EVENT_FORM.CANCEL)}</button>
 
                 <button
                   onClick={handleSaveForm}
