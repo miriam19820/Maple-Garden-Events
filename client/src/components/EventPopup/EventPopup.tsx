@@ -23,11 +23,15 @@ import {
   EVENT_TYPE_KEY_BY_VALUE,
   translateByValue,
 } from '@shared/i18n/bookingLookups';
+import {
+  type CalendarBookingApi,
+  type CalendarDayApi,
+} from '../../utils/optionDateApi';
 import liveEventStyles from '../LiveEvent/LiveEvent.module.css';
 import './EventPopup.css';
 
 interface EventPopupProps {
-  day: any;
+  day: CalendarDayApi;
   onClose: () => void;
   onAddEvent?: () => void;
   onAddOption?: () => void;
@@ -44,7 +48,12 @@ export const EventPopup = ({
   const navigate = useNavigate();
   const { t, T, locale } = useTranslation();
   const [checkInState, setCheckInState] = useState<{ bookingId: string; readOnly: boolean } | null>(null);
-  const [notifyBooking, setNotifyBooking] = useState<any | null>(null);
+  const [notifyBooking, setNotifyBooking] = useState<{
+    id: string;
+    clientAFullName?: string;
+    clientAEmail?: string;
+    clientAPhone?: string;
+  } | null>(null);
   const [, setTick] = useState(0);
   const bookings = day.bookings || [];
   const isOptionDay = hasOptionOnDay(day);
@@ -92,7 +101,7 @@ export const EventPopup = ({
     return () => window.clearInterval(id);
   }, []);
 
-  const buildMissingItems = (booking: any, isWedding: boolean) => {
+  const buildMissingItems = (booking: CalendarBookingApi, isWedding: boolean) => {
     const items: string[] = [];
     if (!booking.paidAmount || booking.paidAmount === 0) items.push(t(T.BOOKINGS.MISSING_ADVANCE));
     if (!booking.isContractSigned) items.push(t(T.BOOKINGS.MISSING_CONTRACT));
@@ -133,7 +142,7 @@ export const EventPopup = ({
             {bookings.length === 0 ? (
               <p className="no-events-msg">{t(T.CALENDAR.NO_EVENTS)}</p>
             ) : (
-              bookings.map((booking: any, index: number) => {
+              bookings.map((booking, index) => {
                 const isWedding = booking.eventType === DEFAULT_EVENT_TYPE;
                 const missingItems = buildMissingItems(booking, isWedding);
                 const editable = canEditBooking(day.date);
@@ -142,10 +151,11 @@ export const EventPopup = ({
                 const isBooked = !isOptionBooking;
                 const showCheckIn = isBooked && canViewCheckIn(day.date, booking, booking.eventForm);
                 const checkInEditable = showCheckIn && canEditCheckIn(day.date, booking, booking.eventForm);
+                const bookingId = booking.id;
 
                 return (
                   <div
-                    key={booking.id || index}
+                    key={bookingId || index}
                     className="event-card"
                     style={{ borderRightColor: getSlotColor(booking.timeOfDay) }}
                   >
@@ -155,7 +165,7 @@ export const EventPopup = ({
                           {booking.eventCode && (
                             <span className="event-code-badge">#{booking.eventCode} · </span>
                           )}
-                          {formatEventType(booking.eventType)} —{' '}
+                          {formatEventType(booking.eventType ?? '')} —{' '}
                           {formatTimeOfDayDisplay(t, booking.timeOfDay)}
                         </h3>
                         <span className={`status-badge ${isOptionBooking ? 'option' : 'booked'}`}>
@@ -163,20 +173,27 @@ export const EventPopup = ({
                         </span>
                       </div>
                       <div className="event-actions">
-                        {isOptionBooking && booking.id && !isPast && (
+                        {isOptionBooking && bookingId && !isPast && (
                           <button
                             type="button"
                             className="edit-btn notify-option-btn"
-                            onClick={() => setNotifyBooking(booking)}
+                            onClick={() =>
+                              setNotifyBooking({
+                                id: bookingId,
+                                clientAFullName: booking.clientAFullName,
+                                clientAEmail: booking.clientAEmail,
+                                clientAPhone: booking.clientAPhone,
+                              })
+                            }
                           >
                             {t(T.CALENDAR.NOTIFY)}
                           </button>
                         )}
-                        {isOptionBooking && booking.id && !isPast && (
+                        {isOptionBooking && bookingId && !isPast && (
                           <button
                             type="button"
                             className="edit-btn finalize-option-btn"
-                            onClick={() => handleCloseOption(booking.id)}
+                            onClick={() => handleCloseOption(bookingId)}
                           >
                             {t(T.CALENDAR.CLOSE_OPTION)}
                           </button>
@@ -184,18 +201,18 @@ export const EventPopup = ({
                         <button
                           type="button"
                           className="edit-btn"
-                          disabled={!editable || !booking.id}
+                          disabled={!editable || !bookingId}
                           title={editable ? t(T.BOOKINGS.EDIT_TITLE) : t(T.BOOKINGS.EDIT_BLOCKED)}
-                          onClick={() => booking.id && handleEdit(booking.id)}
+                          onClick={() => bookingId && handleEdit(bookingId)}
                         >
                           {t(T.CALENDAR.EDIT)}
                         </button>
-                        {booking.id && (
+                        {bookingId && (
                           <>
                             <button
                               type="button"
                               className="edit-btn"
-                              onClick={() => void openContractPdf(booking.id, t)}
+                              onClick={() => void openContractPdf(bookingId, t)}
                             >
                               {t(T.CALENDAR.VIEW_CONTRACT)}
                             </button>
@@ -204,7 +221,7 @@ export const EventPopup = ({
                               className="edit-btn"
                               onClick={async () => {
                                 try {
-                                  await printContract(booking.id, t);
+                                  await printContract(bookingId, t);
                                 } catch (e) {
                                   alert(
                                     e instanceof Error
@@ -223,13 +240,13 @@ export const EventPopup = ({
                             {t(T.BOOKINGS.CONTRACT_SIGNED_NO_IMAGE)}
                           </span>
                         )}
-                        {showCheckIn && booking.id && (
+                        {showCheckIn && bookingId && (
                           <button
                             type="button"
                             className={liveEventStyles.checkInBtn}
                             onClick={() =>
                               setCheckInState({
-                                bookingId: booking.id,
+                                bookingId,
                                 readOnly: !checkInEditable,
                               })
                             }

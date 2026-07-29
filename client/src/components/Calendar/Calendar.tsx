@@ -16,8 +16,14 @@ import { CalendarDaySidePanel } from './CalendarDaySidePanel';
 import { OptionFormModal } from './OptionFormModal';
 import { isEventLive } from '../../utils/eventStart';
 import { useTranslation } from '../../i18n/useTranslation';
+import { T as TranslationDict, type TranslationKey, type TranslationParams } from '@shared/i18n';
 import { DEFAULT_EVENT_TYPE, translateByValue, EVENT_TYPE_KEY_BY_VALUE } from '@shared/i18n/bookingLookups';
+import {
+  type CalendarBookingApi,
+  type CalendarDayApi,
+} from '../../utils/optionDateApi';
 import liveStyles from '../LiveEvent/LiveEvent.module.css';
+
 interface DayData {
   id: string | null;
   date: string;
@@ -27,7 +33,7 @@ interface DayData {
   reason: string | null;
   candleTime: string | null;
   lockedBy: string | null;
-  bookings: any[];
+  bookings: CalendarBookingApi[];
   blockedSlots?: string[];
   isCurrentMonth: boolean;
 }
@@ -42,7 +48,7 @@ const COL_HEADER_INDEX_KEYS = [0, 1, 2, 3, 4, 5, 6] as const;
 /** DOM order top→bottom so flex-end stacks: evening on top, morning at bottom */
 const CALENDAR_SLOT_STACK_ORDER: TimeSlot[] = ['evening', 'noon', 'morning'];
 
-function sortBookingsForCalendarCell(bookings: any[]) {
+function sortBookingsForCalendarCell(bookings: CalendarBookingApi[]) {
   return [...bookings].sort((a, b) => {
     const slotA = normalizeTimeSlot(a.timeOfDay) ?? 'morning';
     const slotB = normalizeTimeSlot(b.timeOfDay) ?? 'morning';
@@ -60,7 +66,6 @@ const formatDateLocal = (date: Date): string => {
 const CalendarCell = memo(({ 
   day, 
   todayStr, 
-  month: _month, 
   eventTypeFilter, 
   openDayPanel,
   t,
@@ -72,9 +77,9 @@ const CalendarCell = memo(({
   month: number;
   eventTypeFilter: string;
   openDayPanel: (day: DayData) => void;
-  t: any;
-  T: any;
-  getEventTitle: (booking: any) => string;
+  t: (key: TranslationKey, params?: TranslationParams) => string;
+  T: typeof TranslationDict;
+  getEventTitle: (booking: CalendarBookingApi) => string;
 }) => {
   const isToday = day.date === todayStr;
   const isPast = day.date < todayStr;
@@ -135,7 +140,7 @@ const CalendarCell = memo(({
         <div className="cell-status-text">{day.reason}</div>
       )}
       <div className={`cell-events-container${bookingCount > 0 ? ' has-events' : ''}`}>
-        {sortBookingsForCalendarCell(day.bookings).map((b: any, idx: number) => {
+        {sortBookingsForCalendarCell(day.bookings).map((b, idx) => {
           const baseColor = getSlotColor(b.timeOfDay);
           const isOptionBooking = b.isOption === true;
           const isLive =
@@ -187,12 +192,12 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const { t, T } = useTranslation();
   const navigate = useNavigate();
 
-  const getEventTitle = (booking: any) => {
+  const getEventTitle = (booking: CalendarBookingApi) => {
   // 1. מנקים רווחים נסתרים מסוג האירוע כדי שהקוד יזהה אותו בוודאות
   const type = (booking.eventType || '').trim(); 
 
   // 2. פונקציית עזר בטוחה לחילוץ שם משפחה
-  const getLastName = (fullName: string) => {
+  const getLastName = (fullName?: string) => {
     if (!fullName) return '';
     return fullName.trim().split(' ').pop() || '';
   };
@@ -201,13 +206,10 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const nameB = getLastName(booking.clientBFullName);
 
   // 3. חיבור חכם של השמות - רק אם יש באמת שני צדדים שונים
-  let namesDisplay = '';
-  if (nameA && nameB && nameA !== nameB) {
-    namesDisplay = `${nameA}-${nameB}`;
-  } else {
-    // אם הוזן רק צד אחד במערכת, נציג רק אותו
-    namesDisplay = nameA || nameB; 
-  }
+  const namesDisplay =
+    nameA && nameB && nameA !== nameB
+      ? `${nameA}-${nameB}`
+      : nameA || nameB;
 
   // 4. תצוגה סופית על הלוח (בלי מקף מיותר בחתונות)
   if (type === 'חתונה' || type === 'אירוסין') {
@@ -248,7 +250,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const datesList = Array.isArray(datesData) ? datesData : [];
 
   const buildGrid = () => {
-    const serverMap = new Map<string, any>(datesList.map((d: any) => [d.date, d]));
+    const serverMap = new Map<string, CalendarDayApi>(datesList.map((d) => [d.date, d]));
     const days: (DayData & { col: number; row: number })[] = [];
     const loop = new Date(startDate);
     let row = 1;
