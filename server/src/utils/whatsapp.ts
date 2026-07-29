@@ -1,5 +1,6 @@
 // src/utils/whatsapp.ts
 import { logger } from './logger';
+import { reportIntegrationFailure } from './reportUnexpectedError';
 import {
   DEFAULT_LOCALE,
   getServerTranslation,
@@ -50,6 +51,11 @@ export async function checkHasWhatsApp(rawPhone: string): Promise<boolean | null
 
     if (!res.ok) {
       logger.error('Green API checkWhatsapp failed', { status: res.status });
+      reportIntegrationFailure('whatsapp', new Error(`Green API checkWhatsapp HTTP ${res.status}`), {
+        operation: 'green.checkWhatsapp',
+        reason: String(res.status),
+        context: { status: res.status },
+      });
       return null;
     }
 
@@ -57,6 +63,10 @@ export async function checkHasWhatsApp(rawPhone: string): Promise<boolean | null
     return !!data.existsWhatsapp;
   } catch (error) {
     logger.error('Green API checkWhatsapp error', { error });
+    reportIntegrationFailure('whatsapp', error, {
+      operation: 'green.checkWhatsapp',
+      reason: 'network',
+    });
     return null;
   }
 }
@@ -80,6 +90,11 @@ async function sendGreenApiMessage(rawPhone: string, message: string): Promise<b
 
     if (!res.ok) {
       logger.error('Green API sendMessage failed', { status: res.status });
+      reportIntegrationFailure('whatsapp', new Error(`Green API sendMessage HTTP ${res.status}`), {
+        operation: 'green.sendMessage',
+        reason: String(res.status),
+        context: { status: res.status, phone: rawPhone },
+      });
       return false;
     }
 
@@ -87,6 +102,11 @@ async function sendGreenApiMessage(rawPhone: string, message: string): Promise<b
     return true;
   } catch (error) {
     logger.error('Green API sendMessage error', { error });
+    reportIntegrationFailure('whatsapp', error, {
+      operation: 'green.sendMessage',
+      reason: 'network',
+      context: { phone: rawPhone },
+    });
     return false;
   }
 }

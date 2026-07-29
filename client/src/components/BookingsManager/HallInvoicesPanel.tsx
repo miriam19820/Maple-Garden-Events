@@ -4,6 +4,7 @@ import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
 import { useTranslation } from '../../i18n/useTranslation';
 import { formatCurrency } from '@shared/i18n/formatters';
+import { runUserAction } from '../../utils/runUserAction';
 
 export interface HallInvoiceRow {
   id: string;
@@ -74,28 +75,34 @@ const HallInvoicesPanel = ({ bookingId, isOption, onPaymentUpdated }: HallInvoic
 
     setCreating(true);
     setActionError('');
-    try {
-      const res = await apiFetch(`${API_URL}/bookings/${bookingId}/invoice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.message || t(T.INVOICES.CREATE_ERROR));
-      await refetch();
-      onPaymentUpdated?.();
-      if (json.data?.invoice?.paymentUrl) {
-        window.open(json.data.invoice.paymentUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        alert(t(T.INVOICES.CREATED, { id: json.data.invoice.externalId }));
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : t(T.INVOICES.CREATE_ERROR);
-      setActionError(msg);
-      alert(msg);
-    } finally {
-      setCreating(false);
-    }
+    await runUserAction(
+      async () => {
+        const res = await apiFetch(`${API_URL}/bookings/${bookingId}/invoice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || t(T.INVOICES.CREATE_ERROR));
+        await refetch();
+        onPaymentUpdated?.();
+        if (json.data?.invoice?.paymentUrl) {
+          window.open(json.data.invoice.paymentUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          alert(t(T.INVOICES.CREATED, { id: json.data.invoice.externalId }));
+        }
+      },
+      {
+        tags: { source: 'HallInvoicesPanel', action: 'createInvoice' },
+        extra: { bookingId },
+        fallbackMessage: t(T.INVOICES.CREATE_ERROR),
+        onError: (_err, msg) => {
+          setActionError(msg);
+          alert(msg);
+        },
+      },
+    );
+    setCreating(false);
   };
 
   return (

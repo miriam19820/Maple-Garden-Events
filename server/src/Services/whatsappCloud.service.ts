@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { reportIntegrationFailure } from '../utils/reportUnexpectedError';
 
 const GRAPH_API_VERSION = process.env.WHATSAPP_GRAPH_VERSION || 'v20.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
@@ -80,6 +81,11 @@ async function postMessages(body: Record<string, unknown>): Promise<WhatsAppClou
     if (!res.ok) {
       const error = data.error?.message || `HTTP ${res.status}`;
       logger.error('WhatsApp Cloud API send failed', { status: res.status, error, data });
+      reportIntegrationFailure('whatsapp', new Error(error), {
+        operation: 'postMessages',
+        reason: String(data.error?.code ?? res.status),
+        context: { status: res.status, to: body.to, type: body.type, code: data.error?.code },
+      });
       return { ok: false, error };
     }
 
@@ -88,6 +94,11 @@ async function postMessages(body: Record<string, unknown>): Promise<WhatsAppClou
     return { ok: true, messageId };
   } catch (error) {
     logger.error('WhatsApp Cloud API send error', { error });
+    reportIntegrationFailure('whatsapp', error, {
+      operation: 'postMessages',
+      reason: 'network',
+      context: { to: body.to, type: body.type },
+    });
     return { ok: false, error: error instanceof Error ? error.message : 'unknown' };
   }
 }
@@ -127,12 +138,22 @@ export async function uploadWhatsAppCloudMedia(
     if (!res.ok || !data.id) {
       const error = data.error?.message || `HTTP ${res.status}`;
       logger.error('WhatsApp Cloud media upload failed', { status: res.status, error, data });
+      reportIntegrationFailure('whatsapp', new Error(error), {
+        operation: 'uploadMedia',
+        reason: String(res.status),
+        context: { status: res.status, filename },
+      });
       return { ok: false, error };
     }
 
     return { ok: true, mediaId: data.id };
   } catch (error) {
     logger.error('WhatsApp Cloud media upload error', { error });
+    reportIntegrationFailure('whatsapp', error, {
+      operation: 'uploadMedia',
+      reason: 'network',
+      context: { filename },
+    });
     return { ok: false, error: error instanceof Error ? error.message : 'unknown' };
   }
 }

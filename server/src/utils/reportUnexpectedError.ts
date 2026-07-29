@@ -88,3 +88,47 @@ export function reportSideEffectFailure(
     alert: true,
   });
 }
+
+export type IntegrationName = 'email' | 'whatsapp' | 's3' | 'easycount';
+
+/**
+ * Soft-fail integration reporting.
+ * Auth/credential failures page on-call; ordinary send failures go to Sentry only.
+ */
+export function reportIntegrationFailure(
+  integration: IntegrationName,
+  error: unknown,
+  options?: {
+    operation?: string;
+    reason?: string;
+    /** Force alert even when reason is not classified as auth. */
+    forceAlert?: boolean;
+    context?: Record<string, unknown>;
+  },
+): void {
+  const reason = (options?.reason || '').toLowerCase();
+  const message = error instanceof Error ? error.message : String(error);
+  const isAuthFailure =
+    options?.forceAlert === true ||
+    reason === 'auth_failed' ||
+    reason === 'invalid_token' ||
+    reason === 'unauthorized' ||
+    /eauth|oauth|access.?token|invalid.?token|credential|session has expired|\b190\b|\b401\b|\b403\b/i.test(
+      `${reason} ${message}`,
+    );
+
+  reportUnexpectedError(error instanceof Error ? error : new Error(message), {
+    source: `integration:${integration}${options?.operation ? `.${options.operation}` : ''}`,
+    title: isAuthFailure
+      ? `${integration} auth/config failure`
+      : `${integration} integration failure`,
+    context: {
+      integration,
+      operation: options?.operation,
+      reason: options?.reason,
+      ...options?.context,
+    },
+    severity: isAuthFailure ? 'critical' : 'error',
+    alert: isAuthFailure,
+  });
+}

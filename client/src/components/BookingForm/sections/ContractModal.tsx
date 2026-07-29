@@ -7,6 +7,7 @@ import modalStyles from './ContractModal.module.css';
 import { useTranslation } from '../../../i18n/useTranslation';
 import { secureFetch } from '../../../services/api';
 import { API_URL } from '../../../config/api';
+import { runUserAction } from '../../../utils/runUserAction';
 
 interface ContractModalProps {
   isOpen: boolean;
@@ -92,28 +93,31 @@ const ContractModal = ({
 
     if (bookingId) {
       setIsSigning(true);
-      try {
-        const response = await secureFetch(`${API_URL}/bookings/${bookingId}/sign-and-send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientSignature: dataUrl }),
-        });
-        const resData = await response.json().catch(() => ({}));
-        if (response.ok && resData.success) {
-          alert('החוזה נחתם בהצלחה ונשלח למייל (ולוואטסאפ אם מוגדר) של בעל האירוע.');
-        } else {
-          console.error(resData);
-          alert(
+      await runUserAction(
+        async () => {
+          const response = await secureFetch(`${API_URL}/bookings/${bookingId}/sign-and-send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientSignature: dataUrl }),
+          });
+          const resData = await response.json().catch(() => ({}));
+          if (response.ok && resData.success) {
+            alert('החוזה נחתם בהצלחה ונשלח למייל (ולוואטסאפ אם מוגדר) של בעל האירוע.');
+            return;
+          }
+          throw new Error(
             'החתימה נשמרה אך אירעה שגיאה בשליחת המסמך: '
               + (resData.message || `HTTP ${response.status}`),
           );
-        }
-      } catch (err) {
-        console.error(err);
-        alert('שגיאה בתקשורת עם השרת בזמן שמירת החתימה.');
-      } finally {
-        setIsSigning(false);
-      }
+        },
+        {
+          tags: { source: 'ContractModal', action: 'signAndSend' },
+          extra: { bookingId },
+          fallbackMessage: 'שגיאה בתקשורת עם השרת בזמן שמירת החתימה.',
+          onError: (_err, msg) => alert(msg),
+        },
+      );
+      setIsSigning(false);
     }
 
     onSignatureSaved?.(dataUrl);

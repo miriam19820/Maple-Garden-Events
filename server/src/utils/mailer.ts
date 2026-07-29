@@ -3,6 +3,7 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from './logger';
+import { reportIntegrationFailure } from './reportUnexpectedError';
 import {
   DEFAULT_LOCALE,
   getServerTranslation,
@@ -101,6 +102,11 @@ export async function verifyEmailConnection(): Promise<MailDeliveryResult> {
       user: getEmailUser(),
       hint: mailFailureMessage(reason),
     });
+    reportIntegrationFailure('email', error, {
+      operation: 'verify',
+      reason,
+      context: { user: getEmailUser() },
+    });
     return { ok: false, reason };
   }
 }
@@ -168,6 +174,11 @@ export async function deliverMail(
   } catch (error) {
     const reason = classifyMailError(error);
     logger.error(`Mail send error (${simulationLabel}):`, error);
+    reportIntegrationFailure('email', error, {
+      operation: 'deliverMail',
+      reason,
+      context: { label: simulationLabel, to: mailOptions.to },
+    });
     return { ok: false, reason };
   }
 }

@@ -138,3 +138,12 @@ See `server/.env.example`, `client/.env.example`, `infra/env.*.example`.
 High-traffic controllers/routes use `catchAsync` so failures reach `errorHandler` (Sentry + alerts for unexpected / ≥500).
 
 `requestLogger` is a **safety net**: if a response finishes with status ≥500 and `res.locals.monitoringReported` was not set by `errorHandler`, it captures a Sentry exception. Prefer fixing the handler to throw/`next(err)` rather than relying on the safety net.
+
+### Integrations & high-stakes UI (PR C)
+
+| Helper | When |
+|--------|------|
+| `reportIntegrationFailure('email'\|'whatsapp'\|…)` | Soft-fail SMTP/WhatsApp (and similar). **Auth/credential** reasons → critical alert; other failures → Sentry only |
+| `runUserAction(fn, { onError, tags })` | Client async handlers (invoices, EasyCount retry, contract sign, notify, login network). Toast/alert + Sentry; **not** ErrorBoundary |
+
+S3 upload failures on HTTP paths are covered by `catchAsync` → `errorHandler` (no extra integration wrapper, to avoid double alerts).

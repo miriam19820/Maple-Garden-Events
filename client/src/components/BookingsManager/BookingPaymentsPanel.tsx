@@ -121,6 +121,7 @@ const BookingPaymentsPanel = ({
     }
 
     try {
+      // Sentry: React Query MutationCache onError (see queryClient.ts)
       const result = await createPayment.mutateAsync({
         amount: parsedAmount,
         paymentMethod,
