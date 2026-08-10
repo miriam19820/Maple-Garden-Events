@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
-import { catchAsync } from '../middlewares/errorHandler';
 import {
   formatPhoneForWhatsAppCloud,
   resolveManagerWhatsAppPhone,
@@ -18,7 +17,7 @@ export type IncomingWhatsAppMessage = {
 };
 
 /**
- * GET /api/webhooks/whatsapp
+ * GET /api/whatsapp/webhook
  * Meta webhook verification challenge.
  */
 export const verifyWhatsAppWebhook = (req: Request, res: Response): void => {
@@ -40,6 +39,21 @@ export const verifyWhatsAppWebhook = (req: Request, res: Response): void => {
   });
   res.sendStatus(403);
 };
+
+/**
+ * Application hook for incoming text messages.
+ *
+ * Keep this intentionally small until the product-specific conversation
+ * workflow is implemented. The webhook processor invokes it after Meta has
+ * already received its acknowledgement, so future work here must never delay
+ * the webhook response.
+ */
+export async function handleIncomingMessage(phone: string, text: string): Promise<void> {
+  console.log('WhatsApp text message received', {
+    phone,
+    text,
+  });
+}
 
 function extractIncomingMessages(payload: unknown): IncomingWhatsAppMessage[] {
   const messages: IncomingWhatsAppMessage[] = [];
@@ -159,15 +173,27 @@ async function appendManagerCommentNote(
 }
 
 /**
- * POST /api/webhooks/whatsapp
- * Incoming Meta webhook events: match booking, persist, forward to manager.
+ * Process incoming Meta events after the webhook request has been acknowledged.
+ *
+ * This preserves the existing booking persistence/manager-forwarding behavior
+ * while ensuring slow database or network operations cannot make Meta retry the
+ * webhook request.
  */
-export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Response) => {
-  // Acknowledge immediately-safe: process after response if needed; keep sync for reliability in this app size.
-  const incoming = extractIncomingMessages(req.body);
-
+async function processIncomingMessages(
+  incoming: IncomingWhatsAppMessage[],
+  payloadObject?: string,
+): Promise<void> {
   for (const msg of incoming) {
     const from = formatPhoneForWhatsAppCloud(msg.from);
+    try {
+      await handleIncomingMessage(from, msg.text ?? '');
+    } catch (error: unknown) {
+      logger.error('Custom WhatsApp message handler failed', {
+        error,
+        from,
+        messageId: msg.messageId,
+      });
+    }
     const booking = await findBookingForInboundPhone(from);
 
     try {
@@ -241,9 +267,30 @@ export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Respon
 
   if (incoming.length === 0) {
     logger.debug('WhatsApp webhook event with no inbound messages', {
-      object: (req.body as { object?: string })?.object,
+      object: payloadObject,
     });
   }
+}
 
+/**
+ * POST /api/whatsapp/webhook
+ * Acknowledge Meta immediately, then process incoming messages asynchronously.
+ */
+export const handleWhatsAppWebhook = (req: Request, res: Response): void => {
+  const payload = req.body as unknown;
   res.sendStatus(200);
-});
+
+  console.log('WhatsApp webhook payload received', payload);
+
+  setImmediate(() => {
+    try {
+      const incoming = extractIncomingMessages(payload);
+      const payloadObject = (payload as { object?: string } | null)?.object;
+      void processIncomingMessages(incoming, payloadObject).catch((error: unknown) => {
+        logger.error('WhatsApp webhook background processing failed', { error });
+      });
+    } catch (error: unknown) {
+      logger.error('Failed to parse WhatsApp webhook payload', { error });
+    }
+  });
+};

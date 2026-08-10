@@ -100,6 +100,8 @@ app.use(csrfProtection);
 
 // Must mount before express.json so the route's express.raw can capture the original body.
 app.use('/api/webhooks/easy-count', easyCountWebhookRoutes);
+app.use('/api/whatsapp/webhook', whatsappWebhookRoutes);
+// Backward-compatible alias for environments already configured with the old URL.
 app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 
 app.use(express.json({ limit: '10mb' }));

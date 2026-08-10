@@ -34,8 +34,20 @@ import prisma from '../src/config/prisma';
 
 function buildApp() {
   const app = express();
-  app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
+  app.use('/api/whatsapp/webhook', whatsappWebhookRoutes);
   return app;
+}
+
+async function waitForBackgroundProcessing(assertion: () => void): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch {
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    }
+  }
+  assertion();
 }
 
 describe('WhatsApp Cloud webhook', () => {
@@ -69,30 +81,30 @@ describe('WhatsApp Cloud webhook', () => {
     process.env.WHATSAPP_VERIFY_TOKEN = 'maple-verify';
     const app = buildApp();
     const res = await request(app)
-      .get('/api/webhooks/whatsapp')
+      .get('/api/whatsapp/webhook')
       .query({
         'hub.mode': 'subscribe',
         'hub.verify_token': 'maple-verify',
-        'hub.challenge': '12345challenge',
+        'hub.challenge': '12345',
       });
     expect(res.status).toBe(200);
-    expect(res.text).toBe('12345challenge');
+    expect(res.text).toBe('12345');
   });
 
   it('GET rejects bad verify token', async () => {
     process.env.WHATSAPP_VERIFY_TOKEN = 'maple-verify';
     const app = buildApp();
     const res = await request(app)
-      .get('/api/webhooks/whatsapp')
+      .get('/api/whatsapp/webhook')
       .query({
         'hub.mode': 'subscribe',
         'hub.verify_token': 'wrong',
-        'hub.challenge': '12345challenge',
+        'hub.challenge': '12345',
       });
     expect(res.status).toBe(403);
   });
 
-  it('POST accepts signed inbound text, persists and forwards to manager', async () => {
+  it('POST acknowledges immediately, then persists and forwards inbound text', async () => {
     process.env.WHATSAPP_APP_SECRET = 'test-app-secret';
     process.env.NODE_ENV = 'test';
     const app = buildApp();
@@ -124,13 +136,78 @@ describe('WhatsApp Cloud webhook', () => {
       crypto.createHmac('sha256', 'test-app-secret').update(raw, 'utf8').digest('hex');
 
     const res = await request(app)
-      .post('/api/webhooks/whatsapp')
+      .post('/api/whatsapp/webhook')
       .set('Content-Type', 'application/json')
       .set('X-Hub-Signature-256', signature)
       .send(raw);
 
     expect(res.status).toBe(200);
-    expect(prisma.whatsAppInboundMessage.create).toHaveBeenCalled();
-    expect(prisma.booking.update).toHaveBeenCalled();
+    await waitForBackgroundProcessing(() => {
+      expect(prisma.whatsAppInboundMessage.create).toHaveBeenCalled();
+      expect(prisma.booking.update).toHaveBeenCalled();
+    });
+  });
+
+  it('POST returns 200 before slow background processing completes', async () => {
+    process.env.WHATSAPP_APP_SECRET = 'test-app-secret';
+    process.env.NODE_ENV = 'test';
+    let resolveBookingLookup: ((value: []) => void) | undefined;
+    (prisma.booking.findMany as jest.Mock).mockImplementationOnce(
+      () => new Promise<[]>((resolve) => {
+        resolveBookingLookup = resolve;
+      }),
+    );
+    const app = buildApp();
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        changes: [{
+          value: {
+            messages: [{
+              from: '972501234567',
+              id: 'wamid.SLOW',
+              type: 'text',
+              text: { body: 'שלום' },
+            }],
+          },
+        }],
+      }],
+    };
+    const raw = JSON.stringify(payload);
+    const signature =
+      'sha256=' +
+      crypto.createHmac('sha256', 'test-app-secret').update(raw, 'utf8').digest('hex');
+
+    const res = await request(app)
+      .post('/api/whatsapp/webhook')
+      .set('Content-Type', 'application/json')
+      .set('X-Hub-Signature-256', signature)
+      .send(raw);
+
+    expect(res.status).toBe(200);
+    expect(prisma.whatsAppInboundMessage.create).not.toHaveBeenCalled();
+    resolveBookingLookup?.([]);
+  });
+
+  it('POST safely accepts payloads without a messages array', async () => {
+    process.env.WHATSAPP_APP_SECRET = 'test-app-secret';
+    process.env.NODE_ENV = 'test';
+    const app = buildApp();
+    const raw = JSON.stringify({
+      object: 'whatsapp_business_account',
+      entry: [{ changes: [{ value: { statuses: [] } }] }],
+    });
+    const signature =
+      'sha256=' +
+      crypto.createHmac('sha256', 'test-app-secret').update(raw, 'utf8').digest('hex');
+
+    const res = await request(app)
+      .post('/api/whatsapp/webhook')
+      .set('Content-Type', 'application/json')
+      .set('X-Hub-Signature-256', signature)
+      .send(raw);
+
+    expect(res.status).toBe(200);
+    expect(prisma.whatsAppInboundMessage.create).not.toHaveBeenCalled();
   });
 });

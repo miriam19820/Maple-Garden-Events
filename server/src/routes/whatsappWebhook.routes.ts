@@ -7,11 +7,11 @@ import { whatsappWebhookSignatureMiddleware } from '../middlewares/whatsappWebho
 
 const router = Router();
 
-/** Meta webhook verification challenge */
+/** GET /api/whatsapp/webhook — Meta webhook verification challenge. */
 router.get('/', verifyWhatsAppWebhook);
 
 /**
- * Incoming messages / status updates.
+ * POST /api/whatsapp/webhook — incoming messages / status updates.
  * Raw body required for X-Hub-Signature-256 verification.
  */
 router.post(
