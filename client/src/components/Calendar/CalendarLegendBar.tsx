@@ -76,20 +76,18 @@ export function CalendarLegendBar({ showWeddingRestrictions = false }: CalendarL
 
   return (
     <div className={styles.root} dir="rtl">
-      <div
-        id={panelId}
-        className={`${styles.panel} ${expanded ? styles.panelOpen : ''}`}
-        aria-hidden={!expanded}
-      >
-        <div className={styles.legendRow} role="list">
-          {items.map((item) => (
-            <div key={item.id} className={styles.legendItem} role="listitem">
-              <LegendSwatch marker={item.marker} color={item.color} />
-              <span className={styles.legendLabel}>{item.label}</span>
-            </div>
-          ))}
+      {expanded && (
+        <div id={panelId} className={styles.panel}>
+          <div className={styles.legendRow} role="list">
+            {items.map((item) => (
+              <div key={item.id} className={styles.legendItem} role="listitem">
+                <LegendSwatch marker={item.marker} color={item.color} />
+                <span className={styles.legendLabel}>{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <button
         type="button"

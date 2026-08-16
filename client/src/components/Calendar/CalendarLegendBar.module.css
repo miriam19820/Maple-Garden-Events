@@ -1,12 +1,12 @@
+/* nowrap keeps the toggle on the toolbar row; the items wrap inside the panel. */
 .root {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px 16px;
-  flex: 1 1 100%;
-  width: 100%;
+  gap: 8px 14px;
   min-width: 0;
+  justify-self: end;
 }
 
 .toggle {
@@ -14,7 +14,6 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  order: 1;
   padding: 6px 10px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
@@ -51,39 +50,30 @@
   transform: rotate(180deg);
 }
 
+/* Sits inline next to the toggle so opening never claims a full-width row. */
 .panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  flex: 1 1 100%;
-  order: 2;
   min-width: 0;
-  width: 100%;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    grid-template-rows 0.28s ease,
-    opacity 0.22s ease;
-}
-
-.panelOpen {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  pointer-events: auto;
+  animation: legendFadeIn 0.2s ease;
 }
 
 .legendRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
-  gap: 10px 18px;
+  justify-content: flex-end;
+  gap: 8px 16px;
   min-width: 0;
-  overflow: hidden;
   padding-block: 2px;
 }
 
-.panelOpen .legendRow {
-  overflow: visible;
+@keyframes legendFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .legendItem {
@@ -118,7 +108,19 @@
 }
 
 @media (max-width: 768px) {
+  .root {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .panel {
+    flex: 1 1 100%;
+  }
+
   .legendRow {
+    justify-content: flex-start;
     gap: 8px 14px;
   }
 
