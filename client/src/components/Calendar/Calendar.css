@@ -42,10 +42,9 @@
 }
 
 .calendar-control-bar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 12px 16px;
   direction: rtl;
 }
@@ -54,7 +53,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1 1 auto;
+  grid-column: 1;
+  justify-self: start;
   min-width: 0;
 }
 
@@ -91,12 +91,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+  grid-column: 2;
+  justify-self: center;
 }
 
 .inline-date-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   flex-wrap: nowrap;
   flex-shrink: 0;
@@ -709,16 +711,20 @@
   }
 
   .calendar-control-bar {
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .calendar-availability-group {
-    flex: 1 1 100%;
+    grid-column: 1;
     justify-content: space-between;
+    width: 100%;
   }
 
   .calendar-inline-nav {
-    flex: 1 1 100%;
+    grid-column: 1;
+    justify-self: center;
+    width: 100%;
   }
 
   .inline-date-nav {
