@@ -1,12 +1,15 @@
+/*
+ * Positioning context for the legend dropdown. The container only ever wraps the
+ * toggle, so the open panel cannot widen the toolbar or push its other columns.
+ */
 .root {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px 16px;
-  flex: 1 1 100%;
-  width: 100%;
   min-width: 0;
+  justify-self: end;
+  grid-column: 3;
 }
 
 .toggle {
@@ -14,7 +17,6 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  order: 1;
   padding: 6px 10px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
@@ -51,39 +53,45 @@
   transform: rotate(180deg);
 }
 
+/*
+ * Dropdown menu anchored under the toggle. `inset-inline-end` keeps it flush
+ * with the button edge in both RTL and LTR, and absolute positioning keeps it
+ * out of the toolbar's layout flow entirely.
+ */
 .panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  flex: 1 1 100%;
-  order: 2;
-  min-width: 0;
-  width: 100%;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    grid-template-rows 0.28s ease,
-    opacity 0.22s ease;
-}
-
-.panelOpen {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  pointer-events: auto;
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 20;
+  min-width: max-content;
+  max-width: min(320px, 80vw);
+  padding: 10px 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  background: var(--brand-surface);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.12),
+    0 2px 6px rgba(15, 23, 42, 0.06);
+  animation: legendFadeIn 0.16s ease;
 }
 
 .legendRow {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px 18px;
-  min-width: 0;
-  overflow: hidden;
-  padding-block: 2px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
 }
 
-.panelOpen .legendRow {
-  overflow: visible;
+@keyframes legendFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .legendItem {
@@ -92,8 +100,6 @@
   gap: 8px;
   color: var(--brand-text-secondary);
   white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
 }
 
 .legendLabel {
@@ -118,11 +124,15 @@
 }
 
 @media (max-width: 768px) {
-  .legendRow {
-    gap: 8px 14px;
+  .root {
+    grid-column: 1;
+    justify-self: start;
   }
 
-  .legendItem {
-    white-space: normal;
+  /* Anchor to the button's start edge so the menu stays inside the viewport. */
+  .panel {
+    inset-inline-end: auto;
+    inset-inline-start: 0;
+    max-width: min(320px, 86vw);
   }
 }

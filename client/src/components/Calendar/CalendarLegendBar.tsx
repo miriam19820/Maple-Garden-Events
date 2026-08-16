@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
 import {
   TIME_SLOTS,
@@ -48,6 +48,28 @@ export function CalendarLegendBar({ showWeddingRestrictions = false }: CalendarL
   const { t, T } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // The panel overlays the calendar, so dismiss it like any other menu.
+  useEffect(() => {
+    if (!expanded) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExpanded(false);
+    };
+
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [expanded]);
 
   const items: LegendItem[] = [
     ...(showWeddingRestrictions
@@ -75,22 +97,7 @@ export function CalendarLegendBar({ showWeddingRestrictions = false }: CalendarL
   ];
 
   return (
-    <div className={styles.root} dir="rtl">
-      <div
-        id={panelId}
-        className={`${styles.panel} ${expanded ? styles.panelOpen : ''}`}
-        aria-hidden={!expanded}
-      >
-        <div className={styles.legendRow} role="list">
-          {items.map((item) => (
-            <div key={item.id} className={styles.legendItem} role="listitem">
-              <LegendSwatch marker={item.marker} color={item.color} />
-              <span className={styles.legendLabel}>{item.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
+    <div className={styles.root} dir="rtl" ref={rootRef}>
       <button
         type="button"
         className={styles.toggle}
@@ -116,6 +123,19 @@ export function CalendarLegendBar({ showWeddingRestrictions = false }: CalendarL
           />
         </svg>
       </button>
+
+      {expanded && (
+        <div id={panelId} className={styles.panel}>
+          <div className={styles.legendRow} role="list">
+            {items.map((item) => (
+              <div key={item.id} className={styles.legendItem} role="listitem">
+                <LegendSwatch marker={item.marker} color={item.color} />
+                <span className={styles.legendLabel}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
