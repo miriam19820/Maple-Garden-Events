@@ -1,12 +1,15 @@
-/* nowrap keeps the toggle on the toolbar row; the items wrap inside the panel. */
+/*
+ * Positioning context for the legend dropdown. The container only ever wraps the
+ * toggle, so the open panel cannot widen the toolbar or push its other columns.
+ */
 .root {
+  position: relative;
   display: flex;
-  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px 14px;
   min-width: 0;
   justify-self: end;
+  grid-column: 3;
 }
 
 .toggle {
@@ -50,29 +53,44 @@
   transform: rotate(180deg);
 }
 
-/* Sits inline next to the toggle so opening never claims a full-width row. */
+/*
+ * Dropdown menu anchored under the toggle. `inset-inline-end` keeps it flush
+ * with the button edge in both RTL and LTR, and absolute positioning keeps it
+ * out of the toolbar's layout flow entirely.
+ */
 .panel {
-  min-width: 0;
-  animation: legendFadeIn 0.2s ease;
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 20;
+  min-width: max-content;
+  max-width: min(320px, 80vw);
+  padding: 10px 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 12px;
+  background: var(--brand-surface);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.12),
+    0 2px 6px rgba(15, 23, 42, 0.06);
+  animation: legendFadeIn 0.16s ease;
 }
 
 .legendRow {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px 16px;
-  min-width: 0;
-  padding-block: 2px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
 }
 
 @keyframes legendFadeIn {
   from {
     opacity: 0;
+    transform: translateY(-4px);
   }
 
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -82,8 +100,6 @@
   gap: 8px;
   color: var(--brand-text-secondary);
   white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
 }
 
 .legendLabel {
@@ -109,22 +125,14 @@
 
 @media (max-width: 768px) {
   .root {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    justify-self: stretch;
-    width: 100%;
+    grid-column: 1;
+    justify-self: start;
   }
 
+  /* Anchor to the button's start edge so the menu stays inside the viewport. */
   .panel {
-    flex: 1 1 100%;
-  }
-
-  .legendRow {
-    justify-content: flex-start;
-    gap: 8px 14px;
-  }
-
-  .legendItem {
-    white-space: normal;
+    inset-inline-end: auto;
+    inset-inline-start: 0;
+    max-width: min(320px, 86vw);
   }
 }
