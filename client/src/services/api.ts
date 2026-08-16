@@ -143,6 +143,10 @@ export async function getAuthUser(): Promise<AuthUserInfo | null> {
         response = await secureFetch(`${API_BASE}/api/auth/me`);
       }
     }
+    if (response.status === 401 || response.status === 403) {
+      clearUserCache();
+      return null;
+    }
     if (!response.ok) return loadUserCache();
     const json = await response.json();
     if (json.user) {

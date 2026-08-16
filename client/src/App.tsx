@@ -7,6 +7,7 @@ import { Login } from './components/Login/Login';
 import { PageLoader } from './components/PageLoader/PageLoader';
 import { AccessibilityWidget } from './components/AccessibilityWidget/AccessibilityWidget';
 import { AccessibilityProvider } from './context/AccessibilityProvider';
+import { TenantBrandingProvider } from './contexts/TenantBrandingContext';
 import { checkAuthSession } from './services/api';
 import { connectSocket, disconnectSocket } from './services/socketService';
 import { setupRealtimeSync, teardownRealtimeSync } from './services/realtimeSync';

@@ -241,7 +241,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
 
   const todayStr = formatDateLocal(new Date());
 
-  const { data: datesData = [], isLoading: loading, isError } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
+  const { data: datesData = [], isLoading: loading, isError, error } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
   const datesList = Array.isArray(datesData) ? datesData : [];
 
   const buildGrid = () => {
@@ -404,7 +404,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       </div>
 
       {loading ? <div className="calendar-loading">{t(T.UI.LOADING_DATA)}</div> : isError ? (
-        <div className="calendar-loading">{t(T.CALENDAR.LOAD_ERROR)}</div>
+        <div className="calendar-loading">{error instanceof Error ? error.message : t(T.CALENDAR.LOAD_ERROR)}</div>
       ) : (
         <div className="calendar-grid-wrapper">
           <div className="calendar-weekdays-bar">
