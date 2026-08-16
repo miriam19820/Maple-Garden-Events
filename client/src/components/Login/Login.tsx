@@ -3,6 +3,7 @@ import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { getBrandConfig } from '@shared/brand/index';
 import { API_BASE } from '../../config/api';
 import { useTranslation } from '../../i18n/useTranslation';
+import { runUserAction } from '../../utils/runUserAction';
 import './Login.css';
 
 interface LoginProps {
@@ -20,24 +21,32 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: credentialResponse.credential }),
-      });
+    await runUserAction(
+      async () => {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: credentialResponse.credential }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok && data.success) {
-        onLoginSuccess();
-      } else {
+        if (response.ok && data.success) {
+          onLoginSuccess();
+          return;
+        }
+
+        // Access denied / invalid token are expected — surface locally, don't page Sentry.
         setError(data.message || t(T.AUTH.LOGIN.ERROR_ACCESS_DENIED));
-      }
-    } catch {
-      setError(t(T.AUTH.LOGIN.ERROR_NETWORK));
-    }
+      },
+      {
+        tags: { source: 'Login', action: 'googleLogin' },
+        level: 'warning',
+        fallbackMessage: t(T.AUTH.LOGIN.ERROR_NETWORK),
+        onError: (_err, msg) => setError(msg),
+      },
+    );
   };
 
   return (

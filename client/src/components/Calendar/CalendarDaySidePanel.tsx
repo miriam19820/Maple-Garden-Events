@@ -7,6 +7,7 @@ import {
   formatAvailableSlotsLabelForDate,
 } from '../../utils/timeSlot';
 import { todayCalendarKey } from '../../utils/dateLocal';
+import type { CalendarBookingApi } from '../../utils/optionDateApi';
 import styles from './CalendarDaySidePanel.module.css';
 
 export interface CalendarSidePanelDay {
@@ -14,7 +15,7 @@ export interface CalendarSidePanelDay {
   hebrewDate?: string;
   status?: string;
   reason?: string | null;
-  bookings?: any[];
+  bookings?: CalendarBookingApi[];
 }
 
 interface CalendarDaySidePanelProps {

@@ -1,19 +1,12 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../services/api';
 import { API_BASE } from '../config/api';
-
-interface TenantBranding {
-  venueName: string;
-  logoUrl: string;
-}
-
-const DEFAULT_BRANDING: TenantBranding = {
-  venueName: 'Maple Garden Events',
-  logoUrl: '/assets/maple-default-logo.png',
-};
-
-const TenantBrandingContext = createContext<TenantBranding>(DEFAULT_BRANDING);
+import {
+  DEFAULT_BRANDING,
+  TenantBrandingContext,
+  type TenantBranding,
+} from './useTenantBranding';
 
 interface ProviderProps {
   children: ReactNode;
@@ -44,8 +37,4 @@ export const TenantBrandingProvider = ({ children, isAuthenticated }: ProviderPr
       {children}
     </TenantBrandingContext.Provider>
   );
-};
-
-export const useTenantBranding = () => {
-  return useContext(TenantBrandingContext);
 };

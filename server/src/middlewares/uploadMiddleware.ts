@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import multer, { type FileFilterCallback } from 'multer';
+import { AppError } from '../utils/AppError';
 
 export const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -18,13 +19,14 @@ export const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   'text/plain',
 ]);
 
-export class UploadValidationError extends Error {
-  statusCode: number;
-
+export class UploadValidationError extends AppError {
   constructor(message: string, statusCode = 400) {
-    super(message);
+    super(message, {
+      statusCode,
+      code: 'UPLOAD_VALIDATION',
+      isOperational: true,
+    });
     this.name = 'UploadValidationError';
-    this.statusCode = statusCode;
   }
 }
 

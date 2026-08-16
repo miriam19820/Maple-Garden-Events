@@ -3,15 +3,14 @@ import {
   formatMoneyLine,
   paymentNoteText,
   type ExtrasLineItem,
-} from '../../vendor/shared/contract';
+} from '@maple/shared/contract';
 import { DEFAULT_LOCALE, getServerTranslation, T, type Locale } from '../../i18n/getServerTranslation';
 
 function esc(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/>/g, '&gt;');
 }
 
 function renderUpgradeTableRows(items: ExtrasLineItem[], emptyMessage: string): string {

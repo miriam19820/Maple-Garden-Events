@@ -4,86 +4,86 @@ import {
   parseAnnexSections,
   splitContractForDisplay,
 } from '../../../utils/contractSections';
+import { parseContractTextBlocks } from './parseContractTextBlocks';
+import styles from './ContractTextViewer.module.css';
 
 interface ContractTextViewerProps {
   text: string;
 }
 
-const sectionCardStyle: React.CSSProperties = {
-  marginBottom: '14px',
-  padding: '14px 16px',
-  background: '#ffffff',
-  borderRadius: '10px',
-  border: '1px solid #e2e8f0',
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
-};
+function emphasizeMarkers(text: string): React.ReactNode {
+  if (!text.includes('!!!')) return text;
+  return <strong className={styles.emphasis}>{text}</strong>;
+}
 
-const sectionTitleStyle: React.CSSProperties = {
-  margin: '0 0 10px',
-  color: '#1e293b',
-  fontSize: '1rem',
-  fontWeight: 700,
-  borderBottom: '2px solid #cbd5e1',
-  paddingBottom: '6px',
-};
+function ContractBlocks({ text }: { text: string }) {
+  const blocks = parseContractTextBlocks(text);
+
+  return (
+    <div className={styles.mainBody}>
+      {blocks.map((block, index) => {
+        if (block.type === 'heading') {
+          return (
+            <h4 key={`h-${index}`} className={styles.heading}>
+              {block.text}
+            </h4>
+          );
+        }
+
+        if (block.type === 'list') {
+          const ListTag = block.ordered ? 'ol' : 'ul';
+          return (
+            <ListTag key={`l-${index}`} className={styles.list}>
+              {block.items.map((item, itemIndex) => (
+                <li key={`li-${index}-${itemIndex}`} className={styles.listItem}>
+                  {emphasizeMarkers(item)}
+                </li>
+              ))}
+            </ListTag>
+          );
+        }
+
+        return (
+          <p key={`p-${index}`} className={styles.paragraph}>
+            {emphasizeMarkers(block.text)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 const ContractTextViewer: React.FC<ContractTextViewerProps> = ({ text }) => {
   const { mainText, annexText } = splitContractForDisplay(text);
 
   if (!annexText) {
     return (
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#334155' }}>
-        {text}
-      </div>
+      <article className={styles.document} dir="rtl">
+        <ContractBlocks text={text} />
+      </article>
     );
   }
 
   const sections = parseAnnexSections(annexText);
 
   return (
-    <div>
-      <div
-        style={{
-          whiteSpace: 'pre-wrap',
-          lineHeight: 1.8,
-          color: '#334155',
-          marginBottom: '18px',
-          paddingBottom: '16px',
-          borderBottom: '1px dashed #cbd5e1',
-        }}
-      >
-        {mainText}
-      </div>
+    <article className={styles.document} dir="rtl">
+      <ContractBlocks text={mainText} />
 
-      <div
-        style={{
-          background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
-          border: '2px solid #334155',
-          borderRadius: '12px',
-          padding: '18px',
-        }}
-      >
-        <h3
-          style={{
-            margin: '0 0 16px',
-            textAlign: 'center',
-            color: '#0f172a',
-            fontSize: '1.1rem',
-          }}
-        >
-          {ANNEX_TITLE}
-        </h3>
-
-        {sections.map((section) => (
-          <div key={section.title} style={sectionCardStyle}>
-            <h4 style={sectionTitleStyle}>{section.title}</h4>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.75, color: '#334155' }}>
-              {section.body}
+      <div className={styles.annexWrap}>
+        <div className={styles.annexPanel}>
+          <h3 className={styles.annexTitle}>{ANNEX_TITLE}</h3>
+          {sections.map((section) => (
+            <div key={section.title} className={styles.sectionCard}>
+              <h4 className={styles.sectionTitle}>{section.title}</h4>
+              <div className={styles.sectionBody}>
+                <ContractBlocks text={section.body} />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </article>
   );
 };
 

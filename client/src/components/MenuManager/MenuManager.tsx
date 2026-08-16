@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
 
+type MenuDish = {
+  id: number;
+  name: string;
+  price: string;
+};
+
 const MenuManager = () => {
   const { t, T } = useTranslation();
-  const [dishes, setDishes] = useState<any[]>([]);
+  const [dishes, setDishes] = useState<MenuDish[]>([]);
   const [newName, setNewName] = useState('');
   const [newPrice, setNewPrice] = useState('');
 

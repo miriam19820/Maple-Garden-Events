@@ -38,12 +38,18 @@
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0.28s;
   direction: rtl;
 }
 
 .app-sidebar-drawer-open {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .app-sidebar-overlay {

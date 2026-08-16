@@ -11,8 +11,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      // Prefer workspace source for Vite HMR; runtime package is @maple/shared
       '@shared/contract': path.resolve(__dirname, '../shared/contract/index.ts'),
       '@shared': path.resolve(__dirname, '../shared'),
+      '@maple/shared': path.resolve(__dirname, '../shared'),
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
   },
@@ -52,6 +54,10 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+      },
+      '/uploads': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,
       },

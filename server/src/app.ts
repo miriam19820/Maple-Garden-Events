@@ -24,15 +24,49 @@ import authRoutes from './routes/auth.routes';
 import checkInRoutes from './routes/checkIn.routes';
 import easyCountRoutes from './routes/easyCount.routes';
 import easyCountWebhookRoutes from './routes/easyCountWebhook.routes';
+import whatsappWebhookRoutes from './routes/whatsappWebhook.routes';
 import filesRoutes from './routes/files.routes';
 import checkScanRoutes from './routes/checkScan.routes';
+import designGalleryRoutes from './routes/designGallery.routes';
+import { getGalleryUploadDir } from './utils/galleryLocalStorage';
+import fs from 'fs';
+
+import {
+  getLivenessReport,
+  getReadinessReport,
+  readinessHttpStatus,
+} from './Services/health.service';
+import { getApmSnapshot } from './utils/apmMetrics';
 
 validateEnv();
 
 const app = express();
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+/** Cheap process liveness — always 200 if the Node process is up. */
+app.get('/api/health/live', (_req, res) => {
+  res.json(getLivenessReport());
+});
+
+/**
+ * Deep readiness health (DB required; Redis/S3/email optional/degraded).
+ * Also available as GET /api/health for App Runner / Docker compatibility.
+ */
+async function sendReadiness(req: express.Request, res: express.Response) {
+  const includeMetrics = req.query.metrics !== '0';
+  const report = await getReadinessReport({ includeMetrics });
+  res.status(readinessHttpStatus(report)).json(report);
+}
+
+app.get('/api/health', (req, res) => {
+  void sendReadiness(req, res);
+});
+app.get('/api/health/ready', (req, res) => {
+  void sendReadiness(req, res);
+});
+
+/** Lightweight in-process APM counters (ops / debugging). */
+app.get('/api/health/metrics', (_req, res) => {
+  res.json({ success: true, data: getApmSnapshot() });
 });
 
 app.use(
@@ -96,10 +130,16 @@ app.use(csrfProtection);
 
 // Must mount before express.json so the route's express.raw can capture the original body.
 app.use('/api/webhooks/easy-count', easyCountWebhookRoutes);
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(requestLogger);
+
+// Local gallery images when S3 is not configured
+const galleryUploadDir = getGalleryUploadDir();
+fs.mkdirSync(galleryUploadDir, { recursive: true });
+app.use('/uploads/gallery', express.static(galleryUploadDir, { maxAge: '7d' }));
 
 app.use('/api/easy-count', easyCountRoutes);
 app.use('/api/check-in', checkInRoutes);
@@ -114,6 +154,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/scan-check', checkScanRoutes);
+app.use('/api/design-gallery', designGalleryRoutes);
 
 const shouldServeClient =
   process.env.SERVE_CLIENT === 'true' || process.env.NODE_ENV === 'production';

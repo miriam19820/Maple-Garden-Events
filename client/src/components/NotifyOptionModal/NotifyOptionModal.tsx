@@ -3,6 +3,8 @@ import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
 import { useTranslation } from '../../i18n/useTranslation';
 import { formatDate } from '@shared/i18n/formatters';
+import { runUserAction } from '../../utils/runUserAction';
+import { buildDefaultOptionInterestMessage } from './buildDefaultOptionInterestMessage';
 import styles from './NotifyOptionModal.module.css';
 
 interface Props {
@@ -15,19 +17,6 @@ interface Props {
   eventDateStr: string;
   onClose: () => void;
   onSuccess?: () => void;
-}
-
-export function buildDefaultOptionInterestMessage(
-  translate: (key: string, params?: Record<string, string | number>) => string,
-  defaultKey: string,
-  clientName: string,
-  eventDateStr: string,
-  locale: string,
-): string {
-  const dateDisplay = eventDateStr.includes('-')
-    ? formatDate(eventDateStr, locale as 'he' | 'en')
-    : formatDate(new Date(eventDateStr), locale as 'he' | 'en');
-  return translate(defaultKey, { clientName, dateStr: dateDisplay });
 }
 
 const NotifyOptionModal = ({ booking, eventDateStr, onClose, onSuccess }: Props) => {
@@ -63,51 +52,57 @@ const NotifyOptionModal = ({ booking, eventDateStr, onClose, onSuccess }: Props)
     setIsSubmitting(true);
     setResult(null);
 
-    try {
-      const res = await apiFetch(`${API_URL}/bookings/notify-option-interest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id, message }),
-      });
-
-      let data: {
-        success?: boolean;
-        message?: string;
-        emailSent?: boolean;
-        whatsappSent?: boolean;
-        whatsappSimulated?: boolean;
-        skippedReasons?: string[];
-      };
-      try {
-        data = await res.json();
-      } catch {
-        alert(
-          res.status === 404
-            ? t(T.OPTIONS.NOTIFY_UNKNOWN_ACTION)
-            : t(T.OPTIONS.NOTIFY_SERVER_STATUS, { status: String(res.status) }),
-        );
-        return;
-      }
-
-      if (data.success) {
-        setResult({
-          emailSent: !!data.emailSent,
-          whatsappSent: !!data.whatsappSent,
-          whatsappSimulated: data.whatsappSimulated,
-          skippedReasons: data.skippedReasons,
+    await runUserAction(
+      async () => {
+        const res = await apiFetch(`${API_URL}/bookings/notify-option-interest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: booking.id, message }),
         });
-        onSuccess?.();
-      } else {
+
+        let data: {
+          success?: boolean;
+          message?: string;
+          emailSent?: boolean;
+          whatsappSent?: boolean;
+          whatsappSimulated?: boolean;
+          skippedReasons?: string[];
+        };
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error(
+            res.status === 404
+              ? t(T.OPTIONS.NOTIFY_UNKNOWN_ACTION)
+              : t(T.OPTIONS.NOTIFY_SERVER_STATUS, { status: String(res.status) }),
+          );
+        }
+
+        if (data.success) {
+          setResult({
+            emailSent: !!data.emailSent,
+            whatsappSent: !!data.whatsappSent,
+            whatsappSimulated: data.whatsappSimulated,
+            skippedReasons: data.skippedReasons,
+          });
+          onSuccess?.();
+          return;
+        }
+
         const details = data.skippedReasons?.length
           ? `${data.message || t(T.OPTIONS.NOTIFY_SEND_ERROR)}\n\n${data.skippedReasons.join('\n')}`
           : data.message || t(T.OPTIONS.NOTIFY_SEND_ERROR);
+        // Soft business failure (missing channels) — keep UX only.
         alert(details);
-      }
-    } catch {
-      alert(t(T.OPTIONS.NOTIFY_NETWORK_ERROR));
-    } finally {
-      setIsSubmitting(false);
-    }
+      },
+      {
+        tags: { source: 'NotifyOptionModal', action: 'notifyOptionInterest' },
+        extra: { bookingId: booking.id },
+        fallbackMessage: t(T.OPTIONS.NOTIFY_NETWORK_ERROR),
+        onError: (_err, msg) => alert(msg),
+      },
+    );
+    setIsSubmitting(false);
   };
 
   const resultLines: string[] = [];

@@ -1,4 +1,4 @@
-import { getBrandConfig } from '../vendor/shared/brand/index';
+import { getBrandConfig } from '@maple/shared/brand';
 const brand = getBrandConfig();
 import cron from 'node-cron';
 import prisma from '../config/prisma';
@@ -13,12 +13,17 @@ import {
   sendSecurityCheckReminderEmail,
   sendManagerFinancialAlertEmail,
 } from './mailer';
-import { processEndedEventsFeedback } from './feedbackHelpers';
+import {
+  processEndedEventsFeedback,
+  processPreviousDayEndedEventsFeedback,
+} from './feedbackHelpers';
 import { runDatabaseBackup } from './databaseBackup';
 import { processDueScheduledGreetings } from '../Services/greetingService';
 import { checkOverduePayments } from '../Services/paymentDeadlineService';
 import { computeHallBalanceBreakdown } from '../Services/easyCount/hallBalance';
+import { processPreviousDayFinancialSummaries } from '../Services/eventFinancialSummary.service';
 import { DEFAULT_LOCALE, getServerTranslation, T } from '../i18n/getServerTranslation';
+import { reportBackgroundFailure } from '../Services/criticalAlert.service';
 
 export const startCronJobs = () => {
   logger.info('Cron jobs service started');
@@ -27,13 +32,17 @@ export const startCronJobs = () => {
     const schedule = process.env.BACKUP_CRON || '0 3 * * *';
     cron.schedule(schedule, async () => {
       logger.info('Starting scheduled database backup');
-      await runDatabaseBackup();
+      try {
+        await runDatabaseBackup();
+      } catch (error) {
+        reportBackgroundFailure('database-backup', error);
+      }
     });
     logger.info(`Database backup scheduled: ${schedule}`);
   }
   
   // הגדרות למנהל
-  const MANAGER_PHONE = '0501234567'; 
+  const MANAGER_PHONE = process.env.MANAGER_PHONE || '0501234567';
   const MANAGER_EMAIL = process.env.MANAGER_EMAIL || brand.messaging.managerAlertEmail; 
 
   // ==========================================
@@ -150,6 +159,7 @@ export const startCronJobs = () => {
 
     } catch (error) {
       logger.error('שגיאה בהרצת התראות נודניק:', error);
+      reportBackgroundFailure('nudnik-reminders', error);
     }
   });
 
@@ -164,6 +174,37 @@ export const startCronJobs = () => {
       }
     } catch (error) {
       logger.error('שגיאה בתהליך שליחת משוב אוטומטי:', error);
+      reportBackgroundFailure('ended-events-feedback', error);
+    }
+  });
+
+  // ==========================================
+  // טיימר 3ב: משוב לאירועי אתמול (יומי ב-10:00)
+  // ==========================================
+  cron.schedule('0 10 * * *', async () => {
+    try {
+      const { eventsProcessed, linksSent, checked, date } =
+        await processPreviousDayEndedEventsFeedback();
+      logger.info(
+        `--- משוב יומי (${date}): ${linksSent} קישורים, ${eventsProcessed} אירועים, ${checked} נבדקו ---`,
+      );
+    } catch (error) {
+      logger.error('שגיאה במשוב יומי לאירועי אתמול:', error);
+      reportBackgroundFailure('previous-day-feedback', error);
+    }
+  });
+
+  // ==========================================
+  // טיימר 3ג: סיכום כספי למנהל — בוקר אחרי האירוע (09:15)
+  // ==========================================
+  cron.schedule('15 9 * * *', async () => {
+    logger.info('--- שולח סיכומים כספיים לאירועי אתמול ---');
+    try {
+      const { checked, sent, date } = await processPreviousDayFinancialSummaries();
+      logger.info(`✅ סיכום כספי (${date}): נשלחו ${sent}/${checked}`);
+    } catch (error) {
+      logger.error('שגיאה בסיכום כספי לאירועי אתמול:', error);
+      reportBackgroundFailure('previous-day-financial-summary', error);
     }
   });
 
@@ -178,6 +219,7 @@ export const startCronJobs = () => {
       }
     } catch (error) {
       logger.error('שגיאה בעיבוד ברכות מתוזמנות:', error);
+      reportBackgroundFailure('scheduled-greetings', error);
     }
   });
 
@@ -191,6 +233,7 @@ export const startCronJobs = () => {
       logger.info('✅ סריקת מועדי תשלום הסתיימה', summary);
     } catch (error) {
       logger.error('שגיאה בסריקת מועדי תשלום:', error);
+      reportBackgroundFailure('overdue-payments', error);
     }
   });
 
@@ -235,6 +278,7 @@ export const startCronJobs = () => {
       }
     } catch (error) {
       logger.error('שגיאה בסריקת תעודות כשרות:', error);
+      reportBackgroundFailure('kashrut-expiry', error);
     }
   });
 
