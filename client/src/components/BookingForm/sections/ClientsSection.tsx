@@ -103,7 +103,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
     <div className={`card mb-3 ${styles.clientsCard}`}>
       <div className="card-header maple-section-header">{t(T.BOOKING.CLIENTS.SECTION_TITLE)}</div>
       <div className="card-body">
-        <div className={`${styles.sides} ${isWedding ? styles.sidesSplit : ''}`}>
+        <div className={styles.sides}>
           <section className={styles.sidePanel}>
             <h4 className={styles.sideTitle}>{sideATitle}</h4>
             <div className={styles.fieldsStack}>
@@ -238,8 +238,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
           </section>
 
           {isWedding && (
-            <>
-              <div className={styles.divider} aria-hidden="true" />
               <section className={styles.sidePanel}>
                 <h4 className={styles.sideTitle}>{sideBTitle}</h4>
                 <div className={styles.fieldsStack}>
@@ -323,7 +321,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                   </FieldRow>
                 </div>
               </section>
-            </>
           )}
         </div>
       </div>

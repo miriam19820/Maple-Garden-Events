@@ -1237,6 +1237,24 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 upgradeDisplayOrder={visibleUpgradeKeys}
                 isHallOnly={isHallOnly}
               />
+            </div>
+
+            <div className="col-lg-4">
+              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
+              {isFoodRelevant && (
+                <div className="card mb-3">
+                  <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.MENU_TITLE)}</div>
+                  <div className="card-body py-2">
+                    <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder={t(T.BOOKING.NOTES.MENU_PLACEHOLDER)} />
+                  </div>
+                </div>
+              )}
+              <div className="card mb-3">
+                <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.INTERNAL_TITLE)}</div>
+                <div className="card-body py-2">
+                  <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder={t(T.BOOKING.NOTES.INTERNAL_PLACEHOLDER)} />
+                </div>
+              </div>
               {!isOption && (
                 <div className="card border-info mb-3">
                   <div className="card-body">
@@ -1286,24 +1304,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="col-lg-4">
-              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
-              {isFoodRelevant && (
-                <div className="card mb-3">
-                  <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.MENU_TITLE)}</div>
-                  <div className="card-body py-2">
-                    <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder={t(T.BOOKING.NOTES.MENU_PLACEHOLDER)} />
-                  </div>
-                </div>
-              )}
-              <div className="card mb-3">
-                <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.INTERNAL_TITLE)}</div>
-                <div className="card-body py-2">
-                  <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder={t(T.BOOKING.NOTES.INTERNAL_PLACEHOLDER)} />
-                </div>
-              </div>
             </div>
 
             <div className="col-lg-4">

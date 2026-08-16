@@ -131,12 +131,11 @@ const CalendarCell = memo(({
           {dayNum}
           {isToday && <span className="today-badge">{t(T.CALENDAR.TODAY)}</span>}
         </span>
-        {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
-        <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
+        {day.candleTime && <span className="candle-time">{day.candleTime}</span>}
+        <span className="hebrew-text">{day.hebrewDate}</span>
       </div>
 
-      {/* When events exist, prefer showing them over the period label (e.g. בין הזמנים). */}
-      {day.isCurrentMonth && bookingCount === 0 && day.reason && (
+      {bookingCount === 0 && day.reason && (
         <div className="cell-status-text">{day.reason}</div>
       )}
       <div className={`cell-events-container${bookingCount > 0 ? ' has-events' : ''}`}>
@@ -421,21 +420,19 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             className="calendar-grid calendar-grid-uniform"
             style={{ ['--calendar-week-rows' as string]: weekRowCount } as React.CSSProperties}
           >
-            {grid.map(day => {
-              return (
-                <CalendarCell
-                  key={day.date}
-                  day={day}
-                  todayStr={todayStr}
-                  month={month}
-                  eventTypeFilter={eventTypeFilter}
-                  openDayPanel={openDayPanel}
-                  t={t}
-                  T={T}
-                  getEventTitle={getEventTitle}
-                />
-              );
-            })}
+            {grid.map((day) => (
+              <CalendarCell
+                key={day.date}
+                day={day}
+                todayStr={todayStr}
+                month={month}
+                eventTypeFilter={eventTypeFilter}
+                openDayPanel={openDayPanel}
+                t={t}
+                T={T}
+                getEventTitle={getEventTitle}
+              />
+            ))}
           </div>
         </div>
       )}
