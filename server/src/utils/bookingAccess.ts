@@ -1,6 +1,7 @@
 import prisma from '../config/prisma';
 import { RBAC } from '../config/rbac';
 import type { UserRole } from '../middlewares/requireRole';
+import { AppError } from './AppError';
 
 const BOOKING_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -26,11 +27,9 @@ export type OrgContext = {
   role: string;
 };
 
-export class BookingAccessDeniedError extends Error {
-  readonly statusCode = 403;
-
+export class BookingAccessDeniedError extends AppError {
   constructor(message = 'אין הרשאה להזמנה זו') {
-    super(message);
+    super(message, { statusCode: 403, code: 'BOOKING_ACCESS_DENIED', isOperational: true });
     this.name = 'BookingAccessDeniedError';
   }
 }

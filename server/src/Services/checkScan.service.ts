@@ -1,5 +1,6 @@
 import vision from '@google-cloud/vision';
 import { logger } from '../utils/logger';
+import { AppError } from '../utils/AppError';
 import {
   type DepositCheckDetails,
   parseCheckFromVisionText,
@@ -16,12 +17,13 @@ const visionClient = new vision.ImageAnnotatorClient({
 const DATA_URL_PREFIX = /^data:image\/[a-zA-Z0-9.+-]+;base64,/;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // Vision practical limit for request payload
 
-export class CheckScanError extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode: number,
-  ) {
-    super(message);
+export class CheckScanError extends AppError {
+  constructor(message: string, statusCode: number) {
+    super(message, {
+      statusCode,
+      code: 'CHECK_SCAN',
+      isOperational: statusCode >= 400 && statusCode < 500,
+    });
     this.name = 'CheckScanError';
   }
 }

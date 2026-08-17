@@ -50,10 +50,12 @@ const GreetingBlast = () => {
         credentials: 'include',
       });
       const data = await res.json();
-      if (data.success) {
-        return data.items || [];
+      if (!res.ok || !data.success) {
+        throw new Error(
+          typeof data?.message === 'string' ? data.message : `scheduled-greetings ${res.status}`,
+        );
       }
-      return [];
+      return Array.isArray(data.items) ? data.items : [];
     },
     refetchInterval: (query) => {
       const items = query.state.data ?? [];

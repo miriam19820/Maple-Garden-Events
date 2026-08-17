@@ -4,15 +4,24 @@
 # ─── Stage 1: build React app ─────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS build
 
-WORKDIR /app/client
+WORKDIR /app
 
 ENV npm_config_strict_ssl=false
 
-COPY client/package.json client/package-lock.json ./
-RUN npm ci
+# npm workspaces: install from the single root lockfile (per-package lock files were dropped)
+COPY package.json package-lock.json ./
+COPY shared/package.json ./shared/
+COPY client/package.json ./client/
+COPY server/package.json ./server/
 
-COPY client/ ./
-COPY shared /app/shared
+RUN npm ci --workspace=client --workspace=@maple/shared --include-workspace-root=false
+
+# Build the shared workspace package first — client imports it as @maple/shared
+COPY shared ./shared
+RUN cd shared && npm run build
+
+COPY client/ ./client/
+WORKDIR /app/client
 
 ARG VITE_GOOGLE_CLIENT_ID
 ARG VITE_API_URL=/api

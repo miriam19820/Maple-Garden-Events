@@ -78,7 +78,6 @@ function mockDbUser(role: string, id = 'user-1') {
     id,
     email: TEST_EMAIL,
     role,
-    tenantId: 'tenant-1',
   });
 }
 

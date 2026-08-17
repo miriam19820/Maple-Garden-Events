@@ -17,6 +17,7 @@ model Tenant {
 
   bookings            Booking[]
   hallInvoices        HallInvoice[]
+  bookingPayments     BookingPayment[]
   eventCheckIns       EventCheckIn[]
   menuCategories      MenuCategory[]
   dishes              Dish[]
@@ -30,8 +31,10 @@ model Tenant {
   feedbacks           Feedback[]
   kashrutCertificates KashrutCertificate[]
   eventAdditions      EventAddition[]
-  authorizedUsers     AuthorizedUser[]
-  scheduledGreetings  ScheduledGreeting[]
+  authorizedUsers          AuthorizedUser[]
+  scheduledGreetings       ScheduledGreeting[]
+  whatsappInboundMessages  WhatsAppInboundMessage[]
+  designGalleryItems       DesignGalleryItem[]
 }
 
 model Booking {
@@ -103,7 +106,11 @@ model Booking {
   lastPaymentReminderSent DateTime?
   upgrades            Json?
   kosherType          String?
-  hallInvoices        HallInvoice[]
+  hallInvoices             HallInvoice[]
+  payments                 BookingPayment[]
+  whatsappInboundMessages  WhatsAppInboundMessage[]
+  /** Set after the post-event financial summary WhatsApp is sent to the manager. */
+  financialSummarySentAt   DateTime?
 
   @@unique([calendarDateId, timeSlot])
   @@index([tenantId])
@@ -125,10 +132,40 @@ model HallInvoice {
   webhookPayload   Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  payments         BookingPayment[]
 
   @@index([bookingId])
   @@index([status])
   @@index([tenantId])
+}
+
+/**
+ * Immutable-style payment ledger for an event/booking.
+ * Aggregates (advancePaid / totalPaid) are recomputed from this table.
+ */
+model BookingPayment {
+  id                     String       @id @default(uuid())
+  tenantId               String
+  tenant                 Tenant       @relation(fields: [tenantId], references: [id])
+  bookingId              String
+  booking                Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount                 Float
+  paidAt                 DateTime     @default(now())
+  /** cash | credit_card | check | bank_transfer | easycount | other */
+  paymentMethod          String
+  /** EasyCount receipt / transaction / invoice external id — unique when present */
+  easycountTransactionId String?      @unique
+  hallInvoiceId          String?
+  hallInvoice            HallInvoice? @relation(fields: [hallInvoiceId], references: [id], onDelete: SetNull)
+  /** ADVANCE | EASYCOUNT_INVOICE | MANUAL */
+  source                 String       @default("MANUAL")
+  notes                  String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@index([bookingId])
+  @@index([tenantId])
+  @@index([paidAt])
 }
 
 model EventCheckIn {
@@ -314,6 +351,27 @@ model ExtraService {
   @@index([tenantId])
 }
 
+/** Catalog of design options (tablecloths, napkins, etc.) with images for the event form gallery. */
+model DesignGalleryItem {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  category     String
+  name         String
+  description  String?
+  modelCode    String?
+  imageUrl     String
+  /** Lightweight WebP (or equivalent) for grid display; falls back to imageUrl when null. */
+  thumbnailUrl String?
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, category])
+}
+
 model StaffMember {
   id        String   @id @default(uuid())
   tenantId  String
@@ -325,20 +383,29 @@ model StaffMember {
   @@index([tenantId])
 }
 
+/**
+ * Feedback token + result (hybrid FeedbackToken / FeedbackResult).
+ * - token / isCompleted / completedAt → one-time response link per side
+ * - foodRating / serviceRating / venueRating / comments → quantitative result
+ * bookingId is the event reference (no separate Event table).
+ */
 model Feedback {
   id                String    @id @default(uuid())
   tenantId          String
   tenant            Tenant    @relation(fields: [tenantId], references: [id])
   bookingId         String
+  /** Side A / Side B ('A' | 'B') for dual-sided events */
   clientSide        String
   clientName        String?
   foodRating        Int?
   serviceRating     Int?
+  /** Venue / hall quality (maps to "Cleanliness" category in product language). */
   venueRating       Int?
   averageScore      Float?
   comments          String?
   token             String    @unique
   isCompleted       Boolean   @default(false)
+  completedAt       DateTime?
   lastNotifiedAt    DateTime?
   lastEmailSent     Boolean   @default(false)
   lastWhatsappSent  Boolean   @default(false)
@@ -408,4 +475,23 @@ model ScheduledGreeting {
   createdAt      DateTime  @default(now())
 
   @@index([tenantId])
+}
+
+/** Inbound Meta WhatsApp Cloud messages linked (when possible) to a booking. */
+model WhatsAppInboundMessage {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  tenant               Tenant   @relation(fields: [tenantId], references: [id])
+  bookingId            String?
+  booking              Booking? @relation(fields: [bookingId], references: [id])
+  fromPhone            String
+  waMessageId          String   @unique
+  messageType          String
+  text                 String?  @db.Text
+  forwardedToManager   Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([fromPhone])
+  @@index([bookingId])
 }

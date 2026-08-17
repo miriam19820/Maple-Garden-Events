@@ -1,5 +1,6 @@
 // src/utils/whatsapp.ts
 import { logger } from './logger';
+import { reportIntegrationFailure } from './reportUnexpectedError';
 import {
   DEFAULT_LOCALE,
   getServerTranslation,
@@ -7,6 +8,10 @@ import {
   type Locale,
   type Translator,
 } from '../i18n/getServerTranslation';
+import {
+  isWhatsAppCloudConfigured,
+  sendWhatsAppCloudText,
+} from '../Services/whatsappCloud.service';
 
 export type WhatsAppSendResult = {
   sent: boolean;
@@ -46,6 +51,11 @@ export async function checkHasWhatsApp(rawPhone: string): Promise<boolean | null
 
     if (!res.ok) {
       logger.error('Green API checkWhatsapp failed', { status: res.status });
+      reportIntegrationFailure('whatsapp', new Error(`Green API checkWhatsapp HTTP ${res.status}`), {
+        operation: 'green.checkWhatsapp',
+        reason: String(res.status),
+        context: { status: res.status },
+      });
       return null;
     }
 
@@ -53,6 +63,10 @@ export async function checkHasWhatsApp(rawPhone: string): Promise<boolean | null
     return !!data.existsWhatsapp;
   } catch (error) {
     logger.error('Green API checkWhatsapp error', { error });
+    reportIntegrationFailure('whatsapp', error, {
+      operation: 'green.checkWhatsapp',
+      reason: 'network',
+    });
     return null;
   }
 }
@@ -76,6 +90,11 @@ async function sendGreenApiMessage(rawPhone: string, message: string): Promise<b
 
     if (!res.ok) {
       logger.error('Green API sendMessage failed', { status: res.status });
+      reportIntegrationFailure('whatsapp', new Error(`Green API sendMessage HTTP ${res.status}`), {
+        operation: 'green.sendMessage',
+        reason: String(res.status),
+        context: { status: res.status, phone: rawPhone },
+      });
       return false;
     }
 
@@ -83,6 +102,11 @@ async function sendGreenApiMessage(rawPhone: string, message: string): Promise<b
     return true;
   } catch (error) {
     logger.error('Green API sendMessage error', { error });
+    reportIntegrationFailure('whatsapp', error, {
+      operation: 'green.sendMessage',
+      reason: 'network',
+      context: { phone: rawPhone },
+    });
     return false;
   }
 }
@@ -106,6 +130,16 @@ async function deliverWhatsApp(
   locale: Locale = DEFAULT_LOCALE,
 ): Promise<WhatsAppSendResult> {
   const { t } = getServerTranslation(locale);
+
+  // Prefer Meta WhatsApp Cloud API when configured; fall back to Green API.
+  if (isWhatsAppCloudConfigured()) {
+    const result = await sendWhatsAppCloudText(phone, message);
+    if (result.simulated) {
+      logger.info(t(T.SERVER.WHATSAPP.SIMULATION), { type, phone, message, provider: 'meta-cloud' });
+      return { sent: false, simulated: true, hasWhatsApp: null };
+    }
+    return { sent: result.ok, simulated: false, hasWhatsApp: result.ok ? true : null };
+  }
 
   if (isGreenApiConfigured()) {
     const hasWhatsApp = await checkHasWhatsApp(phone);

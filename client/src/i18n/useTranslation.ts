@@ -6,7 +6,7 @@ import {
   type TranslationKey,
   type TranslationParams,
 } from '@shared/i18n';
-import { I18nContext } from './I18nProvider';
+import { I18nContext } from './I18nContext';
 
 export function useTranslation() {
   const ctx = useContext(I18nContext);

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { calendarKeyFromDbDate } from '../../utils/dateLocal';
 import { formatTimeOfDayDisplay } from '../../utils/timeSlot';
 import { parseNotes, parseNotesBundle } from '../../utils/notesStorage';
@@ -12,9 +13,11 @@ import {
 } from '../../utils/easycount';
 import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
+import { runUserAction } from '../../utils/runUserAction';
 import { canEditBooking } from '../../utils/bookingEdit';
 import { NotesList } from '../NotesList/NotesList';
 import HallInvoicesPanel from './HallInvoicesPanel';
+import BookingPaymentsPanel from './BookingPaymentsPanel';
 import { useTranslation } from '../../i18n/useTranslation';
 import { formatDate, formatDateTime, formatCurrency } from '@shared/i18n/formatters';
 import {
@@ -34,6 +37,7 @@ interface BookingDetailsModalProps {
 
 const BookingDetailsModal = ({ booking, onClose, onBookingUpdated }: BookingDetailsModalProps) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { t, T, locale } = useTranslation();
   const [issuingReceipt, setIssuingReceipt] = useState(false);
 
@@ -63,25 +67,30 @@ const BookingDetailsModal = ({ booking, onClose, onBookingUpdated }: BookingDeta
 
   const handleIssueReceipt = async (force = false) => {
     setIssuingReceipt(true);
-    try {
-      const res = await apiFetch(`${API_URL}/bookings/${booking.id}/easycount-receipt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
-      });
-      const json = await res.json();
-      alert(
-        json.message ||
-          (json.success ? t(T.BOOKINGS.RECEIPT_SUCCESS) : t(T.BOOKINGS.RECEIPT_ERROR)),
-      );
-      if (json.success && json.data && onBookingUpdated) {
-        onBookingUpdated(json.data as BookingApi);
-      }
-    } catch {
-      alert(t(T.COMMON.ERRORS.CONNECTION));
-    } finally {
-      setIssuingReceipt(false);
-    }
+    await runUserAction(
+      async () => {
+        const res = await apiFetch(`${API_URL}/bookings/${booking.id}/easycount-receipt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force }),
+        });
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.message || t(T.BOOKINGS.RECEIPT_ERROR));
+        }
+        alert(json.message || t(T.BOOKINGS.RECEIPT_SUCCESS));
+        if (json.data && onBookingUpdated) {
+          onBookingUpdated(json.data as BookingApi);
+        }
+      },
+      {
+        tags: { source: 'BookingDetailsModal', action: 'easycountReceipt' },
+        extra: { bookingId: booking.id, force },
+        fallbackMessage: t(T.COMMON.ERRORS.CONNECTION),
+        onError: (_err, msg) => alert(msg),
+      },
+    );
+    setIssuingReceipt(false);
   };
 
   const titleParts = [
@@ -310,7 +319,23 @@ const BookingDetailsModal = ({ booking, onClose, onBookingUpdated }: BookingDeta
               </div>
             )}
 
-            <HallInvoicesPanel bookingId={booking.id} isOption={booking.isOption} />
+            <BookingPaymentsPanel
+              bookingId={booking.id}
+              isOption={booking.isOption}
+              onPaymentUpdated={(patch) => {
+                onBookingUpdated?.({ ...booking, ...patch });
+              }}
+            />
+
+            <HallInvoicesPanel
+              bookingId={booking.id}
+              isOption={booking.isOption}
+              onPaymentUpdated={() => {
+                void queryClient.invalidateQueries({
+                  queryKey: ['booking-payments', booking.id],
+                });
+              }}
+            />
 
             <div className={styles.popupRow}>
               <label>{t(T.BOOKINGS.LABEL_MUSIC)}</label>

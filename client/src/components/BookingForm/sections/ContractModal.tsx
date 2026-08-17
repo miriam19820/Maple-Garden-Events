@@ -1,10 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { getSignatureDataUrl } from '../../../utils/signature';
 import { openContractPdf } from '../../../utils/contractPrint';
 import ContractTextViewer from './ContractTextViewer';
 import modalStyles from './ContractModal.module.css';
 import { useTranslation } from '../../../i18n/useTranslation';
+import { secureFetch } from '../../../services/api';
+import { API_URL } from '../../../config/api';
+import { runUserAction } from '../../../utils/runUserAction';
 
 interface ContractModalProps {
   isOpen: boolean;
@@ -17,6 +20,7 @@ interface ContractModalProps {
   onContractTextChange: (text: string) => void;
   bookingId?: string;
   styles?: Record<string, string>;
+  savedSignature?: string | null;
 }
 
 /** Locked bitmap size — avoids ResizeObserver remounts that wipe strokes. */
@@ -32,6 +36,7 @@ const ContractModal = ({
   contractText,
   onContractTextChange,
   bookingId,
+  savedSignature,
 }: ContractModalProps) => {
   const { t, T } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
@@ -50,6 +55,18 @@ const ContractModal = ({
     }
   }
 
+  useEffect(() => {
+    if (isOpen && savedSignature && sigCanvas.current) {
+      // Small timeout to ensure canvas is fully mounted
+      setTimeout(() => {
+        sigCanvas.current?.fromDataURL(savedSignature);
+        latestSignatureRef.current = { gen: padGeneration, data: savedSignature };
+      }, 50);
+    }
+  }, [isOpen, savedSignature, sigCanvas, padGeneration]);
+
+  const [isSigning, setIsSigning] = useState(false);
+
   if (!isOpen) return null;
 
   const captureFromPad = (): string | null => {
@@ -63,7 +80,7 @@ const ContractModal = ({
     return null;
   };
 
-  const handleConfirmSignature = () => {
+  const handleConfirmSignature = async () => {
     if (isEditing) {
       alert(t(T.BOOKING.CONTRACT.SAVE_EDIT_BEFORE_SIGN));
       return;
@@ -73,6 +90,36 @@ const ContractModal = ({
       alert(t(T.BOOKING.CONTRACT.SIGN_REQUIRED));
       return;
     }
+
+    if (bookingId) {
+      setIsSigning(true);
+      await runUserAction(
+        async () => {
+          const response = await secureFetch(`${API_URL}/bookings/${bookingId}/sign-and-send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientSignature: dataUrl }),
+          });
+          const resData = await response.json().catch(() => ({}));
+          if (response.ok && resData.success) {
+            alert('החוזה נחתם בהצלחה ונשלח למייל (ולוואטסאפ אם מוגדר) של בעל האירוע.');
+            return;
+          }
+          throw new Error(
+            'החתימה נשמרה אך אירעה שגיאה בשליחת המסמך: '
+              + (resData.message || `HTTP ${response.status}`),
+          );
+        },
+        {
+          tags: { source: 'ContractModal', action: 'signAndSend' },
+          extra: { bookingId },
+          fallbackMessage: 'שגיאה בתקשורת עם השרת בזמן שמירת החתימה.',
+          onError: (_err, msg) => alert(msg),
+        },
+      );
+      setIsSigning(false);
+    }
+
     onSignatureSaved?.(dataUrl);
     setContractSigned(true);
     onClose();
@@ -194,9 +241,10 @@ const ContractModal = ({
             <button
               type="button"
               onClick={handleConfirmSignature}
+              disabled={isSigning}
               className={`maple-btn maple-btn-primary ${modalStyles.signBtn}`}
             >
-              {t(T.BOOKING.CONTRACT.CONFIRM_SIGN)}
+              {isSigning ? 'שומר חתימה ושולח...' : t(T.BOOKING.CONTRACT.CONFIRM_SIGN)}
             </button>
           </div>
         </div>

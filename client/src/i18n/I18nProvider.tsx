@@ -1,18 +1,12 @@
 import {
-  createContext,
   useCallback,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
-import { getTranslator, type Locale, type Translator } from '@shared/i18n';
+import { getTranslator, type Locale } from '@shared/i18n';
 import { applyDocumentLocale, loadStoredLocale, saveLocale } from './languageStorage';
-
-export type I18nContextValue = Translator & {
-  setLocale: (locale: Locale) => void;
-};
-
-export const I18nContext = createContext<I18nContextValue | null>(null);
+import { I18nContext, type I18nContextValue } from './I18nContext';
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {

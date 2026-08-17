@@ -3,6 +3,16 @@ import { useTranslation } from '../../i18n/useTranslation';
 import { toCalendarDateKey } from '../../utils/dateLocal';
 import styles from './HebrewDatePicker.module.css';
 
+function syncViewFromSelected(
+  selected: Date | null,
+  setViewYear: (y: number) => void,
+  setViewMonth: (m: number) => void,
+) {
+  if (!selected) return;
+  setViewYear(selected.getFullYear());
+  setViewMonth(selected.getMonth());
+}
+
 export interface HebrewDatePickerProps {
   value: string;
   onChange: (value: string) => void;
@@ -60,11 +70,20 @@ export function HebrewDatePicker({
   const [viewYear, setViewYear] = useState(() => (selected ?? today).getFullYear());
   const [viewMonth, setViewMonth] = useState(() => (selected ?? today).getMonth());
 
-  useEffect(() => {
-    if (!open || !selected) return;
-    setViewYear(selected.getFullYear());
-    setViewMonth(selected.getMonth());
-  }, [open, selected]);
+  const openPicker = () => {
+    if (disabled) return;
+    syncViewFromSelected(selected, setViewYear, setViewMonth);
+    setOpen(true);
+  };
+
+  const togglePicker = () => {
+    if (disabled) return;
+    if (open) {
+      setOpen(false);
+    } else {
+      openPicker();
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -158,7 +177,7 @@ export function HebrewDatePicker({
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="dialog"
-        onClick={() => !disabled && setOpen((v) => !v)}
+        onClick={togglePicker}
       >
         <span className={value ? styles.triggerValue : styles.triggerPlaceholder}>
           {value ? formatDisplay(value, locale) : '—'}

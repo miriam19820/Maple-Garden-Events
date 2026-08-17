@@ -6,9 +6,13 @@ import { startCronJobs } from './utils/cronJobs';
 import { initOrderSequence } from './utils/eventCode';
 import { logger } from './utils/logger';
 import { verifyEmailConnection } from './utils/mailer';
-import { getEasyCountMeta } from './Services/easycount.service';
+import { getEasyCountMeta } from './Services/easyCount';
+import { installProcessGuards } from './utils/processGuards';
+import { notifyCriticalAlert } from './Services/criticalAlert.service';
 import app from './app';
 import { getCorsOrigins } from './config/corsOrigins';
+
+installProcessGuards();
 
 const httpServer = createServer(app);
 
@@ -40,5 +44,11 @@ initOrderSequence()
   })
   .catch((err) => {
     logger.error('Failed to initialize order sequence', { error: err });
-    process.exit(1);
+    void notifyCriticalAlert({
+      title: 'Server failed to start',
+      message: err instanceof Error ? err.message : String(err),
+      severity: 'critical',
+      source: 'server.boot',
+      error: err,
+    }).finally(() => process.exit(1));
   });

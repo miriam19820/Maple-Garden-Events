@@ -4,7 +4,8 @@ import { catchAsync } from '../middlewares/errorHandler';
 import { DEFAULT_CONTRACT_TEXT } from '../utils/defaultContractText';
 import { emitSettingsUpdated } from '../utils/realtime';
 import { getPaymentTemplatesFromSettings } from '../utils/paymentTerms';
-import { getEasyCountMeta } from '../Services/easycount.service';
+import { getEasyCountMeta } from '../Services/easyCount';
+import { getBrandConfig } from '@maple/shared/brand';
 
 export const settingsController = {
   // =========================================
@@ -15,9 +16,11 @@ export const settingsController = {
     const tenantId = (req as any).user?.tenantId;
     if (!tenantId) return res.status(403).json({ error: 'Tenant context is missing.' });
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const brand = getBrandConfig();
     res.json({
-      venueName: tenant?.name || 'Maple Garden Events',
-      logoUrl: '/assets/maple-default-logo.png'
+      // Prefer brand public Hebrew name so UI/contracts stay consistent for Maple.
+      venueName: brand.publicVenueName || tenant?.name || brand.displayName,
+      logoUrl: brand.logoUrl || '/assets/maple-default-logo.png',
     });
   }),
 

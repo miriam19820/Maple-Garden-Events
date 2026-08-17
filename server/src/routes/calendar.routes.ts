@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { calendarController } from '../controllers/calendar.controller';
 import { calendarService } from '../Services/calendar.service';
 import { requireAuth } from '../middlewares/auth';
@@ -12,7 +12,7 @@ import {
   releaseDateSchema,
   saveOptionHoldSchema,
 } from '../validators/calendar.validator';
-import { logger } from '../utils/logger';
+import { catchAsync } from '../middlewares/errorHandler';
 
 const router = Router();
 router.use(requireAuth);
@@ -23,8 +23,11 @@ router.post('/release/:dateStr', requireRole(...RBAC.MANAGER_ONLY), validate(rel
 router.post('/option/:dateId', requireRole(...RBAC.CALENDAR_WRITE), validate(calendarBookingDetailsSchema), calendarController.createOption);
 router.post('/book-final/:dateId', requireRole(...RBAC.CALENDAR_WRITE), validate(calendarBookingDetailsSchema), calendarController.bookFinal);
 
-router.post('/options', requireRole(...RBAC.CALENDAR_WRITE), validate(saveOptionHoldSchema), async (req, res) => {
-  try {
+router.post(
+  '/options',
+  requireRole(...RBAC.CALENDAR_WRITE),
+  validate(saveOptionHoldSchema),
+  catchAsync(async (req: Request, res: Response) => {
     const { dates, clientName, clientPhone, clientEmail } = req.body;
 
     const result = await calendarService.saveOptionHold(
@@ -36,10 +39,7 @@ router.post('/options', requireRole(...RBAC.CALENDAR_WRITE), validate(saveOption
     );
     await invalidateCache('calendar');
     res.status(200).json({ success: true, data: result });
-  } catch (error) {
-    logger.error('שגיאה בשמירת אופציה', { error });
-    res.status(500).json({ error: 'אירעה שגיאה בשרת בעת שמירת האופציה' });
-  }
-});
+  }),
+);
 
 export default router;

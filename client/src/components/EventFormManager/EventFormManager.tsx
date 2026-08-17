@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from '../../i18n/useTranslation';
-import { formatDate, formatDateTime, formatCurrency } from '@shared/i18n/formatters';
+import { formatDate, formatDateTime } from '@shared/i18n/formatters';
 import {
   translateByValue,
   EVENT_TYPE_KEY_BY_VALUE,
   KASHRUT_KEY_BY_VALUE,
+  DEFAULT_EVENT_TYPE,
 } from '@shared/i18n/bookingLookups';
 import { formatTimeOfDayDisplay } from '../../utils/timeSlot';
 import { useNavigationOverride } from '../../context/navigationContext';
@@ -19,8 +20,7 @@ import MenuSelectionForm from '../MenuSelectionForm/MenuSelectionForm';
 import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
-import { calculatePortionBilling } from '../../utils/portionBilling';
-import { hasEventEnded } from '../../utils/eventStart';
+import { hasEventEnded, type EventFormTime } from '../../utils/eventStart';
 import { todayCalendarKey } from '../../utils/dateLocal';
 import { API_URL } from '../../config/api';
 import { secureFetch, getAuthUser } from '../../services/api';
@@ -30,10 +30,13 @@ import {
   clearEventFormDraft,
   type EventFormDraftSnapshot,
 } from '../../utils/eventFormDraft';
+import { consumePendingDesignSelections } from '../../utils/designGallerySelection';
+import { DesignSelectionSummary } from '../DesignGallery/DesignSelectionSummary';
+import { DesignGalleryModal } from '../DesignGallery/DesignGalleryModal';
+import type { DesignFormField } from '@shared/gallery';
 import {
   useBookingsQuery,
   useEventFormsQuery,
-  useGlobalSettingsQuery,
   useKashrutQuery,
 } from '../../hooks/queries';
 import {
@@ -44,6 +47,10 @@ import {
   EmptyState,
   type EventCardData,
 } from '../ui';
+
+const BAR_MITZVAH_EVENT_TYPE = 'בר מצווה';
+const DEFAULT_RECEPTION_TIME = '18:00';
+const EVENT_FORM_RETURN_BOOKING_KEY = 'eventFormReturnBookingId';
 
 interface Booking {
   id: string;
@@ -61,9 +68,20 @@ interface Booking {
   guestCount: number;
   eventType: string;
   timeOfDay: string;
-  eventForm?: any;
+  eventForm?: EventFormTime | null;
   akumApprovalCode?: string;
+  kosherType?: string | null;
+  depositCheckUrl?: string | null;
+  depositCheckDetails?: DepositCheckDetails | null;
+  depositCheckStatus?: boolean | null;
 }
+
+const showsReceptionTime = (eventType?: string) =>
+  eventType === DEFAULT_EVENT_TYPE || eventType === BAR_MITZVAH_EVENT_TYPE;
+
+const showsEntertainers = (eventType?: string) => eventType === DEFAULT_EVENT_TYPE;
+
+const requiresReceptionTime = (eventType?: string) => eventType === DEFAULT_EVENT_TYPE;
 
 const computePercentSplit = (menCount: number, womenCount: number) => {
   const total = menCount + womenCount;
@@ -126,6 +144,28 @@ const KASHRUT_LIST = [
   'בדץ ע"ח'
 ];
 
+/** Map Contract Form kosherType codes → Event Production Form kashrut values. */
+const CONTRACT_KOSHER_TO_EVENT_KASHRUT: Record<string, string> = {
+  rubin: 'רובין',
+  רובין: 'רובין',
+  bad_reuven: 'רובין',
+  machpud: 'מחפוד',
+  מחפוד: 'מחפוד',
+  landa: 'לנדא',
+  לנדא: 'לנדא',
+  kehilot: 'בדץ קהילות',
+  'בדץ קהילות': 'בדץ קהילות',
+  gross: 'הרב גרוס',
+  'הרב גרוס': 'הרב גרוס',
+  badatz: 'בדץ ע"ח',
+  'בדץ ע"ח': 'בדץ ע"ח',
+};
+
+const kashrutFromContract = (kosherType?: string | null): string | undefined => {
+  if (!kosherType) return undefined;
+  return CONTRACT_KOSHER_TO_EVENT_KASHRUT[kosherType] || CONTRACT_KOSHER_TO_EVENT_KASHRUT[kosherType.trim()];
+};
+
 interface SegmentedControlProps {
   value: string;
   options: { value: string; label: string }[];
@@ -169,14 +209,17 @@ interface EventFormManagerProps {
 const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const { t, T, locale } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [search, setSearch] = useState('');
 
+  const seatingSeparateLabel = t(T.EVENT_FORM.SEATING_SEPARATE);
+  const seatingMixedLabel = t(T.EVENT_FORM.SEATING_MIXED);
   const separateMixedOptions = useMemo(
     () => [
-      { value: 'separate', label: t(T.EVENT_FORM.SEATING_SEPARATE) },
-      { value: 'mixed', label: t(T.EVENT_FORM.SEATING_MIXED) },
+      { value: 'separate', label: seatingSeparateLabel },
+      { value: 'mixed', label: seatingMixedLabel },
     ],
-    [t],
+    [seatingSeparateLabel, seatingMixedLabel],
   );
 
   const formatEventType = (value: string) => translateByValue(t, EVENT_TYPE_KEY_BY_VALUE, value);
@@ -190,7 +233,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   });
   const { data: allForms = [] } = useEventFormsQuery();
   const { data: kashruts = [] } = useKashrutQuery();
-  const { data: globalSettings } = useGlobalSettingsQuery();
 
   const bookings = useMemo(
     () =>
@@ -213,7 +255,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const [notesList, setNotesList] = useState<string[]>(designExport?.notesList ?? []);
   const [newNote, setNewNote] = useState('');
 
-  const [kashrutImage, setKashrutImage] = useState<string | null>(null);
+  const kashrutImage = kashruts[0]?.imageUrl ?? null;
   const [isKashrutModalOpen, setIsKashrutModalOpen] = useState(false);
   
   const [selectedMenu, setSelectedMenu] = useState<Record<string, string[]> | null>(designExport?.selectedMenu ?? null);
@@ -225,15 +267,8 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const [tableLayoutSaving, setTableLayoutSaving] = useState(false);
   const [hasHonorTable, setHasHonorTable] = useState<boolean | null>(designExport?.hasHonorTable ?? null);
   const [hasEntertainers, setHasEntertainers] = useState<boolean | null>(designExport?.hasEntertainers ?? null);
-  const [barPortionPrice, setBarPortionPrice] = useState(60);
   const [showCamera, setShowCamera] = useState(false);
-
-  const portionBilling = calculatePortionBilling({
-    finalGuestCount: formData.finalGuestCount || 0,
-    seatingType: formData.seatingType || 'separate',
-    menPercent: formData.menPercent,
-    pricePerPortion: barPortionPrice,
-  });
+  const [isDesignGalleryOpen, setIsDesignGalleryOpen] = useState(false);
 
   const menuStats = useMemo(() => {
     if (!selectedMenu) return null;
@@ -241,6 +276,10 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     const items = Object.values(selectedMenu).reduce((sum, arr) => sum + arr.length, 0);
     return { categories, items };
   }, [selectedMenu]);
+
+  const isWeddingEvent = selected?.eventType === DEFAULT_EVENT_TYPE;
+  const showReceptionTimeField = showsReceptionTime(selected?.eventType);
+  const showEntertainersSection = showsEntertainers(selected?.eventType);
 
   const formProgress = useMemo(() => {
     const seating = formData.seatingType || 'separate';
@@ -253,10 +292,11 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       formData.hasScreens ||
       formData.hasFireworks
     );
-    const entertainersOk = hasEntertainers === false || hasEntertainers === true;
+    const entertainersOk = !showEntertainersSection || hasEntertainers === false || hasEntertainers === true;
+    const receptionTimeOk = !requiresReceptionTime(selected?.eventType) || !!formData.eventTime;
     const hasCheck = !!(depositCheckFile || formData.depositCheckUrl);
     const sections = [
-      !!formData.eventTime,
+      receptionTimeOk,
       !!formData.finalGuestCount && seatingOk,
       !!(
         formData.tableclothId ||
@@ -271,7 +311,25 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       true,
     ];
     return Math.round((sections.filter(Boolean).length / sections.length) * 100);
-  }, [formData, hasEntertainers, depositCheckFile, selectedMenu]);
+  }, [formData, hasEntertainers, depositCheckFile, selectedMenu, selected?.eventType, showEntertainersSection]);
+
+  const resetEditorState = useCallback(() => {
+    setFormData({});
+    setNotesList([]);
+    setHasHonorTable(null);
+    setHasEntertainers(null);
+    setShowCamera(false);
+  }, []);
+
+  const clearSelected = useCallback(() => {
+    setSelected(null);
+    resetEditorState();
+  }, [resetEditorState]);
+
+  const selectBooking = useCallback((booking: Booking) => {
+    setShowCamera(false);
+    setSelected(booking);
+  }, []);
 
   const handleStepBack = useCallback(() => {
     if (showCamera) {
@@ -290,33 +348,75 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       setIsKashrutModalOpen(false);
       return;
     }
+    if (isDesignGalleryOpen) {
+      setIsDesignGalleryOpen(false);
+      return;
+    }
     if (isTableLayoutModalOpen) {
       setIsTableLayoutModalOpen(false);
       return;
     }
     if (selected) {
-      setSelected(null);
+      clearSelected();
     }
-  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, isTableLayoutModalOpen, selected]);
+  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, isDesignGalleryOpen, isTableLayoutModalOpen, selected, clearSelected]);
 
   const navigationOverride = useMemo(() => {
-    const inSubStep = showCamera || isTableLayoutOpen || isMenuOpen || isKashrutModalOpen || isTableLayoutModalOpen || !!selected;
+    const inSubStep =
+      showCamera
+      || isTableLayoutOpen
+      || isMenuOpen
+      || isKashrutModalOpen
+      || isDesignGalleryOpen
+      || isTableLayoutModalOpen
+      || !!selected;
     return inSubStep ? { onBack: handleStepBack } : null;
-  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, isTableLayoutModalOpen, selected, handleStepBack]);
+  }, [showCamera, isTableLayoutOpen, isMenuOpen, isKashrutModalOpen, isDesignGalleryOpen, isTableLayoutModalOpen, selected, handleStepBack]);
 
   useNavigationOverride(navigationOverride);
 
   const prepareFormDataForSave = (data: EventFormData): EventFormData => {
-    const { menCount, womenCount, ...rest } = data;
+    const rest: EventFormData = { ...data };
+    delete rest.menCount;
+    delete rest.womenCount;
+    const clearEntertainers = !showEntertainersSection || hasEntertainers === false;
     return {
       ...rest,
       honorTableCount: hasHonorTable ? data.honorTableCount : undefined,
-      ...(hasEntertainers === false ? {
+      ...(clearEntertainers ? {
         entertainersBar: undefined,
         entertainersSitting: undefined,
         entertainersMen: undefined,
         entertainersWomen: undefined,
       } : {}),
+      ...(!showReceptionTimeField ? { eventTime: undefined } : {}),
+    };
+  };
+
+  const hydrateFormFromBooking = (
+    cleanForm: Partial<EventFormData>,
+    booking: Booking,
+  ): EventFormData => {
+    const guestTotal = cleanForm.finalGuestCount || booking.guestCount;
+    const { menCount, womenCount } = countsFromPercents(
+      cleanForm.menPercent,
+      cleanForm.womenPercent,
+      guestTotal,
+    );
+    const receptionVisible = showsReceptionTime(booking.eventType);
+    return {
+      ...cleanForm,
+      finalGuestCount: guestTotal || undefined,
+      menCount,
+      womenCount,
+      eventTime: cleanForm.eventTime || (receptionVisible ? DEFAULT_RECEPTION_TIME : undefined),
+      // Prefer saved event-form value; otherwise seed from contract choice (still editable).
+      kashrut: cleanForm.kashrut || kashrutFromContract(booking.kosherType),
+      depositCheckUrl: cleanForm.depositCheckUrl || booking.depositCheckUrl || undefined,
+      depositCheckDetails:
+        cleanForm.depositCheckDetails ?? booking.depositCheckDetails ?? null,
+      depositCheckStatus:
+        cleanForm.depositCheckStatus ?? booking.depositCheckStatus ?? undefined,
     };
   };
 
@@ -327,56 +427,44 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   };
 
   useEffect(() => {
-    if (kashruts.length > 0 && kashruts[0].imageUrl) {
-      setKashrutImage(kashruts[0].imageUrl);
-    }
-  }, [kashruts]);
-
-  useEffect(() => {
-    if (globalSettings?.barPortionPrice) {
-      setBarPortionPrice(Number(globalSettings.barPortionPrice));
-    }
-  }, [globalSettings]);
-
-  useEffect(() => {
     if (designExport) return;
+    if (!selected) return;
 
-    if (!selected) {
-      setFormData({});
-      setNotesList([]);
-      setHasHonorTable(null);
-      setHasEntertainers(null);
-      setShowCamera(false);
-      return;
-    }
-    setShowCamera(false);
     secureFetch(`${API_URL}/event-forms/${selected.id}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(form => {
+      .then(async (form) => {
         if (form && form.id) {
-          const { id, createdAt, updatedAt, booking, bookingId, tables, ...cleanForm } = form;
-          const guestTotal = cleanForm.finalGuestCount || selected.guestCount;
-          const { menCount, womenCount } = countsFromPercents(
-            cleanForm.menPercent,
-            cleanForm.womenPercent,
-            guestTotal
-          );
-          setFormData({ ...cleanForm, menCount, womenCount });
+          const { booking, tables, ...restForm } = form;
+          const cleanForm = { ...restForm };
+          delete cleanForm.id;
+          delete cleanForm.createdAt;
+          delete cleanForm.updatedAt;
+          delete cleanForm.bookingId;
+          const bookingSource: Booking = {
+            ...selected,
+            kosherType: selected.kosherType ?? booking?.kosherType,
+            depositCheckUrl: selected.depositCheckUrl ?? booking?.depositCheckUrl,
+            depositCheckDetails: selected.depositCheckDetails ?? booking?.depositCheckDetails,
+            depositCheckStatus: selected.depositCheckStatus ?? booking?.depositCheckStatus,
+          };
+          setFormData(hydrateFormFromBooking(cleanForm, bookingSource));
           setHasHonorTable(!!(form.honorTableCount && form.honorTableCount > 0));
           setHasEntertainers(
-            form.entertainersBar != null || form.entertainersSitting != null ? true : null
+            showsEntertainers(selected.eventType)
+              ? (form.entertainersBar != null || form.entertainersSitting != null ? true : null)
+              : false
           );
           setNotesList(form.notes ? JSON.parse(form.notes) : []);
           setSelectedMenu(form.menuSelections || null);
           setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
           setTableLayoutImageUrl(form.tableLayoutImageUrl || null);
 
-          const currentUser = getAuthUser();
-          if (currentUser && currentUser.email) {
+          const currentUser = await getAuthUser();
+          if (currentUser?.email) {
             const draft = loadEventFormDraft(selected.id, currentUser.email);
             if (draft) {
               if (window.confirm('מצאנו טיוטה מקומית לא שמורה. האם תרצה לשחזר אותה?')) {
-                setFormData(draft.formData);
+                setFormData(draft.formData as EventFormData);
                 setHasHonorTable(draft.hasHonorTable);
                 setHasEntertainers(draft.hasEntertainers);
                 setNotesList(draft.notesList);
@@ -386,42 +474,88 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
               }
             }
           }
+
+          const pendingDesign = consumePendingDesignSelections(selected.id);
+          if (pendingDesign && Object.keys(pendingDesign).length > 0) {
+            setFormData((prev) => ({ ...prev, ...pendingDesign }));
+          }
         } else {
-          setFormData({});
+          setFormData(hydrateFormFromBooking({}, selected));
           setHasHonorTable(null);
-          setHasEntertainers(null);
+          setHasEntertainers(showsEntertainers(selected.eventType) ? null : false);
           setNotesList([]);
           setSavedTables(undefined);
           setTableLayoutImageUrl(null);
+          const pendingDesign = consumePendingDesignSelections(selected.id);
+          if (pendingDesign && Object.keys(pendingDesign).length > 0) {
+            setFormData((prev) => ({ ...prev, ...pendingDesign }));
+          }
         }
       })
       .catch(() => {
-        setFormData({});
+        setFormData(hydrateFormFromBooking({}, selected));
         setHasHonorTable(null);
-        setHasEntertainers(null);
+        setHasEntertainers(showsEntertainers(selected.eventType) ? null : false);
         setNotesList([]);
         setSavedTables(undefined);
         setTableLayoutImageUrl(null);
+        const pendingDesign = consumePendingDesignSelections(selected.id);
+        if (pendingDesign && Object.keys(pendingDesign).length > 0) {
+          setFormData((prev) => ({ ...prev, ...pendingDesign }));
+        }
       });
   }, [selected, designExport]);
 
+  // Restore the open booking after returning from Gallery (or other sub-routes).
+  const locationState = location.state as { bookingId?: string; restoreEventForm?: boolean } | null;
+  const returnBookingId =
+    !designExport && !loading && !selected
+      ? locationState?.bookingId ||
+        (typeof sessionStorage !== 'undefined'
+          ? sessionStorage.getItem(EVENT_FORM_RETURN_BOOKING_KEY)
+          : null)
+      : null;
+  const restoredBooking =
+    returnBookingId && bookings.length > 0
+      ? bookings.find((b) => b.id === returnBookingId) ?? null
+      : null;
+
+  if (restoredBooking && selected?.id !== restoredBooking.id) {
+    setSelected(restoredBooking);
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(EVENT_FORM_RETURN_BOOKING_KEY);
+    }
+  }
+
+  useEffect(() => {
+    if (!restoredBooking || !locationState?.bookingId) return;
+    if (selected?.id !== restoredBooking.id) return;
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [restoredBooking, selected?.id, locationState?.bookingId, location.pathname, navigate]);
+
   useEffect(() => {
     if (!selected || actionBusy) return;
-    const currentUser = getAuthUser();
-    if (!currentUser || !currentUser.email) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const timer = setTimeout(() => {
-      const snapshot: EventFormDraftSnapshot = {
-        formData,
-        hasHonorTable,
-        hasEntertainers,
-        notesList,
-        selectedMenu,
-      };
-      saveEventFormDraft(selected.id, currentUser.email, snapshot);
-    }, 1000);
+    getAuthUser().then((currentUser) => {
+      if (cancelled || !currentUser?.email) return;
+      timer = setTimeout(() => {
+        const snapshot: EventFormDraftSnapshot = {
+          formData,
+          hasHonorTable,
+          hasEntertainers,
+          notesList,
+          selectedMenu,
+        };
+        saveEventFormDraft(selected.id, currentUser.email, snapshot);
+      }, 1000);
+    });
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [selected, formData, hasHonorTable, hasEntertainers, notesList, selectedMenu, actionBusy]);
 
   const handleTableLayoutSave = async (tables: TableData[], imageDataUrl: string) => {
@@ -497,14 +631,18 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     statusLabel: hasForm ? t(T.EVENT_FORM.STATUS_EXISTS) : t(T.EVENT_FORM.STATUS_PENDING),
   });
 
-  const handleInputChange = (field: keyof EventFormData, value: any) => {
+  const handleInputChange = (
+    field: keyof EventFormData,
+    value: EventFormData[keyof EventFormData] | string,
+  ) => {
     if (field === 'menCount' || field === 'womenCount') {
       setFormData(prev => {
+        const raw = typeof value === 'string' || typeof value === 'number' ? value : 0;
         const menCount = field === 'menCount'
-          ? Math.max(0, parseInt(value, 10) || 0)
+          ? Math.max(0, parseInt(String(raw), 10) || 0)
           : (prev.menCount || 0);
         const womenCount = field === 'womenCount'
-          ? Math.max(0, parseInt(value, 10) || 0)
+          ? Math.max(0, parseInt(String(raw), 10) || 0)
           : (prev.womenCount || 0);
         const { menPercent, womenPercent } = computePercentSplit(menCount, womenCount);
         return { ...prev, menCount, womenCount, menPercent, womenPercent };
@@ -512,7 +650,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     } else {
       setFormData(prev => ({
         ...prev,
-        [field]: value
+        [field]: value as EventFormData[typeof field],
       }));
     }
   };
@@ -592,9 +730,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       depositCheckUrl: checkUrl || formData.depositCheckUrl,
       notes: JSON.stringify(notesList),
       menuSelections: selectedMenu,
-      guestPortionCount: portionBilling?.totalBillablePortions,
-      pricePerPortion: portionBilling?.pricePerPortion ?? barPortionPrice,
-      totalPrice: portionBilling?.totalAmount,
     });
   };
   const handleDownloadPDF = async () => {
@@ -650,9 +785,10 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const isFormValid = () => {
     const currentReception = formData.receptionType || 'separate';
     const currentSeating = formData.seatingType || 'separate';
+    const receptionTimeOk = !requiresReceptionTime(selected?.eventType) || !!formData.eventTime;
 
     return !!(
-      formData.eventTime &&
+      receptionTimeOk &&
       currentReception &&
       formData.finalGuestCount &&
       currentSeating &&
@@ -661,6 +797,25 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       formData.kashrut
     );
   };
+
+  const openGallery = () => {
+    setIsDesignGalleryOpen(true);
+  };
+
+  const designSelectedValues = useMemo(
+    () => ({
+      tableclothId: formData.tableclothId,
+      napkinId: formData.napkinId,
+      centerpiece: formData.centerpiece,
+      bridgeChair: formData.bridgeChair,
+    }),
+    [
+      formData.tableclothId,
+      formData.napkinId,
+      formData.centerpiece,
+      formData.bridgeChair,
+    ],
+  );
 
   const handleSaveForm = async () => {
     if (!selected || actionBusy) return;
@@ -686,7 +841,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
         clearEventFormDraft(selected.id);
         setDepositCheckFile(null);
         showEmailSaveMessage(result);
-        setSelected(null);
+        clearSelected();
         return;
       } else {
         alert(`${t(T.UI.SAVE_ERROR)}: ${result.error || t(T.COMMON.ERRORS.GENERIC)}`);
@@ -868,7 +1023,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                           <EventCard
                             key={b.id}
                             event={toEventCard(b, false)}
-                            onView={() => setSelected(b)}
+                            onView={() => selectBooking(b)}
                             viewLabel={t(T.EVENT_FORM.OPEN_FORM)}
                           />
                         ))}
@@ -886,7 +1041,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                           <EventCard
                             key={b.id}
                             event={toEventCard(b, true)}
-                            onView={() => setSelected(b)}
+                            onView={() => selectBooking(b)}
                             viewLabel={t(T.EVENT_FORM.EDIT_FORM)}
                           />
                         ))}
@@ -946,13 +1101,13 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                       tabIndex={0}
                       onClick={() => {
                         if (form.booking) {
-                          setSelected(form.booking as Booking);
+                          selectBooking(form.booking as Booking);
                         }
                       }}
                       onKeyDown={(e) => {
                         if ((e.key === 'Enter' || e.key === ' ') && form.booking) {
                           e.preventDefault();
-                          setSelected(form.booking as Booking);
+                          selectBooking(form.booking as Booking);
                         }
                       }}
                     >
@@ -993,7 +1148,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
               <span className="maple-meta-chip">{t(T.EVENT_FORM.META_KASHRUT, { value: formData.kashrut ? formatKashrut(formData.kashrut) : t(T.COMMON.LABELS.EM_DASH) })}</span>
             </div>
             {!designExport && (
-              <button type="button" onClick={() => setSelected(null)} className="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-3">✕ {t(T.UI.CLOSE)}</button>
+              <button type="button" onClick={() => clearSelected()} className="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-3">✕ {t(T.UI.CLOSE)}</button>
             )}
           </div>
 
@@ -1013,15 +1168,21 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                     </span>
                   </div>
                   <div className="row g-2">
-                    <div className="col-12">
-                      <label className="form-label">{t(T.EVENT_FORM.LABEL_RECEPTION_TIME)}</label>
-                      <input
-                        type="time"
-                        className="form-control"
-                        value={formData.eventTime || ''}
-                        onChange={e => handleInputChange('eventTime', e.target.value)}
-                      />
-                    </div>
+                    {showReceptionTimeField && (
+                      <div className="col-12">
+                        <label className="form-label">
+                          {isWeddingEvent
+                            ? t(T.EVENT_FORM.LABEL_RECEPTION_TIME)
+                            : t(T.EVENT_FORM.LABEL_RECEPTION_TIME_OPTIONAL)}
+                        </label>
+                        <input
+                          type="time"
+                          className="form-control"
+                          value={formData.eventTime ?? DEFAULT_RECEPTION_TIME}
+                          onChange={e => handleInputChange('eventTime', e.target.value)}
+                        />
+                      </div>
+                    )}
                     <div className="col-12">
                       <label className="form-label">{t(T.EVENT_FORM.LABEL_RECEPTION_TYPE)}</label>
                       <SegmentedControl
@@ -1040,58 +1201,13 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                       <SectionIcon>
                         <svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.8L20 8l-3.6 3.5.85 5L12 14.8 6.75 16.5 7.6 11.5 4 8l5.6-1.2L12 2z"/></svg>
                       </SectionIcon>
-                      {t(T.EVENT_FORM.SECTION_DESIGN)}
+                      {t(T.EVENT_FORM.SECTION_DESIGNS_GALLERY)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/gallery')}
-                      className="btn btn-sm btn-outline-secondary"
-                    >
-                      {t(T.EVENT_FORM.SECTION_GALLERY)}
-                    </button>
                   </div>
-                  <div className="row g-2">
-                    <div className="col-6">
-                      <label className="form-label">{t(T.EVENT_FORM.LABEL_TABLECLOTHS)}</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder={t(T.EVENT_FORM.PLACEHOLDER_TABLECLOTH)}
-                        value={formData.tableclothId || ''}
-                        onChange={e => handleInputChange('tableclothId', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label">{t(T.EVENT_FORM.LABEL_NAPKINS)}</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder={t(T.EVENT_FORM.PLACEHOLDER_NAPKIN)}
-                        value={formData.napkinId || ''}
-                        onChange={e => handleInputChange('napkinId', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label">{t(T.EVENT_FORM.LABEL_CENTERPIECES)}</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder={t(T.EVENT_FORM.PLACEHOLDER_CENTERPIECE)}
-                        value={formData.centerpiece || ''}
-                        onChange={e => handleInputChange('centerpiece', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label">{t(T.EVENT_FORM.LABEL_BRIDE_CHAIR)}</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder={t(T.EVENT_FORM.PLACEHOLDER_CHAIR)}
-                        value={formData.bridgeChair || ''}
-                        onChange={e => handleInputChange('bridgeChair', e.target.value)}
-                      />
-                    </div>
-                  </div>
+                  <DesignSelectionSummary
+                    selectedValues={designSelectedValues}
+                    onOpenGallery={openGallery}
+                  />
                 </div>
 
                 <div className={`${styles.boardSubSection} ${styles.boardSubSectionEquip}`}>
@@ -1149,6 +1265,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
               </div>
             </div>
 
+            {showEntertainersSection && (
             <div className={`card mb-0 ${styles.boardEnt}`}>
               <div className="card-header maple-section-header">
                 <h4 className="h6 mb-0 d-flex align-items-center">
@@ -1289,6 +1406,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
               )}
               </div>
             </div>
+            )}
             </div>
 
             <div className={styles.boardColumn}>
@@ -1443,25 +1561,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                   </div>
                 </div>
               )}
-
-              {portionBilling && (
-                <div
-                  className={styles.portionStrip}
-                  title={
-                    portionBilling.seatingType === 'separate'
-                      ? `${t(T.EVENT_FORM.PORTIONS_MEN, { men: portionBilling.menCount, portions: portionBilling.menBillablePortions })} · ${t(T.EVENT_FORM.PORTIONS_WOMEN, { women: portionBilling.womenCount, portions: portionBilling.womenBillablePortions })}`
-                      : t(T.EVENT_FORM.PORTIONS_TOTAL, {
-                          guests: formData.finalGuestCount ?? 0,
-                          portions: portionBilling.totalBillablePortions,
-                        })
-                  }
-                >
-                  <span className={styles.portionStripLabel}>{t(T.EVENT_FORM.PORTIONS_BILLABLE)}</span>
-                  <span className={styles.portionStripStrong}>
-                    {portionBilling.totalBillablePortions} × {portionBilling.pricePerPortion} ₪ = {formatCurrency(portionBilling.totalAmount, locale)}
-                  </span>
-                </div>
-              )}
               </div>
             </div>
 
@@ -1523,6 +1622,9 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                   ) : (
                     <span className={styles.payStatusWarn}>{t(T.EVENT_FORM.KASHRUT_REQUIRED)}</span>
                   )}
+                </div>
+                <div className="alert alert-secondary py-2 px-3 mb-3 small" role="note">
+                  {t(T.EVENT_FORM.DEPOSIT_INTERNAL_ONLY)}
                 </div>
                 <div className="d-flex flex-wrap gap-2 mb-3">
                   <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowCamera(true)}>
@@ -1594,6 +1696,15 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                   </div>
                 </div>
               )}
+
+              <DesignGalleryModal
+                isOpen={isDesignGalleryOpen}
+                onClose={() => setIsDesignGalleryOpen(false)}
+                selectedValues={designSelectedValues}
+                onSelect={(field: DesignFormField, value: string) => {
+                  handleInputChange(field, value);
+                }}
+              />
             </div>
 
             <div className={`card mb-0 ${styles.boardNotes}`}>
@@ -1708,7 +1819,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
             </p>
 
             <div className="card-footer maple-form-footer d-flex flex-wrap gap-2 justify-content-between">
-                <button onClick={() => setSelected(null)} className="btn btn-outline-secondary">{t(T.EVENT_FORM.CANCEL)}</button>
+                <button onClick={() => clearSelected()} className="btn btn-outline-secondary">{t(T.EVENT_FORM.CANCEL)}</button>
 
                 <button
                   onClick={handleSaveForm}

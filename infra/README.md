@@ -91,12 +91,15 @@ aws apprunner create-service \
   }' \
   --health-check-configuration '{
     "Protocol": "HTTP",
-    "Path": "/api/health",
+    "Path": "/api/health/live",
     "Interval": 20,
     "Timeout": 5,
     "HealthyThreshold": 1,
     "UnhealthyThreshold": 5
   }'
+# Prefer /api/health/live for App Runner liveness (process up).
+# Use GET /api/health/ready for deploy smoke / deep readiness (DB required).
+# See docs/MONITORING.md.
 ```
 
 ## 6. GitHub Secrets (for deploy.yml)
@@ -109,8 +112,26 @@ aws apprunner create-service \
 | `ECR_REPOSITORY` | e.g. `maple-events` |
 | `APP_RUNNER_SERVICE_ARN_STAGING` | Staging service ARN |
 | `APP_RUNNER_SERVICE_ARN_PRODUCTION` | Production service ARN |
-| `DATABASE_URL_STAGING` | For prisma migrate deploy |
-| `DATABASE_URL_PRODUCTION` | For prisma migrate deploy |
+| `DATABASE_URL_STAGING` | RDS URL — GitHub Actions runs `scripts/db-migrate-deploy.sh` before App Runner deploy |
+| `DATABASE_URL_PRODUCTION` | Same for production |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client id (Docker build-arg) |
+| `VITE_SENTRY_DSN` | Optional frontend Sentry DSN (Docker build-arg) |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | Optional; defaults to `0.1` in Dockerfile |
+| `STAGING_HEALTH_URL` / `PRODUCTION_HEALTH_URL` | Base URL for deploy smoke (`/api/health/ready`) |
+
+Ops monitoring env (runtime Secrets Manager): `SENTRY_DSN`, `ALERT_WEBHOOK_URL`, thresholds — see [`docs/MONITORING.md`](../docs/MONITORING.md).
+
+### Database migrations
+
+Schema is managed only via **Prisma Migrate** (`server/prisma/migrations/`).
+
+Deploy order (see [`docs/DATABASE-MIGRATIONS.md`](../docs/DATABASE-MIGRATIONS.md)):
+
+1. `docker build` → push ECR  
+2. `bash server/scripts/db-migrate-deploy.sh` (CI, using `DATABASE_URL_*`)  
+3. App Runner starts new revision → entrypoint runs migrate again (idempotent) → `node dist/server.js`
+
+Local: `cd server && npm run db:migrate`
 
 ## 7. Run Setup Script
 

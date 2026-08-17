@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'crypto';
 import { Response } from 'express';
 import jwt from 'jsonwebtoken';
 
-import { getBrandConfig } from '../vendor/shared/brand/index';
+import { getBrandConfig } from '@maple/shared/brand';
 
 const brand = getBrandConfig();
 
@@ -18,10 +18,10 @@ const ACCESS_TOKEN_MS = 60 * 60 * 1000;
 const REFRESH_TOKEN_MS = 7 * 24 * 60 * 60 * 1000;
 
 function cookieBaseOptions() {
-  const secureCookies = process.env.COOKIE_SECURE === 'true';
+  const isProduction = process.env.NODE_ENV === 'production';
   return {
-    secure: secureCookies,
-    sameSite: (secureCookies ? 'strict' : 'lax') as 'strict' | 'lax',
+    secure: isProduction,
+    sameSite: (isProduction ? 'strict' : 'lax') as 'strict' | 'lax',
     path: '/',
   };
 }
