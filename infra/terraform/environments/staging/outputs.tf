@@ -15,3 +15,7 @@ output "ecr_server" {
 output "ecr_proxy" {
   value = module.ecr.proxy_repo_url
 }
+
+output "ecr_client" {
+  value = module.ecr.client_repo_url
+}

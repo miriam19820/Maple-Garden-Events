@@ -20,6 +20,17 @@ resource "aws_ecr_repository" "proxy" {
   tags = local.tags
 }
 
+resource "aws_ecr_repository" "client" {
+  name                 = "${var.project}-client-${var.env}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = local.tags
+}
+
 resource "aws_ecr_lifecycle_policy" "server" {
   repository = aws_ecr_repository.server.name
   policy = jsonencode({
@@ -38,6 +49,22 @@ resource "aws_ecr_lifecycle_policy" "server" {
 
 resource "aws_ecr_lifecycle_policy" "proxy" {
   repository = aws_ecr_repository.proxy.name
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep last 5 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 5
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "client" {
+  repository = aws_ecr_repository.client.name
   policy = jsonencode({
     rules = [{
       rulePriority = 1
