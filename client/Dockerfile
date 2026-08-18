@@ -34,6 +34,8 @@ ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 ENV VITE_SENTRY_TRACES_SAMPLE_RATE=$VITE_SENTRY_TRACES_SAMPLE_RATE
 ENV VITE_TENANT_NAME=$VITE_TENANT_NAME
 
+RUN if [ -z "$VITE_GOOGLE_CLIENT_ID" ]; then echo "ERROR: VITE_GOOGLE_CLIENT_ID build-arg is empty — refusing to build a broken client" >&2; exit 1; fi
+
 RUN npx vite build
 
 # ─── Stage 2: serve static files via nginx ────────────────────────────────────

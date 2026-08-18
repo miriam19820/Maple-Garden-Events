@@ -128,3 +128,17 @@ jobs:
 
             docker compose up -d --remove-orphans
             docker image prune -f
+
+            # ─── Health check: fail the deploy if the app never comes up healthy ──
+            echo "Waiting for app to become healthy..."
+            for i in $(seq 1 15); do
+              if curl -sf http://localhost/api/health > /dev/null; then
+                echo "✅ Health check passed"
+                exit 0
+              fi
+              echo "  attempt $i/15 — not ready yet, waiting 5s..."
+              sleep 5
+            done
+            echo "❌ Health check failed after 75s — deployment is broken!"
+            docker logs maple-server --tail 50
+            exit 1
