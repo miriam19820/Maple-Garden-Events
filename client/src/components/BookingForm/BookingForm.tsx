@@ -929,21 +929,34 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (isOption) {
-      if (!formData.clientAFirstName?.trim()) {
-        alert(t(T.BOOKING.VALIDATION.FIRST_NAME_REQUIRED));
-        return;
-      }
-      if (!formData.clientALastName?.trim()) {
-        alert(t(T.BOOKING.VALIDATION.LAST_NAME_REQUIRED));
-        return;
-      }
-      if (!formData.clientAPhone?.trim() || formData.clientAPhone.trim().length < 9) {
-        alert(t(T.BOOKING.VALIDATION.PHONE_REQUIRED));
-        return;
-      }
       if (!formData.createdBy?.trim()) {
         alert(t(T.BOOKING.VALIDATION.REPRESENTATIVE_REQUIRED));
         return;
+      }
+      if (isWedding) {
+        const optionNameA = `${formData.clientAFirstName.trim()} ${formData.clientALastName.trim()}`.trim();
+        if (!hasRequiredWeddingClientDetails({
+          clientAFullName: optionNameA,
+          clientAPhone: formData.clientAPhone,
+          clientBFullName: formData.clientBFullName,
+          clientBPhone: formData.clientBPhone,
+        })) {
+          alert(t(T.BOOKING.VALIDATION.WEDDING_ONE_SIDE_REQUIRED));
+          return;
+        }
+      } else {
+        if (!formData.clientAFirstName?.trim()) {
+          alert(t(T.BOOKING.VALIDATION.FIRST_NAME_REQUIRED));
+          return;
+        }
+        if (!formData.clientALastName?.trim()) {
+          alert(t(T.BOOKING.VALIDATION.LAST_NAME_REQUIRED));
+          return;
+        }
+        if (!formData.clientAPhone?.trim() || formData.clientAPhone.trim().length < 9) {
+          alert(t(T.BOOKING.VALIDATION.PHONE_REQUIRED));
+          return;
+        }
       }
       if (formData.clientAEmail?.trim() && !emailPattern.test(formData.clientAEmail.trim())) {
         alert(t(T.BOOKING.VALIDATION.CLIENT_EMAIL_INVALID));
@@ -1252,8 +1265,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
             />
           )}
 
-          <div className="row g-3 maple-form-columns">
-            <div className="col-lg-4">
+          <div className="maple-form-columns">
+            <div className="maple-form-column">
               <ClientsSection formData={formData} handleChange={handleChange} errors={errors} isWedding={isWedding} isOption={isOption} />
               <UpgradesSection
                 upgrades={upgrades}
@@ -1284,7 +1297,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
                     {(isWedding || formData.hasMusic) && (
                       <>
-                        <p className="small text-secondary mb-2">
+                        <p className={styles.akumRequiredText}>
                           {isWedding ? t(T.BOOKING.AKUM.REQUIRED_WEDDING) : t(T.BOOKING.AKUM.REQUIRED_OTHER)}
                         </p>
                         <a
@@ -1313,7 +1326,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
               )}
             </div>
 
-            <div className="col-lg-4">
+            <div className="maple-form-column">
               <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
               {isFoodRelevant && (
                 <div className="card mb-3">
@@ -1331,7 +1344,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
               </div>
             </div>
 
-            <div className="col-lg-4">
+            <div className="maple-form-column">
               <PaymentAndUpgradesSection formData={formData} handleChange={handleChange} isHallOnly={isHallOnly} isOption={isOption} depositMethod={depositMethod} setDepositMethod={handleDepositMethodChange} checkScanning={checkScanning} onCheckCapture={handleCheckCapture} onCheckFileUpload={handleCheckFileUpload} onDeleteCheck={handleDeleteCheck} onCheckDetailsChange={handleCheckDetailsChange} totals={totals} isFoodRelevant={isFoodRelevant} kosherType={kosherType} isEditMode={isEditMode} editId={editId} errors={errors} vatRate={vatRate} paymentTemplates={paymentTemplates} paymentTemplateId={paymentTemplateId} onPaymentTemplateChange={setPaymentTemplateId} paymentTermsCustom={paymentTermsCustom} onPaymentTermsCustomChange={setPaymentTermsCustom} paymentTermsText={paymentTermsText} onPaymentTermsTextChange={handlePaymentTermsTextChange} eventDate={getEventDateStr()} easycountMeta={(globalSettings as { easycount?: { mode?: string; label?: string; canIssueRealDocuments?: boolean } } | undefined)?.easycount} />
             </div>
           </div>
