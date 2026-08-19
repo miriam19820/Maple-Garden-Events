@@ -16,6 +16,7 @@ import { getPaymentTemplatesFromSettings } from '../../utils/paymentTerms';
 import { syncBookingPaymentMetadata } from '../paymentDeadlineService';
 import { sendPDFToClient } from '../emailService';
 import { notifyContractClosedViaWhatsApp } from '../whatsappDealNotify.service';
+import { buildContractPdfFilename } from '@maple/shared/contract';
 import {
   emitBookingUpdated,
   emitDateUpdated,
@@ -62,7 +63,8 @@ import {
   issueEasyCountReceiptForBooking,
   type EasyCountBookingResult,
 } from '../easyCount';
-import { syncContractFields } from '../../utils/contractFields';
+import { syncContractFields, resolvePersistedSignatures } from '../../utils/contractFields';
+import { isWeddingEventType } from '@maple/shared/contract';
 import {
   recordPayment,
   getBookingFinancialSnapshot,
@@ -161,18 +163,35 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
     );
   const overrideOptionDateId: string | undefined = data.overrideOptionDateId;
 
-  if (!isOption && data.contractSigned && !data.clientSignature?.trim()) {
-    return { status: 400, body: {
-      success: false,
-      message: 'לא ניתן לסמן חוזה כחתום ללא חתימת לקוח.',
-    } };
+  if (!isOption && data.contractSigned) {
+    const preview = syncContractFields(
+      data.contractSigned,
+      data.clientSignature,
+      data.clientBSignature,
+      data.eventType,
+    );
+    if (!preview.isContractSigned) {
+      return { status: 400, body: {
+        success: false,
+        message: isWeddingEventType(data.eventType)
+          ? 'לא ניתן לסמן חוזה כחתום ללא חתימות שני הצדדים.'
+          : 'לא ניתן לסמן חוזה כחתום ללא חתימת לקוח.',
+      } };
+    }
   }
 
-  const contractFields = syncContractFields(data.contractSigned, data.clientSignature);
-  if (data.contractSigned && !contractFields.clientSignatureUrl) {
+  const contractFields = syncContractFields(
+    data.contractSigned,
+    data.clientSignature,
+    data.clientBSignature,
+    data.eventType,
+  );
+  if (data.contractSigned && !contractFields.isContractSigned) {
     return { status: 400, body: {
       success: false,
-      message: 'לא ניתן לסמן חוזה כחתום ללא חתימת לקוח.',
+      message: isWeddingEventType(data.eventType)
+        ? 'לא ניתן לסמן חוזה כחתום ללא חתימות שני הצדדים.'
+        : 'לא ניתן לסמן חוזה כחתום ללא חתימת לקוח.',
     } };
   }
 
@@ -323,9 +342,9 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
       try {
         newBooking = await tx.booking.create({
         data: {
-          clientAFullName: data.clientAFullName,
+          clientAFullName: data.clientAFullName || '',
           clientAIdNumber: data.clientAIdNumber || '',
-          clientAPhone: clientAPhoneCombined,
+          clientAPhone: clientAPhoneCombined || '',
           clientAEmail: data.clientAEmail || null,
           clientAAddress: clientAAddressCombined,
           clientBFullName: data.clientBFullName || null,
@@ -375,6 +394,7 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
           securityCheckStatus: 'PENDING',
           isContractSigned: contractFields.isContractSigned,
           clientSignatureUrl: contractFields.clientSignatureUrl,
+          clientBSignatureUrl: contractFields.clientBSignatureUrl,
           isOption: newStatus === 'OPTION',
           managerComments: data.managerComments || null,
           clientComments: data.clientComments || null,
@@ -425,7 +445,7 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
     }
   }
 
-  if (data.contractSigned && data.clientSignature && createdBookings.length > 0) {
+  if (contractFields.isContractSigned && createdBookings.length > 0) {
     try {
       const savedBooking = createdBookings[0];
       const firstDateItem = datesToProcess[0];
@@ -436,7 +456,8 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
           { ...savedBooking, eventDate: { date: parseCalendarDate(toCalendarDateKey(String(firstDateString))) } },
           {
             isOption: newStatus === 'OPTION',
-            clientSignatureUrl: data.clientSignature,
+            clientSignatureUrl: contractFields.clientSignatureUrl,
+            clientBSignatureUrl: contractFields.clientBSignatureUrl,
             eventForm: {},
           },
         ),
@@ -448,7 +469,9 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
           clientEmail, 
           savedBooking.clientAFullName, 
           parseCalendarDate(toCalendarDateKey(String(firstDateString))).toString(), 
-          contractPdfBuffer
+          contractPdfBuffer,
+          undefined,
+          buildContractPdfFilename(savedBooking),
         );
       }
       if (newStatus === 'BOOKED') {
@@ -626,35 +649,40 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
   const isConverting = data.convertFromOption === true;
   const incomingSignature =
     typeof data.clientSignature === 'string' ? data.clientSignature.trim() : '';
+  const incomingSignatureB =
+    typeof data.clientBSignature === 'string' ? data.clientBSignature.trim() : '';
+  const eventType = String(data.eventType ?? booking.eventType);
   const finalSignature = incomingSignature || booking.clientSignatureUrl || null;
+  const finalSignatureB = incomingSignatureB
+    || (booking as { clientBSignatureUrl?: string | null }).clientBSignatureUrl
+    || null;
   let convertedEventCode: string | null = null;
 
-  if (data.contractSigned && !finalSignature) {
-    return { status: 400, body: {
-      success: false,
-      message: 'לא ניתן לסמן חוזה כחתום ללא חתימת לקוח.',
-    } };
+  if (data.contractSigned) {
+    const preview = syncContractFields(
+      true,
+      finalSignature,
+      finalSignatureB,
+      eventType,
+    );
+    if (!preview.isContractSigned) {
+      return { status: 400, body: {
+        success: false,
+        message: isWeddingEventType(eventType)
+          ? 'לא ניתן לסמן חוזה כחתום ללא חתימות שני הצדדים.'
+          : 'לא ניתן לסמן חוזה כחתום ללא חתימת לקוח.',
+      } };
+    }
   }
 
-  // Preserve an existing signature when the client sends null/empty without
-  // explicitly unsigning (common on edit when the pad is closed/unmounted).
-  let contractFields: ReturnType<typeof syncContractFields>;
-  if (data.clientSignature !== undefined) {
-    if (incomingSignature) {
-      contractFields = syncContractFields(data.contractSigned, incomingSignature);
-    } else if (data.contractSigned === false) {
-      contractFields = syncContractFields(false, null);
-    } else {
-      contractFields = syncContractFields(
-        data.contractSigned ?? booking.isContractSigned,
-        booking.clientSignatureUrl,
-      );
-    }
-  } else if (isConverting) {
-    contractFields = syncContractFields(data.contractSigned ?? true, finalSignature);
-  } else {
-    contractFields = syncContractFields(booking.isContractSigned, booking.clientSignatureUrl);
-  }
+  const contractFields = resolvePersistedSignatures({
+    eventType,
+    contractSigned: data.contractSigned ?? (isConverting ? true : booking.isContractSigned),
+    incomingA: data.clientSignature,
+    incomingB: data.clientBSignature,
+    existingA: booking.clientSignatureUrl,
+    existingB: (booking as { clientBSignatureUrl?: string | null }).clientBSignatureUrl,
+  });
 
   if (isConverting) {
     convertedEventCode = convertOptionCodeToEventCode(booking.eventCode);
@@ -714,6 +742,7 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
       createdBy: data.createdBy || booking.createdBy,
       isContractSigned: contractFields.isContractSigned,
       clientSignatureUrl: contractFields.clientSignatureUrl,
+      clientBSignatureUrl: contractFields.clientBSignatureUrl,
       depositCheckUrl: data.depositCheckUrl !== undefined ? data.depositCheckUrl || null : (booking as { depositCheckUrl?: string | null }).depositCheckUrl,
       depositCheckDetails: data.depositCheckDetails !== undefined ? data.depositCheckDetails || null : (booking as { depositCheckDetails?: unknown }).depositCheckDetails,
       contractText: data.contractText !== undefined
@@ -744,6 +773,7 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
       updateData.isOption = false;
       updateData.eventCode = convertedEventCode;
       updateData.clientSignatureUrl = contractFields.clientSignatureUrl;
+      updateData.clientBSignatureUrl = contractFields.clientBSignatureUrl;
       if (data.advancePaid !== undefined) {
         const paid = Number(data.advancePaid) || 0;
         updateData.advancePaid = paid;
@@ -834,14 +864,15 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
       emitDateUpdated({ dateId, status: 'AVAILABLE' });
     });
 
-    if (finalSignature && data.contractSigned) {
+    if (contractFields.isContractSigned && data.contractSigned) {
       try {
         const contractPdfBuffer = await generateContractPDF(
           buildBookingPdfData(
             { ...updated, eventDate: booking.eventDate },
             {
               isOption: false,
-              clientSignatureUrl: finalSignature,
+              clientSignatureUrl: contractFields.clientSignatureUrl,
+              clientBSignatureUrl: contractFields.clientBSignatureUrl,
               contractText: updated.contractText,
               eventForm: {},
             },
@@ -854,6 +885,8 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
             updated.clientAFullName,
             booking.eventDate.date.toString(),
             contractPdfBuffer,
+            undefined,
+            buildContractPdfFilename(updated),
           );
         }
         await notifyContractClosedViaWhatsApp(
@@ -941,7 +974,7 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
 
     const tenantId = (req as AuthRequest).user?.tenantId;
     if (!tenantId) return { status: 403, body: { error: 'Tenant context is missing.' } };
-  const { bookingId, advancePaid, akumApprovalCode, hasMusic, clientSignature, tables } = req.body;
+  const { bookingId, advancePaid, akumApprovalCode, hasMusic, clientSignature, clientBSignature, tables } = req.body;
 
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId,
@@ -957,12 +990,16 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
   }
 
   const finalSignature = clientSignature || booking.clientSignatureUrl;
-  const contractFields = syncContractFields(true, finalSignature);
+  const finalSignatureB = clientBSignature
+    || (booking as { clientBSignatureUrl?: string | null }).clientBSignatureUrl;
+  const contractFields = syncContractFields(true, finalSignature, finalSignatureB, booking.eventType);
 
-  if (!contractFields.clientSignatureUrl) {
+  if (!contractFields.isContractSigned) {
     return { status: 400, body: {
       success: false,
-      message: 'לא ניתן לסגור הזמנה ללא חתימת לקוח.',
+      message: isWeddingEventType(booking.eventType)
+        ? 'לא ניתן לסגור הזמנה ללא חתימות שני הצדדים.'
+        : 'לא ניתן לסגור הזמנה ללא חתימת לקוח.',
     } };
   }
 
@@ -978,6 +1015,7 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
         eventCode,
         isContractSigned: contractFields.isContractSigned,
         clientSignatureUrl: contractFields.clientSignatureUrl,
+        clientBSignatureUrl: contractFields.clientBSignatureUrl,
       }
     });
 
@@ -1018,12 +1056,15 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
     });
   });
 
-  if (finalSignature && updated) {
+  if (contractFields.clientSignatureUrl && updated) {
     try {
       const contractPdfBuffer = await generateContractPDF(
         buildBookingPdfData(
           { ...updated, eventDate: booking.eventDate, eventForm: booking.eventForm },
-          { clientSignatureUrl: finalSignature },
+          {
+            clientSignatureUrl: contractFields.clientSignatureUrl,
+            clientBSignatureUrl: contractFields.clientBSignatureUrl,
+          },
         ),
       );
       
@@ -1033,7 +1074,9 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
           clientEmail, 
           updated.clientAFullName, 
           booking.eventDate.date.toString(), 
-          contractPdfBuffer
+          contractPdfBuffer,
+          undefined,
+          buildContractPdfFilename(updated),
         );
       }
       await notifyContractClosedViaWhatsApp(

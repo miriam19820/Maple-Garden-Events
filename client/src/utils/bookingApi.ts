@@ -98,6 +98,7 @@ export type BookingApi = {
   akumApprovalCode?: string | null;
   isContractSigned?: boolean;
   clientSignatureUrl?: string | null;
+  clientBSignatureUrl?: string | null;
   securityCheckStatus?: string;
   createdBy?: string;
   updatedBy?: string | null;

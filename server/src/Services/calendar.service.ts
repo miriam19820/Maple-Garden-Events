@@ -25,6 +25,7 @@ import {
   lockEventDateRow,
 } from '../utils/eventDateLock';
 import { isSlotUniqueViolation, slotUniqueConflictError } from '../utils/bookingSlotGuard';
+import { syncContractFields } from '../utils/contractFields';
 
 export enum EventStatus {
   AVAILABLE = 'AVAILABLE',
@@ -318,6 +319,12 @@ export const calendarService = {
       const extrasPrice = Number(totals?.hallExtrasTotal ?? totals?.extrasTotal ?? priceBreakdown.extrasPrice) || 0;
       const externalExtrasPrice = Number(totals?.externalExtrasTotal ?? priceBreakdown.externalExtrasPrice) || 0;
       const totalPrice = priceBreakdown.totalPrice;
+      const contractFields = syncContractFields(
+        bookingDetails.contractSigned,
+        bookingDetails.clientSignature,
+        bookingDetails.clientBSignature,
+        bookingDetails.eventType,
+      );
 
       try {
         const created = await tx.booking.create({
@@ -353,8 +360,9 @@ export const calendarService = {
             advancePaid: 0,
             totalPaid: 0,
             securityCheckStatus: 'PENDING',
-            isContractSigned: !!(bookingDetails.contractSigned && bookingDetails.clientSignature),
-            clientSignatureUrl: bookingDetails.clientSignature || null,
+            isContractSigned: contractFields.isContractSigned,
+            clientSignatureUrl: contractFields.clientSignatureUrl,
+            clientBSignatureUrl: contractFields.clientBSignatureUrl,
             depositCheckUrl: bookingDetails.depositCheckUrl || null,
             depositCheckDetails: bookingDetails.depositCheckDetails || null,
             contractText: bookingDetails.contractText?.trim() || null,

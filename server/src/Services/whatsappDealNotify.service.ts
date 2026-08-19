@@ -7,11 +7,13 @@ import {
   sendWhatsAppCloudText,
   type WhatsAppCloudSendResult,
 } from './whatsappCloud.service';
+import { buildContractPdfFilename, buildProductionPdfFilename } from '@maple/shared/contract';
 
 export type DealNotifyBooking = {
   id: string;
   eventCode?: string | null;
   clientAFullName: string;
+  clientBFullName?: string | null;
   clientAPhone?: string | null;
   clientBPhone?: string | null;
   eventType?: string | null;
@@ -80,7 +82,7 @@ export async function notifyContractClosedViaWhatsApp(
   }
 
   const dateStr = formatEventDate(booking);
-  const filename = `contract-${booking.eventCode || booking.id}.pdf`;
+  const filename = buildContractPdfFilename(booking);
   const caption = `חוזה אירוע — ${booking.clientAFullName}${dateStr ? ` · ${dateStr}` : ''}`;
   const phones = clientPhones(booking);
   const managerPhone = resolveManagerWhatsAppPhone();
@@ -130,7 +132,7 @@ export async function notifyEventFormViaWhatsApp(
   }
 
   const dateStr = formatEventDate(booking);
-  const filename = `event-form-${booking.eventCode || booking.id}.pdf`;
+  const filename = buildProductionPdfFilename(booking);
   const caption = `טופס הפקה — ${booking.clientAFullName}${dateStr ? ` · ${dateStr}` : ''}`;
   const phones = clientPhones(booking);
   const managerPhone = resolveManagerWhatsAppPhone();

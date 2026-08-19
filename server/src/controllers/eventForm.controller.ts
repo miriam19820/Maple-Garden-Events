@@ -10,6 +10,11 @@ import { logger } from '../utils/logger';
 import { AppError } from '../utils/AppError';
 import { NotFoundError } from '../utils/httpErrors';
 import { assertBookingNotArchived } from '../Services/booking/helpers';
+import {
+  buildProductionPdfFilename,
+  contentDispositionHeader,
+  productionAsciiFallback,
+} from '@maple/shared/contract';
 
 function mapTableCreate(table: {
   id: number;
@@ -245,14 +250,12 @@ export const eventFormController = {
     }
 
     const pdfBuffer = await generateEventProductionPDF(buildBookingPdfData(booking));
+    const filename = buildProductionPdfFilename(booking);
 
     res.setHeader('Content-Type', 'application/pdf');
-    // HTTP headers are latin1-only — Hebrew names must go through RFC 5987 filename*
-    const asciiName = `event-form-${booking.eventCode || booking.id}.pdf`;
-    const utf8Name = encodeURIComponent(`טופס-הפקה-${booking.clientAFullName || ''}.pdf`);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`,
+      contentDispositionHeader(filename, 'attachment', productionAsciiFallback(booking)),
     );
     res.send(pdfBuffer);
   }),

@@ -90,6 +90,7 @@ model Booking {
   eventCheckIn        EventCheckIn?
   feedbacks           Feedback[]
   clientSignatureUrl  String?
+  clientBSignatureUrl String?
   depositCheckUrl     String?
   depositCheckDetails Json?
   depositMethod       String?

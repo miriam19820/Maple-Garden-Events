@@ -21,7 +21,7 @@ import { DEFAULT_UPGRADES_PRICING } from './pricing';
 import { HALL_ONLY_EVENT_TYPE } from '../validators/booking.validator';
 import { logger } from './logger';
 import { getBrandConfig } from '@maple/shared/brand';
-import { CONTRACT_ANNEX_PLACEHOLDER, VENUE_MINIMUM_PORTIONS } from '@maple/shared/contract';
+import { CONTRACT_ANNEX_PLACEHOLDER, VENUE_MINIMUM_PORTIONS, isWeddingEventType } from '@maple/shared/contract';
 import {
   DEFAULT_LOCALE,
   getServerTranslation,
@@ -63,6 +63,7 @@ export interface EventFormPDFData {
   eventType: string;
   timeOfDay?: string;
   clientSignatureUrl?: string | null;
+  clientBSignatureUrl?: string | null;
   contractText?: string | null;
   totalPrice?: number;
   basePrice?: number;
@@ -125,6 +126,7 @@ type BookingForPdf = {
   eventType: string;
   timeOfDay?: string | null;
   clientSignatureUrl?: string | null;
+  clientBSignatureUrl?: string | null;
   contractText?: string | null;
   totalPrice?: number;
   basePrice?: number;
@@ -194,9 +196,13 @@ const PDF_STYLES = `
   .notes-list { padding: 8px 12px 8px 24px; border: 1px solid #ccc; border-top: none; margin: 0; }
   .notes-list li { margin-bottom: 3px; }
   .signature-footer { page-break-before: auto; page-break-inside: avoid; break-inside: avoid; margin-top: 24px; }
+  .signature-footer-dual { display: flex; gap: 16px; justify-content: space-between; align-items: stretch; }
+  .signature-footer-dual .signature-box { flex: 1; min-width: 0; }
   .signature-box { padding: 14px; border: 2px solid #222; page-break-inside: avoid; break-inside: avoid; }
   .signature-text { font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 12px; line-height: 1.5; }
-  .signature-img { max-width: 250px; max-height: 100px; display: block; margin: 0 auto; border-bottom: 1px solid #000; padding-bottom: 5px; }
+  .signature-label { font-size: 12px; font-weight: 700; text-align: center; margin: 0 0 8px; }
+  .signature-img { max-width: 250px; max-height: 90px; display: block; margin: 0 auto; border-bottom: 1px solid #000; padding-bottom: 5px; }
+  .signature-footer-dual .signature-img { max-width: 100%; max-height: 80px; }
   .signature-name { text-align: center; font-weight: 700; margin-top: 6px; font-size: 13px; }
   .check-img { max-width: 200px; max-height: 120px; margin-top: 8px; border: 1px solid #ccc; display: block; }
   .layout-img { max-width: 100%; max-height: 400px; margin-top: 8px; border: 1px solid #ccc; display: block; }
@@ -310,6 +316,7 @@ export function buildBookingPdfData(
     eventType: booking.eventType,
     timeOfDay: booking.timeOfDay || undefined,
     clientSignatureUrl: booking.clientSignatureUrl || null,
+    clientBSignatureUrl: booking.clientBSignatureUrl || null,
     contractText: booking.contractText,
     totalPrice: booking.totalPrice,
     basePrice: booking.basePrice,
@@ -486,15 +493,48 @@ function watermarkHtml(isOption: boolean | undefined, t: Translator['t']): strin
   return isOption ? `<div class="watermark">${esc(t(T.SERVER.PDF.DRAFT_WATERMARK))}</div>` : '';
 }
 
+function signatureBoxHtml(
+  imageUrl: string,
+  label: string,
+  signedBy: string,
+  t: Translator['t'],
+  showDisclaimer: boolean,
+): string {
+  return `
+    <div class="signature-box">
+      ${showDisclaimer ? `<p class="signature-text">${esc(t(T.SERVER.PDF.SIGNATURE_TEXT))}</p>` : ''}
+      ${label ? `<p class="signature-label">${esc(label)}</p>` : ''}
+      <img class="signature-img" src="${imageUrl}" alt="${esc(t(T.SERVER.PDF.SIGNATURE_ALT))}" />
+      ${signedBy ? `<p class="signature-name">${t(T.SERVER.PDF.SIGNED_BY)} ${esc(signedBy)}</p>` : ''}
+    </div>`;
+}
+
 function signatureFooter(data: EventFormPDFData, t: Translator['t']): string {
-  if (!data.clientSignatureUrl) return '';
+  const sigA = data.clientSignatureUrl?.trim() || '';
+  const sigB = data.clientBSignatureUrl?.trim() || '';
+  if (!sigA && !sigB) return '';
+
+  if (isWeddingEventType(data.eventType) && (sigA || sigB)) {
+    const sideA = sigA
+      ? signatureBoxHtml(sigA, t(T.SERVER.PDF.SIGNATURE_SIDE_A), data.clientAFullName || '', t, false)
+      : '';
+    const sideB = sigB
+      ? signatureBoxHtml(sigB, t(T.SERVER.PDF.SIGNATURE_SIDE_B), data.clientBFullName || '', t, false)
+      : '';
+    return `
+  <div class="signature-footer">
+    <p class="signature-text">${esc(t(T.SERVER.PDF.SIGNATURE_TEXT))}</p>
+    <div class="signature-footer-dual">
+      ${sideA}
+      ${sideB}
+    </div>
+  </div>`;
+  }
+
+  if (!sigA) return '';
   return `
   <div class="signature-footer">
-    <div class="signature-box">
-      <p class="signature-text">${esc(t(T.SERVER.PDF.SIGNATURE_TEXT))}</p>
-      <img class="signature-img" src="${data.clientSignatureUrl}" alt="${esc(t(T.SERVER.PDF.SIGNATURE_ALT))}" />
-      <p class="signature-name">${t(T.SERVER.PDF.SIGNED_BY)} ${esc(data.clientAFullName)}</p>
-    </div>
+    ${signatureBoxHtml(sigA, '', data.clientAFullName, t, true)}
   </div>`;
 }
 

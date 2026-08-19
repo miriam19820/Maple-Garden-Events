@@ -4,6 +4,7 @@ import { isFloorStaffRole } from '../config/rbac';
 import { canEditCheckIn } from '../utils/eventStart';
 import { calendarKeyFromDbDate } from '../utils/dateLocal';
 import { ForbiddenError, NotFoundError } from '../utils/httpErrors';
+import { extractLastName } from '@maple/shared/contract';
 
 export type CheckInBooking = Prisma.BookingGetPayload<{
   include: { eventForm: true; eventDate: true };
@@ -15,19 +16,13 @@ function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return value as unknown as Prisma.InputJsonValue;
 }
 
-function getLastName(fullName?: string | null): string {
-  if (!fullName?.trim()) return '';
-  const parts = fullName.trim().split(/\s+/);
-  return parts[parts.length - 1] || '';
-}
-
 function buildFamiliesLabel(booking: {
   clientAFullName: string;
   clientBFullName?: string | null;
   eventType?: string | null;
 }): string {
-  const nameA = getLastName(booking.clientAFullName);
-  const nameB = getLastName(booking.clientBFullName);
+  const nameA = extractLastName(booking.clientAFullName);
+  const nameB = extractLastName(booking.clientBFullName);
   if (booking.eventType === 'חתונה' && nameB) {
     return `משפחת ${nameA} ומשפחת ${nameB}`;
   }

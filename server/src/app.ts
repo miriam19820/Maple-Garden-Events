@@ -124,6 +124,7 @@ app.use(cors({
   },
   credentials: true,
   optionsSuccessStatus: 200,
+  exposedHeaders: ['Content-Disposition'],
 }));
 
 app.use(cookieParser());

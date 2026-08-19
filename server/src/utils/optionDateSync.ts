@@ -221,6 +221,7 @@ export async function syncOptionDatesOnEdit(
           createdBy: String(sharedFields.createdBy ?? anchor.createdBy),
           isContractSigned: Boolean(sharedFields.isContractSigned),
           clientSignatureUrl: (sharedFields.clientSignatureUrl as string | null) ?? null,
+          clientBSignatureUrl: (sharedFields.clientBSignatureUrl as string | null) ?? null,
           depositCheckUrl: (sharedFields.depositCheckUrl as string | null) ?? null,
           depositCheckDetails:
             sharedFields.depositCheckDetails == null

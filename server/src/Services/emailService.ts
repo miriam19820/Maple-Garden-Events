@@ -1,6 +1,7 @@
 import { deliverMail, getFromAddress } from '../utils/mailer';
 import { logger } from '../utils/logger';
 import { DEFAULT_LOCALE, getServerTranslation, T, type Locale } from '../i18n/getServerTranslation';
+import { sanitizePdfFilename } from '@maple/shared/contract';
 
 export const sendPDFToClient = async (
   clientEmail: string,
@@ -8,6 +9,7 @@ export const sendPDFToClient = async (
   eventDate: string,
   pdfBuffer: Buffer,
   locale: Locale = DEFAULT_LOCALE,
+  attachmentFilename?: string,
 ): Promise<boolean> => {
   const { t } = getServerTranslation(locale);
   const formattedDate = new Date(eventDate).toLocaleDateString(locale === 'he' ? 'he-IL' : 'en-US');
@@ -22,6 +24,10 @@ export const sendPDFToClient = async (
       </div>
     `;
 
+  const filename = sanitizePdfFilename(
+    attachmentFilename || `${clientName || 'מסמך'}.pdf`,
+  );
+
   const result = await deliverMail(
     {
       from: getFromAddress(locale),
@@ -30,9 +36,10 @@ export const sendPDFToClient = async (
       html: htmlBody,
       attachments: [
         {
-          filename: t(T.SERVER.EMAIL.EVENT_FORM.ATTACHMENT, { clientName }),
+          filename,
           content: pdfBuffer,
           contentType: 'application/pdf',
+          contentDisposition: 'attachment',
         },
       ],
     },

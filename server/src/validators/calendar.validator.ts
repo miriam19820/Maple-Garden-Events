@@ -64,6 +64,7 @@ export const calendarBookingDetailsSchema = z.object({
       clientComments: z.string().optional(),
       createdBy: z.string().trim().min(1),
       clientSignature: z.string().optional(),
+      clientBSignature: z.string().optional(),
       contractSigned: z.boolean().optional(),
       depositCheckUrl: z.string().optional(),
       depositCheckDetails: z.unknown().optional(),

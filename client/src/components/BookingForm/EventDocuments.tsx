@@ -10,21 +10,25 @@ import styles from './EventDocuments.module.css';
 
 interface EventDocumentsProps {
   bookingId: string;
+  eventType?: string;
+  clientAFullName?: string;
+  clientBFullName?: string;
   eventCode?: string;
-  clientName?: string;
   hasContract: boolean;
   hasProductionForm: boolean;
 }
 
 export function EventDocuments({
   bookingId,
+  eventType,
+  clientAFullName,
+  clientBFullName,
   eventCode,
-  clientName,
   hasContract,
   hasProductionForm,
 }: EventDocumentsProps) {
   const { t, T } = useTranslation();
-  const slug = eventCode || clientName || bookingId;
+  const bookingMeta = { eventType, clientAFullName, clientBFullName, eventCode, id: bookingId };
 
   return (
     <section className={styles.panel} aria-labelledby="event-documents-title">
@@ -45,7 +49,7 @@ export function EventDocuments({
           variant="secondary"
           disabled={!hasContract}
           title={hasContract ? t(T.ARCHIVE.DOWNLOAD_CONTRACT) : t(T.ARCHIVE.NO_CONTRACT)}
-          onClick={() => void downloadContractPdf(bookingId, t, `contract-${slug}.pdf`)}
+          onClick={() => void downloadContractPdf(bookingId, t, bookingMeta)}
         >
           {t(T.ARCHIVE.DOWNLOAD_CONTRACT)}
         </Button>
@@ -61,9 +65,7 @@ export function EventDocuments({
           variant="secondary"
           disabled={!hasProductionForm}
           title={hasProductionForm ? t(T.ARCHIVE.DOWNLOAD_PRODUCTION) : t(T.ARCHIVE.NO_PRODUCTION)}
-          onClick={() =>
-            void downloadProductionPdf(bookingId, t, `production-form-${slug}.pdf`)
-          }
+          onClick={() => void downloadProductionPdf(bookingId, t, bookingMeta)}
         >
           {t(T.ARCHIVE.DOWNLOAD_PRODUCTION)}
         </Button>

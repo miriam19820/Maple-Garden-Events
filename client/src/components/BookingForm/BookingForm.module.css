@@ -378,3 +378,24 @@
   padding: 0;
   min-inline-size: 0;
 }
+
+.contractSignedBadge {
+  margin: 0 0 12px;
+  color: var(--brand-green-deep, #166534);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.contractPartialNote {
+  margin: 0 0 12px;
+  color: var(--brand-text-muted, #64748b);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.contractActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
