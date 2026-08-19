@@ -242,8 +242,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
           </section>
 
           {isWedding && (
-            <>
-              <div className={styles.divider} aria-hidden="true" />
               <section className={styles.sidePanel}>
                 <h4 className={styles.sideTitle}>{sideBTitle}</h4>
                 <div className={styles.fieldsStack}>
@@ -325,7 +323,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                   </FieldRow>
                 </div>
               </section>
-            </>
           )}
         </div>
       </div>

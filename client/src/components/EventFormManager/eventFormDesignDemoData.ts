@@ -1,5 +1,5 @@
 import type { DepositCheckDetails } from '../../utils/checkOcr';
-import { getBrandConfig } from '../../../../shared/brand/index';
+import { getBrandConfig } from '@shared/brand/index';
 
 const brand = getBrandConfig();
 
