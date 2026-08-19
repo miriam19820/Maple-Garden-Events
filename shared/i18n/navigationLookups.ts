@@ -10,7 +10,8 @@ export type NavIconName =
   | 'star'
   | 'chart'
   | 'mail'
-  | 'event';
+  | 'event'
+  | 'archive';
 
 export interface NavItemDef {
   labelKey: TranslationKey;
@@ -24,6 +25,7 @@ export const NAV_ITEMS: NavItemDef[] = [
   { labelKey: T.NAV.SETTINGS, path: '/settings', icon: 'settingsAlt' },
   { labelKey: T.NAV.OPTIONS_MANAGER, path: '/options-manager', icon: 'clipboard' },
   { labelKey: T.NAV.BOOKINGS_MANAGER, path: '/bookings-manager', icon: 'bookings' },
+  { labelKey: T.NAV.ARCHIVE, path: '/archive', icon: 'archive' },
   { labelKey: T.NAV.FEEDBACK_MANAGER, path: '/feedback-manager', icon: 'star' },
   { labelKey: T.NAV.FEEDBACK_STATS, path: '/feedback-stats', icon: 'chart' },
   { labelKey: T.NAV.GREETING, path: '/greeting', icon: 'mail' },
@@ -36,6 +38,7 @@ export const ROUTE_TITLE_KEYS: Record<string, TranslationKey> = {
   '/booking': T.NAV.BOOKING_NEW,
   '/options-manager': T.NAV.OPTIONS_MANAGER,
   '/bookings-manager': T.NAV.BOOKINGS_MANAGER,
+  '/archive': T.NAV.ARCHIVE,
   '/greeting': T.NAV.GREETING,
   '/event-form-manager': T.NAV.EVENT_FORM_MANAGER,
   '/option': T.NAV.OPTION_NEW,
@@ -52,6 +55,9 @@ export function resolveRouteTitleKey(pathname: string): TranslationKey | null {
   }
   if (pathname.startsWith('/booking/edit/')) {
     return T.NAV.BOOKING_EDIT;
+  }
+  if (pathname.startsWith('/archive/')) {
+    return T.NAV.ARCHIVE;
   }
   if (pathname.startsWith('/feedback/')) {
     return T.NAV.FEEDBACK_PAGE;

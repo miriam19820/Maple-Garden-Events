@@ -102,6 +102,7 @@ export interface LoadedBooking {
     hebrewDate?: string;
     status?: string;
   };
+  eventForm?: { id?: string } | null;
 }
 
 export interface ContractTemplateApiData {

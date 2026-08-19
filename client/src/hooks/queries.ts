@@ -81,6 +81,45 @@ export function useInfiniteBookingsQuery(params: BookingsParams) {
   });
 }
 
+export type ArchiveMonthGroup = {
+  year: number;
+  months: { month: number; count: number }[];
+};
+
+export function useArchiveSummaryQuery() {
+  return useQuery({
+    queryKey: ['archive', 'summary'],
+    queryFn: async (): Promise<ArchiveMonthGroup[]> => {
+      const res = await apiFetch(`${API_URL}/archive/summary`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || tClient(T.ARCHIVE.LOAD_ERROR));
+      return json.data as ArchiveMonthGroup[];
+    },
+  });
+}
+
+export function useArchiveEventsQuery(
+  year: number | null,
+  month: number | null,
+  search?: string,
+) {
+  return useQuery({
+    queryKey: ['archive', 'events', year, month, search],
+    enabled: year != null && month != null,
+    queryFn: async (): Promise<BookingsResponse> => {
+      const qs = new URLSearchParams();
+      qs.set('year', String(year));
+      qs.set('month', String(month));
+      qs.set('limit', '100');
+      if (search) qs.set('search', search);
+      const res = await apiFetch(`${API_URL}/archive/events?${qs}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || tClient(T.ARCHIVE.LOAD_ERROR));
+      return { data: json.data as BookingApi[], pagination: json.pagination };
+    },
+  });
+}
+
 import { queryClient } from '../lib/queryClient';
 
 export function prefetchCalendarDates(start: string, end: string, eventType: string) {

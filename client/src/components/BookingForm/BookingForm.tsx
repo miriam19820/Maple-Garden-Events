@@ -40,6 +40,8 @@ import ContractModal from './sections/ContractModal';
 import MetaBar from './sections/MetaBar';
 import OptionDatesBar from './sections/OptionDatesBar';
 import FinalizeOptionDatesBar from './sections/FinalizeOptionDatesBar';
+import { EventDocuments } from './EventDocuments';
+import { isArchivedBooking } from '../../utils/bookingArchive';
 import { verifyAllOptionDates, normalizeOptionDate, type OptionDateItem } from '../../utils/optionDateApi';
 import { calendarKeyFromDbDate } from '../../utils/dateLocal';
 import React, { Suspense } from 'react';
@@ -158,6 +160,9 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const convertFromOption = !!optionId;
   const activeEditId = optionId || editId;
   const isEditMode = !!activeEditId;
+  const archiveRoute = location.pathname.startsWith('/archive/');
+  const [isArchiveReadOnly, setIsArchiveReadOnly] = useState(archiveRoute);
+  const [hasProductionForm, setHasProductionForm] = useState(false);
   const [overrideCtx] = useState(() => ({
     dateId: location.state?.overrideOptionDateId as string | undefined,
     clientName: location.state?.overrideOptionClientName as string | undefined,
@@ -523,6 +528,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       setUpgrades((prev) => ({ ...prev, amplification: !!b.hasMusic }));
     }
     if (b.kosherType) setKosherType(b.kosherType);
+    setIsArchiveReadOnly(archiveRoute || isArchivedBooking(b));
+    setHasProductionForm(!!b.eventForm?.id);
   };
 
   const applyBookingToFormRef = useRef(applyBookingToForm);
@@ -907,6 +914,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isArchiveReadOnly) return;
     let signatureData: string | null = savedSignature;
     if (!signatureData && contractSigned) {
       signatureData = getSignatureDataUrl(sigCanvas);
@@ -1160,7 +1168,9 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     ? t(T.BOOKING.FORM.TITLE_CLOSE_FROM_OPTION)
     : overrideOptionDateId
       ? t(T.BOOKING.FORM.TITLE_CLOSE_OVERRIDE_OPTION)
-      : isEditMode
+      : isArchiveReadOnly
+        ? t(T.BOOKING.FORM.TITLE_ARCHIVE_VIEW)
+        : isEditMode
         ? (isOption ? t(T.BOOKING.FORM.TITLE_EDIT_OPTION) : t(T.BOOKING.FORM.TITLE_EDIT_BOOKING))
         : (isOption ? t(T.BOOKING.FORM.TITLE_SAVE_OPTION) : t(T.BOOKING.FORM.TITLE_CLOSE_BOOKING));
 
@@ -1170,9 +1180,30 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         <div className="card-header">
           <h2 className="h4 mb-1">{formTitle}</h2>
           <p className="maple-subtitle">
-            {isOption ? t(T.BOOKING.FORM.SUBTITLE_OPTION) : t(T.BOOKING.FORM.SUBTITLE_BOOKING)}
+            {isArchiveReadOnly
+              ? t(T.BOOKING.FORM.SUBTITLE_ARCHIVE)
+              : isOption
+                ? t(T.BOOKING.FORM.SUBTITLE_OPTION)
+                : t(T.BOOKING.FORM.SUBTITLE_BOOKING)}
           </p>
         </div>
+
+        {isArchiveReadOnly && (
+          <>
+            <div className="alert alert-secondary rounded-0 mb-0">
+              {t(T.BOOKING.FORM.ARCHIVE_LOCKED_NOTICE)}
+            </div>
+            {activeEditId && (
+              <EventDocuments
+                bookingId={activeEditId}
+                eventCode={orderNumber}
+                clientName={formData.clientAFullName}
+                hasContract={contractSigned}
+                hasProductionForm={hasProductionForm}
+              />
+            )}
+          </>
+        )}
 
         {overrideOptionDateId && (
           <div className="alert alert-warning rounded-0 mb-0">
@@ -1183,6 +1214,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         )}
 
         <form className="card-body" onSubmit={handleSubmit}>
+          <fieldset disabled={isArchiveReadOnly} className={isArchiveReadOnly ? styles.archiveFieldset : undefined}>
           <MetaBar formData={formData} handleChange={handleChange} isOption={isOption} orderNumber={orderNumber} optionDurationHours={optionDurationHours} setOptionDurationHours={setOptionDurationHours} selectedDatesDisplay={selectedDatesDisplay} calendarEventTypeFilter={metaBarEventTypeFilter} />
           {convertFromOption && relatedOptions.length > 1 && (
             <FinalizeOptionDatesBar
@@ -1332,6 +1364,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
           </div>
           )}
 
+          {(!isArchiveReadOnly) && (
           <div className="card-footer maple-form-footer d-flex gap-2">
             <button
               type="submit"
@@ -1347,6 +1380,19 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                     : (isOption ? t(T.BOOKING.FORM.SUBMIT_SAVE_OPTION) : t(T.BOOKING.FORM.SUBMIT_CLOSE_EVENT))}
             </button>
           </div>
+          )}
+          </fieldset>
+          {isArchiveReadOnly && (
+            <div className="card-footer maple-form-footer d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => navigate('/archive')}
+              >
+                {t(T.BOOKING.FORM.BACK_TO_ARCHIVE)}
+              </button>
+            </div>
+          )}
         </form>
       </div>
 

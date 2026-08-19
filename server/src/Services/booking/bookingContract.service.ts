@@ -79,6 +79,8 @@ import {
   syncDesyncedOptionDates,
   slotConflictMessage,
   validateHallRentalPriceInput,
+  isArchivedEvent,
+  archiveLockedResult,
 } from './helpers';
 
 export async function addBookingUpgrade(req: AuthRequest | Request): Promise<HttpResult> {
@@ -101,6 +103,10 @@ export async function addBookingUpgrade(req: AuthRequest | Request): Promise<Htt
 
   if (!booking) {
     return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה.' } };
+  }
+
+  if (isArchivedEvent(booking)) {
+    return archiveLockedResult();
   }
 
   if (!canEditBookingDate(booking.eventDate.date)) {
@@ -170,6 +176,7 @@ export async function signAndSendContract(req: AuthRequest | Request): Promise<H
     include: { eventDate: true, eventForm: true },
   });
   if (!booking) return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה' } };
+  if (isArchivedEvent(booking)) return archiveLockedResult();
 
   const updated = await prisma.booking.update({
     where: { id: bookingId },

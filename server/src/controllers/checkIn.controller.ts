@@ -15,6 +15,7 @@ import {
 } from '../Services/checkInService';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AppError } from '../utils/AppError';
+import { isArchivedEvent } from '../Services/booking/helpers';
 
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return value as unknown as Prisma.InputJsonValue;
@@ -63,6 +64,10 @@ export const checkInController = {
 
     if (!existing) {
       throw new NotFoundError('הזמנה לא נמצאה');
+    }
+
+    if (isArchivedEvent(existing)) {
+      throw new ForbiddenError('אירוע בארכיון אינו ניתן לעריכה.');
     }
 
     const eventDateStr = existing.eventDate?.date

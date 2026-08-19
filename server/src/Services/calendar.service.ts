@@ -31,6 +31,7 @@ export enum EventStatus {
   CHECKING  = 'CHECKING',
   OPTION    = 'OPTION',
   BOOKED    = 'BOOKED',
+  ARCHIVED  = 'ARCHIVED',     // אירוע שעבר — ארכיון לקריאה בלבד
   BLOCKED   = 'BLOCKED',      // חסום לגמרי (אדום - כמו שבת)
   FORBIDDEN = 'FORBIDDEN',    // אסור לאירוע (ורוד - חגים/צומות קשים)
   PROBLEMATIC = 'PROBLEMATIC' // תאריך דפוק/אפשרי חלקית (כתום)
@@ -239,6 +240,7 @@ export const calendarService = {
       const recordsForDay = datesInRange.filter((d: any) => toLocalDateKey(new Date(d.date)) === dateKey);
       const record =
         recordsForDay.find((d: any) => d.status === EventStatus.BOOKED) ||
+        recordsForDay.find((d: any) => d.status === EventStatus.ARCHIVED) ||
         recordsForDay.find((d: any) => d.status === EventStatus.OPTION) ||
         recordsForDay.find((d: any) => (d.bookings?.length ?? 0) > 0) ||
         recordsForDay[0];
@@ -246,9 +248,11 @@ export const calendarService = {
 
       const dbStatus = recordsForDay.some((d: any) => d.status === EventStatus.BOOKED)
         ? EventStatus.BOOKED
-        : recordsForDay.some((d: any) => d.status === EventStatus.OPTION)
-          ? EventStatus.OPTION
-          : record?.status;
+        : recordsForDay.some((d: any) => d.status === EventStatus.ARCHIVED)
+          ? EventStatus.BOOKED
+          : recordsForDay.some((d: any) => d.status === EventStatus.OPTION)
+            ? EventStatus.OPTION
+            : record?.status;
       const hasBookingStatus = dbStatus === EventStatus.OPTION || dbStatus === EventStatus.BOOKED;
 
       result.push({
@@ -406,7 +410,11 @@ export const calendarService = {
 
         if (eventDate) {
           const hasConfirmed = eventDate!.bookings.some((b) => !b.isOption);
-          if (hasConfirmed || eventDate!.status === EventStatus.BOOKED) {
+          if (
+            hasConfirmed
+            || eventDate!.status === EventStatus.BOOKED
+            || eventDate!.status === EventStatus.ARCHIVED
+          ) {
             throw new HttpError('לא ניתן לנעול תאריך שכבר מוזמן.', 409);
           }
 

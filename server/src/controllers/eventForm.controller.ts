@@ -9,6 +9,7 @@ import { refreshBookingUpgradesAndContract } from '../utils/bookingUpgradesSync'
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/AppError';
 import { NotFoundError } from '../utils/httpErrors';
+import { assertBookingNotArchived } from '../Services/booking/helpers';
 
 function mapTableCreate(table: {
   id: number;
@@ -98,6 +99,7 @@ export const eventFormController = {
   upsertForm: catchAsync(async (req: AuthRequest, res: Response) => {
     const { tenantId } = req.user!;
     const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    await assertBookingNotArchived(bookingId, tenantId);
     const { tables, ...rawBody } = req.body as { tables?: Parameters<typeof mapTableCreate>[0][] } & Record<string, unknown>;
     const formData = pickEventFormDbFields(rawBody);
     const tableRows = Array.isArray(tables) ? tables : undefined;
@@ -189,6 +191,7 @@ export const eventFormController = {
   saveTables: catchAsync(async (req: AuthRequest, res: Response) => {
     const { tenantId } = req.user!;
     const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    await assertBookingNotArchived(bookingId, tenantId);
     const { tables, tableLayoutImageUrl } = req.body;
 
     if (!Array.isArray(tables)) {
@@ -254,8 +257,9 @@ export const eventFormController = {
     res.send(pdfBuffer);
   }),
 
-  sendEmail: catchAsync(async (req: Request, res: Response) => {
+  sendEmail: catchAsync(async (req: AuthRequest, res: Response) => {
     const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    await assertBookingNotArchived(bookingId, req.user?.tenantId);
     const emailResult = await sendEventFormEmailIfAllowed(bookingId);
 
     if (emailResult.sent) {

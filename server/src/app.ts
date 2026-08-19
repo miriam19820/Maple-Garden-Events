@@ -28,6 +28,7 @@ import whatsappWebhookRoutes from './routes/whatsappWebhook.routes';
 import filesRoutes from './routes/files.routes';
 import checkScanRoutes from './routes/checkScan.routes';
 import designGalleryRoutes from './routes/designGallery.routes';
+import archiveRoutes from './routes/archive.routes';
 import { getGalleryUploadDir } from './utils/galleryLocalStorage';
 import fs from 'fs';
 
@@ -148,6 +149,7 @@ app.use('/api/kashrut', kashrutRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/archive', archiveRoutes);
 app.use('/api/event-forms', eventFormRoutes);
 app.use('/api/options', optionRoutes);
 app.use('/api/settings', settingsRoutes);

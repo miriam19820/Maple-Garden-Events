@@ -31,6 +31,7 @@ const FeedbackPage = lazy(() => import('./components/FeedbackPage/FeedbackPage')
 const FeedbackManager = lazy(() => import('./components/FeedbackManager/FeedbackManager'));
 const FeedbackStats = lazy(() => import('./components/FeedbackStats/FeedbackStats'));
 const Gallery = lazy(() => import('./components/Gallery/Gallery'));
+const ArchiveManager = lazy(() => import('./components/ArchiveManager/ArchiveManager'));
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));
 
 const CalendarWrapper = () => {
@@ -175,6 +176,8 @@ function App() {
             <Route path="/booking/edit/:id" element={guard(<Lazy><AppLayout layout="viewportFill"><BookingForm /></AppLayout></Lazy>)} />
             <Route path="/options-manager" element={guard(<Lazy><FullWidthShell><OptionsManager /></FullWidthShell></Lazy>)} />
             <Route path="/bookings-manager" element={guard(<Lazy><FullWidthShell><BookingsManager /></FullWidthShell></Lazy>)} />
+            <Route path="/archive/:id" element={guard(<Lazy><AppLayout layout="viewportFill"><BookingForm /></AppLayout></Lazy>)} />
+            <Route path="/archive" element={guard(<Lazy><FullWidthShell><ArchiveManager /></FullWidthShell></Lazy>)} />
             <Route path="/greeting" element={guard(<Lazy><FullWidthShell><GreetingBlast /></FullWidthShell></Lazy>)} />
             <Route path="/event-form-manager" element={guard(<Lazy><AppLayout layout="viewportFill"><EventFormManager /></AppLayout></Lazy>)} />
             <Route path="/option" element={guard(<Lazy><AppLayout layout="viewportFill"><OptionPage /></AppLayout></Lazy>)} />

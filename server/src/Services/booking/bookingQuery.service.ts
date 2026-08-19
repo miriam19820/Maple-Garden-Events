@@ -89,7 +89,7 @@ export async function getBookingById(req: AuthRequest | Request): Promise<HttpRe
     where: { id,
         tenantId
     },
-    include: { eventDate: true },
+    include: { eventDate: true, eventForm: { select: { id: true } } },
   });
 
   if (!booking) {
@@ -184,12 +184,16 @@ export async function getAllBookings(req: AuthRequest | Request): Promise<HttpRe
     await syncDesyncedOptionDates();
   }
 
-  const where: Prisma.BookingWhereInput = {};
+  const where: Prisma.BookingWhereInput = { tenantId };
 
   if (status === 'BOOKED') {
     where.isOption = false;
+    where.eventDate = { status: { not: 'ARCHIVED' } };
   } else if (status === 'OPTION') {
     where.isOption = true;
+  } else if (status === 'ARCHIVED') {
+    where.isOption = false;
+    where.eventDate = { status: 'ARCHIVED' };
   }
 
   if (search) {

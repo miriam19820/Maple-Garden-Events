@@ -79,6 +79,8 @@ import {
   syncDesyncedOptionDates,
   slotConflictMessage,
   validateHallRentalPriceInput,
+  isArchivedEvent,
+  archiveLockedResult,
 } from './helpers';
 
 export async function createBooking(req: AuthRequest): Promise<HttpResult> {
@@ -522,6 +524,10 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
 
   if (!booking || !booking.eventDate) {
     return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה.' } };
+  }
+
+  if (isArchivedEvent(booking)) {
+    return archiveLockedResult();
   }
 
   if (!canEditBookingDate(booking.eventDate.date)) {
@@ -1086,6 +1092,17 @@ export async function addEventAddition(req: AuthRequest | Request): Promise<Http
 
     if (!agreedToTerms) {
       return { status: 400, body: { error: 'חובה להסכים לתנאי התשלום' } };
+    }
+
+    const existing = await prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
+      include: { eventDate: true },
+    });
+    if (!existing) {
+      return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה.' } };
+    }
+    if (isArchivedEvent(existing)) {
+      return archiveLockedResult();
     }
 
     const newAddition = await prisma.$transaction(async (tx) => {

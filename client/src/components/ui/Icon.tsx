@@ -62,6 +62,12 @@ const ICONS: Record<NavIconName, ReactNode> = {
       d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"
     />
   ),
+  archive: (
+    <path
+      fill="currentColor"
+      d="M3 3h18v4H3V3zm1 6h16v12H4V9zm4 3v2h8v-2H8z"
+    />
+  ),
 };
 
 export interface IconProps {

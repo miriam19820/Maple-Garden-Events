@@ -1,11 +1,12 @@
 import { T, type TranslationKey } from './keys';
 
 /** API enum values — labels come from i18n keys only */
-export type ApiBookingStatus = 'BOOKED' | 'OPTION';
+export type ApiBookingStatus = 'BOOKED' | 'OPTION' | 'ARCHIVED';
 
 export const API_BOOKING_STATUS_KEYS: Record<ApiBookingStatus, TranslationKey> = {
   BOOKED: T.STATUS.CONFIRMED,
   OPTION: T.STATUS.OPTION,
+  ARCHIVED: T.STATUS.ARCHIVED,
 };
 
 export const BOOKING_STATUS_KEYS = {
