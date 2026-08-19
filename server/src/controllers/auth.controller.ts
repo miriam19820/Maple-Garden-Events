@@ -1,71 +1,116 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import prisma from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth';
-import { clearAuthCookie, setAuthCookie } from '../utils/authCookie';
+import {
+  clearSessionCookies,
+  extractRefreshToken,
+  generateCsrfToken,
+  setSessionCookies,
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from '../utils/authCookie';
 import { catchAsync } from '../middlewares/errorHandler';
-import { logger } from '../utils/logger';
+import { isValidRole } from '../middlewares/requireRole';
+import { AppError } from '../utils/AppError';
+import { getServerTranslation, resolveLocaleFromRequest, T } from '../i18n/getServerTranslation';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-function signManagerToken(email: string, name: string): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET is not configured');
-  }
-  return jwt.sign({ email, role: 'manager', name }, secret, { expiresIn: '30d' });
+function issueSession(res: Response, email: string, name: string, role: string) {
+  const accessToken = signAccessToken(email, name, role);
+  const refreshToken = signRefreshToken(email, name, role);
+  const csrfToken = generateCsrfToken();
+  setSessionCookies(res, accessToken, refreshToken, csrfToken);
 }
 
-export const login = async (req: Request, res: Response) => {
+export const login = catchAsync(async (req: Request, res: Response) => {
+  const locale = resolveLocaleFromRequest(req);
+  const { t } = getServerTranslation(locale);
   const { token } = req.body;
 
   if (!token) {
-    return res.status(400).json({ success: false, message: 'לא נשלח טוקן אימות.' });
+    throw AppError.badRequest(t(T.SERVER.AUTH.NO_TOKEN));
   }
 
+  let payload;
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-
-    const payload = ticket.getPayload();
-    if (!payload?.email) {
-      return res.status(401).json({ success: false, message: 'טוקן אימות לא חוקי.' });
-    }
-
-    const googleUserEmail = payload.email.toLowerCase().trim();
-    const userName = payload.name || 'מנהל מערכת';
-
-    const user = await prisma.authorizedUser.findUnique({
-      where: { email: googleUserEmail },
-    });
-
-    if (!user) {
-      return res.status(403).json({
-        success: false,
-        message: 'אין למשתמש זה הרשאות גישה למערכת.',
-      });
-    }
-
-    const managerToken = signManagerToken(googleUserEmail, userName);
-    setAuthCookie(res, managerToken);
-
-    return res.status(200).json({
-      success: true,
-      message: 'התחברת בהצלחה',
-      user: { role: 'manager', name: userName, email: googleUserEmail },
-    });
-  } catch (error) {
-    logger.error('Google authentication failed', { error });
-    return res.status(401).json({ success: false, message: 'ההתחברות מול גוגל נכשלה.' });
+    payload = ticket.getPayload();
+  } catch {
+    throw AppError.unauthorized(t(T.SERVER.AUTH.GOOGLE_FAILED));
   }
-};
 
-export const logout = (_req: Request, res: Response) => {
-  clearAuthCookie(res);
-  res.status(200).json({ success: true, message: 'התנתקת בהצלחה.' });
+  if (!payload?.email) {
+    throw AppError.unauthorized(t(T.SERVER.AUTH.INVALID_TOKEN));
+  }
+
+  const googleUserEmail = payload.email.toLowerCase().trim();
+  const userName = payload.name || t(T.SERVER.AUTH.DEFAULT_ADMIN_NAME);
+
+  const user = await prisma.authorizedUser.findUnique({
+    where: { email: googleUserEmail },
+  });
+
+  if (!user) {
+    throw AppError.forbidden(t(T.SERVER.AUTH.ACCESS_DENIED));
+  }
+
+  if (!isValidRole(user.role)) {
+    throw AppError.forbidden(t(T.SERVER.AUTH.INVALID_ROLE));
+  }
+
+  issueSession(res, googleUserEmail, userName, user.role);
+
+  return res.status(200).json({
+    success: true,
+    message: t(T.SERVER.AUTH.LOGIN_SUCCESS),
+    user: { role: user.role, name: userName, email: googleUserEmail },
+  });
+});
+
+export const refresh = catchAsync(async (req: Request, res: Response) => {
+  const locale = resolveLocaleFromRequest(req);
+  const { t } = getServerTranslation(locale);
+  const refreshToken = extractRefreshToken(req);
+  if (!refreshToken) {
+    throw AppError.unauthorized(t(T.SERVER.AUTH.REFRESH_MISSING));
+  }
+
+  let user;
+  try {
+    user = verifyRefreshToken(refreshToken);
+  } catch {
+    clearSessionCookies(res);
+    throw AppError.unauthorized(t(T.SERVER.AUTH.REFRESH_INVALID));
+  }
+
+  const authorized = await prisma.authorizedUser.findUnique({
+    where: { email: user.email },
+  });
+  if (!authorized) {
+    clearSessionCookies(res);
+    throw AppError.forbidden(t(T.SERVER.AUTH.REFRESH_FORBIDDEN));
+  }
+
+  if (!isValidRole(authorized.role)) {
+    clearSessionCookies(res);
+    throw AppError.forbidden(t(T.SERVER.AUTH.REFRESH_INVALID_ROLE));
+  }
+
+  issueSession(res, user.email, user.name, authorized.role);
+  return res.status(200).json({ success: true });
+});
+
+export const logout = (req: Request, res: Response) => {
+  const locale = resolveLocaleFromRequest(req);
+  const { t } = getServerTranslation(locale);
+  clearSessionCookies(res);
+  res.status(200).json({ success: true, message: t(T.SERVER.AUTH.LOGOUT_SUCCESS) });
 };
 
 export const me = catchAsync(async (req: AuthRequest, res: Response) => {

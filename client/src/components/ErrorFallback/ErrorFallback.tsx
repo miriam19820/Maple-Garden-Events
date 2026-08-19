@@ -1,53 +1,45 @@
 import React from 'react';
+import * as Sentry from '@sentry/react';
+import { useTranslation } from '../../i18n/useTranslation';
+import styles from './ErrorFallback.module.css';
 
 interface ErrorFallbackProps {
   error?: Error;
   resetError?: () => void;
+  /** Sentry event id when the boundary reported the crash */
+  eventId?: string | null;
 }
 
-export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetError }) => (
-  <div style={{
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    padding: '2rem',
-    textAlign: 'center',
-    fontFamily: 'system-ui, sans-serif',
-  }}>
-    <h1 style={{ marginBottom: '0.5rem' }}>משהו השתבש</h1>
-    <p style={{ color: '#666', marginBottom: '1.5rem' }}>
-      השגיאה נשלחה לצוות הפיתוח. ניתן לנסות שוב.
-    </p>
-    {import.meta.env.DEV && error && (
-      <pre style={{
-        background: '#f5f5f5',
-        padding: '1rem',
-        borderRadius: '8px',
-        maxWidth: '600px',
-        overflow: 'auto',
-        fontSize: '0.85rem',
-        marginBottom: '1rem',
-      }}>
-        {error.message}
-      </pre>
-    )}
-    {resetError && (
-      <button
-        type="button"
-        onClick={resetError}
-        style={{
-          padding: '0.6rem 1.2rem',
-          borderRadius: '8px',
-          border: 'none',
-          background: '#2d6a4f',
-          color: '#fff',
-          cursor: 'pointer',
-        }}
-      >
-        נסה שוב
-      </button>
-    )}
-  </div>
-);
+export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetError, eventId }) => {
+  const { t, T } = useTranslation();
+  return (
+    <div className={styles.errorFallback}>
+      <h1>{t(T.UI.ERROR_TITLE)}</h1>
+      <p>{t(T.UI.ERROR_MESSAGE)}</p>
+      {eventId ? (
+        <p className={styles.errorRef} dir="ltr">
+          Ref: {eventId}
+        </p>
+      ) : null}
+      {import.meta.env.DEV && error && (
+        <pre>{error.stack || error.message}</pre>
+      )}
+      <div className={styles.errorActions}>
+        {resetError && (
+          <button type="button" onClick={resetError} className="maple-btn maple-btn-primary">
+            {t(T.COMMON.ACTIONS.RETRY)}
+          </button>
+        )}
+        {eventId && import.meta.env.VITE_SENTRY_DSN ? (
+          <button
+            type="button"
+            className="maple-btn maple-btn-secondary"
+            onClick={() => Sentry.showReportDialog({ eventId })}
+          >
+            {t(T.UI.ERROR_REPORT)}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+};

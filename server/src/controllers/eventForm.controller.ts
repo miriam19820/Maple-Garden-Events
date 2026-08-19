@@ -1,7 +1,14 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middlewares/auth';
+import { catchAsync } from '../middlewares/errorHandler';
 import prisma from '../config/prisma';
-import { generateEventFormPDF } from '../utils/pdfGenerator';
-import { sendPDFToClient, sendWhatsAppMessage } from '../Services/emailService';
+import { buildBookingPdfData, generateEventProductionPDF } from '../utils/pdfGenerator';
+import { sendEventFormEmailIfAllowed } from '../utils/eventFormEmail';
+import { emitEventFormsUpdated, emitBookingUpdated } from '../utils/realtime';
+import { refreshBookingUpgradesAndContract } from '../utils/bookingUpgradesSync';
+import { logger } from '../utils/logger';
+import { AppError } from '../utils/AppError';
+import { NotFoundError } from '../utils/httpErrors';
 
 function mapTableCreate(table: {
   id: number;
@@ -11,8 +18,9 @@ function mapTableCreate(table: {
   isHonor?: boolean;
   width?: number | null;
   height?: number | null;
-}) {
+}, tenantId: string) {
   return {
+    tenantId,
     tableNumber: table.id,
     positionX: table.x,
     positionY: table.y,
@@ -23,268 +31,249 @@ function mapTableCreate(table: {
   };
 }
 
+const EVENT_FORM_DB_FIELDS = [
+  'eventTime',
+  'receptionType',
+  'finalGuestCount',
+  'seatingType',
+  'menPercent',
+  'womenPercent',
+  'honorTableCount',
+  'tableclothId',
+  'napkinId',
+  'centerpiece',
+  'bridgeChair',
+  'hasLighting',
+  'hasSoundSystem',
+  'hasScreens',
+  'hasFireworks',
+  'entertainersBar',
+  'entertainersSitting',
+  'entertainersMen',
+  'entertainersWomen',
+  'depositCheckUrl',
+  'depositCheckStatus',
+  'depositCheckDetails',
+  'akumCode',
+  'kashrut',
+  'guestPortionCount',
+  'pricePerPortion',
+  'kashrutSurcharge',
+  'designPrice',
+  'extrasJson',
+  'totalPrice',
+  'contractSigned',
+  'notes',
+  'menuSelections',
+  'tableLayoutImageUrl',
+] as const;
+
+function pickEventFormDbFields(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    EVENT_FORM_DB_FIELDS
+      .filter((key) => body[key] !== undefined)
+      .map((key) => [key, body[key]]),
+  );
+}
+
 export const eventFormController = {
 
-  async searchBookings(req: Request, res: Response) {
-    try {
-      const q = typeof req.query.q === 'string' ? req.query.q : '';
-      const bookings = await prisma.booking.findMany({
-        where: {
-          status: 'BOOKED',
-          OR: [
-            { clientAFullName: { contains: q, mode: 'insensitive' } },
-            { clientAIdNumber: { contains: q } },
-            { clientBFullName: { contains: q, mode: 'insensitive' } },
-            { clientBIdNumber: { contains: q } },
-          ]
-        },
-        include: { eventDate: true, eventForm: true }
-      });
-      res.json({ success: true, data: bookings });
-    } catch (e) {
-      res.status(500).json({ error: 'שגיאה בחיפוש' });
-    }
-  },
+  searchBookings: catchAsync(async (req: Request, res: Response) => {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const bookings = await prisma.booking.findMany({
+      where: {
+        eventDate: { status: 'BOOKED' },
+        OR: [
+          { clientAFullName: { contains: q, mode: 'insensitive' } },
+          { clientAIdNumber: { contains: q } },
+          { clientBFullName: { contains: q, mode: 'insensitive' } },
+          { clientBIdNumber: { contains: q } },
+        ]
+      },
+      include: { eventDate: true, eventForm: true }
+    });
+    res.json({ success: true, data: bookings });
+  }),
 
-  async upsertForm(req: Request, res: Response) {
-    try {
-      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const { id, createdAt, updatedAt, booking: _booking, bookingId: _bid, tables, ...formData } = req.body;
+  upsertForm: catchAsync(async (req: AuthRequest, res: Response) => {
+    const { tenantId } = req.user!;
+    const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    const { tables, ...rawBody } = req.body as { tables?: Parameters<typeof mapTableCreate>[0][] } & Record<string, unknown>;
+    const formData = pickEventFormDbFields(rawBody);
+    const tableRows = Array.isArray(tables) ? tables : undefined;
 
-      const form = await prisma.eventForm.upsert({
-        where: { bookingId },
-        update: { 
-          ...formData,
-          tables: tables ? {
-            deleteMany: {},
-            create: tables.map(mapTableCreate)
-          } : undefined
-        },
-        create: { 
-          bookingId, 
-          ...formData,
-          tables: tables ? {
-            create: tables.map(mapTableCreate)
-          } : undefined
-        }
-      });
+    const form = await prisma.eventForm.upsert({
+      where: { bookingId },
+      update: { 
+        ...formData,
+        tables: tableRows ? {
+          deleteMany: {},
+          create: tableRows.map(t => mapTableCreate(t, tenantId))
+        } : undefined
+      },
+      create: { 
+        tenantId,
+        bookingId, 
+        ...formData,
+        tables: tableRows ? {
+          create: tableRows.map(t => mapTableCreate(t, tenantId))
+        } : undefined
+      }
+    });
 
-      const booking = await prisma.booking.findUnique({
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { eventDate: true },
+    });
+
+    if (booking) {
+      const refreshed = await refreshBookingUpgradesAndContract(booking, form);
+      await prisma.booking.update({
         where: { id: bookingId },
-        include: { eventDate: true }
-      });
-
-      if (booking) {
-        try {
-          const pdfData = {
-            eventCode: booking.eventCode,
-            clientAFullName: booking.clientAFullName,
-            clientAIdNumber: booking.clientAIdNumber,
-            clientBFullName: booking.clientBFullName || undefined,
-            clientBIdNumber: booking.clientBIdNumber || undefined,
-            eventDate: booking.eventDate.date.toString(),
-            guestCount: booking.guestCount,
-            eventType: booking.eventType,
-            timeOfDay: booking.timeOfDay || undefined,
-            clientSignatureUrl: booking.clientSignatureUrl,
-            contractText: booking.contractText,
-            eventForm: form,
-          };
-
-          const pdfBuffer = await generateEventFormPDF(pdfData);
-
-          // בניית רשימת נמענים למייל ולוואטסאפ לפי סוג אירוע
-          const emails: string[] = [];
-          const phones: string[] = [];
-
-          // תמיד מוסיפים את צד א' (הצד המרכזי) אם קיים לו מידע
-          if (booking.clientAEmail) emails.push(booking.clientAEmail);
-          if (booking.clientAPhone) phones.push(booking.clientAPhone);
-
-          // מוסיפים את צד ב' רק אם סוג האירוע הוא חתונה
-          if (booking.eventType === 'חתונה') {
-            if (booking.clientBEmail) emails.push(booking.clientBEmail);
-            if (booking.clientBPhone) phones.push(booking.clientBPhone);
-          }
-
-          // שליחת מייל לכל מי שברשימה
-          for (const email of emails) {
-            await sendPDFToClient(email, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
-          }
-
-          // שליחת וואטסאפ לכל מי שברשימה
-          for (const phone of phones) {
-            await sendWhatsAppMessage(phone, booking.clientAFullName, booking.eventDate.date.toString());
-          }
-        } catch (emailError) {
-          console.warn('Failed to send communications:', emailError);
-        }
-      }
-
-      res.json({ success: true, data: form });
-    } catch (e) {
-      console.error('Form upsert error:', e);
-      res.status(500).json({ error: 'שגיאה בשמירת הטופס' });
-    }
-  },
-
-  async getForm(req: Request, res: Response) {
-    try {
-      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const form = await prisma.eventForm.findUnique({
-        where: { bookingId },
-        include: { 
-          booking: { include: { eventDate: true } },
-          tables: true 
-        }
-      });
-      res.json(form);
-    } catch (e) {
-      res.status(500).json({ error: 'שגיאה בשליפת הטופס' });
-    }
-  },
-
-  async saveTables(req: Request, res: Response) {
-    try {
-      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const { tables } = req.body;
-
-      if (!Array.isArray(tables)) {
-        return res.status(400).json({ error: 'נדרש מערך tables' });
-      }
-
-      const form = await prisma.eventForm.upsert({
-        where: { bookingId },
-        update: {
-          tables: {
-            deleteMany: {},
-            create: tables.map(mapTableCreate),
-          },
+        data: {
+          upgrades: refreshed.upgrades,
+          extrasPrice: refreshed.extrasPrice,
+          externalExtrasPrice: refreshed.externalExtrasPrice,
+          totalPrice: refreshed.totalPrice,
+          paymentTermsText: refreshed.paymentTermsText,
+          contractText: refreshed.contractText,
+          updatedBy: 'מערכת',
         },
-        create: {
-          bookingId,
-          tables: {
-            create: tables.map(mapTableCreate),
-          },
+      });
+      emitBookingUpdated(bookingId);
+    }
+
+    let emailSent = false;
+    let emailSkipped = false;
+    let retryAfterSeconds: number | undefined;
+    let emailError: string | undefined;
+
+    try {
+      const emailResult = await sendEventFormEmailIfAllowed(bookingId);
+      if (emailResult.sent) {
+        emailSent = true;
+      } else if (emailResult.skipped) {
+        emailSkipped = true;
+        retryAfterSeconds = emailResult.retryAfterSeconds;
+      } else {
+        emailError = emailResult.error;
+      }
+    } catch (sendError) {
+      logger.warn('Failed to send communications:', sendError);
+      emailError = 'שגיאה בשליחת המייל';
+    }
+
+    res.json({
+      success: true,
+      data: form,
+      emailSent,
+      emailSkipped,
+      retryAfterSeconds,
+      emailError,
+    });
+    emitEventFormsUpdated();
+  }),
+
+  getForm: catchAsync(async (req: Request, res: Response) => {
+    const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    const form = await prisma.eventForm.findUnique({
+      where: { bookingId },
+      include: { 
+        booking: { include: { eventDate: true } },
+        tables: true 
+      }
+    });
+    res.json(form);
+  }),
+
+  saveTables: catchAsync(async (req: AuthRequest, res: Response) => {
+    const { tenantId } = req.user!;
+    const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    const { tables, tableLayoutImageUrl } = req.body;
+
+    if (!Array.isArray(tables)) {
+      throw AppError.badRequest('נדרש מערך tables');
+    }
+
+    const form = await prisma.eventForm.upsert({
+      where: { bookingId },
+      update: {
+        ...(typeof tableLayoutImageUrl === 'string' ? { tableLayoutImageUrl } : {}),
+        tables: {
+          deleteMany: {},
+          create: tables.map(t => mapTableCreate(t, tenantId)),
         },
-        include: { tables: true },
-      });
+      },
+      create: {
+        tenantId,
+        bookingId,
+        ...(typeof tableLayoutImageUrl === 'string' ? { tableLayoutImageUrl } : {}),
+        tables: {
+          create: tables.map(t => mapTableCreate(t, tenantId)),
+        },
+      },
+      include: { tables: true },
+    });
 
-      res.json({ success: true, data: form });
-    } catch (e) {
-      console.error('Save tables error:', e);
-      res.status(500).json({ error: 'שגיאה בשמירת סידור שולחנות' });
+    res.json({ success: true, data: form });
+    emitEventFormsUpdated();
+  }),
+
+  getAllForms: catchAsync(async (req: Request, res: Response) => {
+    const forms = await prisma.eventForm.findMany({
+      include: { booking: { include: { eventDate: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(forms);
+  }),
+
+  generatePDF: catchAsync(async (req: Request, res: Response) => {
+    const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        eventDate: true,
+        eventForm: { include: { tables: true } }
+      }
+    });
+
+    if (!booking || !booking.eventForm) {
+      throw new NotFoundError('הזמנה או טופס לא נמצאו');
     }
-  },
 
-  async getAllForms(req: Request, res: Response) {
-    try {
-      const forms = await prisma.eventForm.findMany({
-        include: { booking: { include: { eventDate: true } } },
-        orderBy: { createdAt: 'desc' }
-      });
-      res.json(forms);
-    } catch (e) {
-      res.status(500).json({ error: 'שגיאה בשליפת הטפסים' });
+    const pdfBuffer = await generateEventProductionPDF(buildBookingPdfData(booking));
+
+    res.setHeader('Content-Type', 'application/pdf');
+    // HTTP headers are latin1-only — Hebrew names must go through RFC 5987 filename*
+    const asciiName = `event-form-${booking.eventCode || booking.id}.pdf`;
+    const utf8Name = encodeURIComponent(`טופס-הפקה-${booking.clientAFullName || ''}.pdf`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`,
+    );
+    res.send(pdfBuffer);
+  }),
+
+  sendEmail: catchAsync(async (req: Request, res: Response) => {
+    const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
+    const emailResult = await sendEventFormEmailIfAllowed(bookingId);
+
+    if (emailResult.sent) {
+      return res.json({ success: true, message: 'המייל נשלח בהצלחה' });
     }
-  },
 
-  async generatePDF(req: Request, res: Response) {
-    try {
-      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { 
-          eventDate: true,
-          eventForm: { include: { tables: true } }
-        }
+    if (emailResult.skipped) {
+      return res.json({
+        success: true,
+        skipped: true,
+        message: 'המייל כבר נשלח לפני פחות מדקה',
+        retryAfterSeconds: emailResult.retryAfterSeconds,
       });
-
-      if (!booking || !booking.eventForm) {
-        return res.status(404).json({ error: 'הזמנה או טופס לא נמצאו' });
-      }
-
-      const pdfData = {
-        eventCode: booking.eventCode,
-        clientAFullName: booking.clientAFullName,
-        clientAIdNumber: booking.clientAIdNumber,
-        clientBFullName: booking.clientBFullName || undefined,
-        clientBIdNumber: booking.clientBIdNumber || undefined,
-        eventDate: booking.eventDate.date.toString(),
-        guestCount: booking.guestCount,
-        eventType: booking.eventType,
-        timeOfDay: booking.timeOfDay || undefined,
-        clientSignatureUrl: booking.clientSignatureUrl,
-        contractText: booking.contractText,
-        eventForm: booking.eventForm,
-      };
-
-      const pdfBuffer = await generateEventFormPDF(pdfData);
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="event-form-${booking.clientAFullName}.pdf"`);
-      res.send(pdfBuffer);
-    } catch (e) {
-      console.error('PDF generation error:', e);
-      res.status(500).json({ error: 'שגיאה בהפקת PDF' });
     }
-  },
 
-  // הפונקציה החדשה לשליחת המייל אוטומטית בלחיצת כפתור
-  async sendEmail(req: Request, res: Response) {
-    try {
-      const bookingId = typeof req.params.bookingId === 'string' ? req.params.bookingId : '';
-      const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { 
-          eventDate: true,
-          eventForm: { include: { tables: true } }
-        }
-      });
-
-      if (!booking || !booking.eventForm) {
-        return res.status(404).json({ error: 'הזמנה או טופס לא נמצאו' });
-      }
-
-      // 1. הכנת הנתונים ליצירת ה-PDF
-      const pdfData = {
-        eventCode: booking.eventCode,
-        clientAFullName: booking.clientAFullName,
-        clientAIdNumber: booking.clientAIdNumber,
-        clientBFullName: booking.clientBFullName || undefined,
-        clientBIdNumber: booking.clientBIdNumber || undefined,
-        eventDate: booking.eventDate.date.toString(),
-        guestCount: booking.guestCount,
-        eventType: booking.eventType,
-        timeOfDay: booking.timeOfDay || undefined,
-        clientSignatureUrl: booking.clientSignatureUrl,
-        contractText: booking.contractText,
-        eventForm: booking.eventForm,
-      };
-
-      const pdfBuffer = await generateEventFormPDF(pdfData);
-
-      // 2. בדיקה למי לשלוח (לפי חתונה או אירוע אחר)
-      const emails: string[] = [];
-      if (booking.clientAEmail) emails.push(booking.clientAEmail);
-      
-      if (booking.eventType === 'חתונה' && booking.clientBEmail) {
-        emails.push(booking.clientBEmail);
-      }
-
-      if (emails.length === 0) {
-        return res.status(400).json({ error: 'לא מוגדרות כתובות אימייל ללקוחות אלו' });
-      }
-
-      // 3. שליחת המייל עם ה-PDF המצורף
-      for (const email of emails) {
-        await sendPDFToClient(email, booking.clientAFullName, booking.eventDate.date.toString(), pdfBuffer);
-      }
-
-      res.json({ success: true, message: 'המייל נשלח בהצלחה' });
-    } catch (e) {
-      console.error('Send email error:', e);
-      res.status(500).json({ error: 'שגיאה בשליחת המייל' });
+    if (emailResult.error === 'הזמנה או טופס לא נמצאו') {
+      throw new NotFoundError(emailResult.error);
     }
-  }
+    throw AppError.badRequest(emailResult.error || 'שגיאה בשליחת המייל');
+  }),
 };

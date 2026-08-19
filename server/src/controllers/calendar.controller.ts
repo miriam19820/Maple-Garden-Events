@@ -1,70 +1,62 @@
 import { Request, Response } from 'express';
 import { calendarService } from '../Services/calendar.service';
+import { invalidateCache } from '../middlewares/cacheMiddleware';
+import { catchAsync } from '../middlewares/errorHandler';
+import { AppError } from '../utils/AppError';
 
 export const calendarController = {
+  getAllDates: catchAsync(async (req: Request, res: Response) => {
+    const { start, end, eventType } = req.query;
+    const parseLocalDateStart = (s: string) => {
+      const [y, m, d] = s.split('-').map(Number);
+      return new Date(y, m - 1, d, 0, 0, 0);
+    };
+    const parseLocalDateEnd = (s: string) => {
+      const [y, m, d] = s.split('-').map(Number);
+      return new Date(y, m - 1, d, 23, 59, 59, 999);
+    };
 
-  async getAllDates(req: Request, res: Response) {
-    try {
-      // הוספנו כאן את ה-eventType שמגיע מה-Frontend
-      const { start, end, eventType } = req.query;
-      const parseLocalDate = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-      
-      const dates = await calendarService.getAllCalendarDates(
-        parseLocalDate(start as string),
-        parseLocalDate(end as string),
-        eventType as string // מעבירים את סוג האירוע לשירות
-      );
-      res.json(dates);
-    } catch (error) {
-      // הוספנו את ההדפסה הזו כדי לראות את השגיאה האמיתית בטרמינל!
-      console.error('❌ שגיאה מפורטת ב-getAllDates:', error);
-      res.status(500).json({ error: 'שגיאה בשליפת התאריכים' });
+    if (!start || !end || typeof start !== 'string' || typeof end !== 'string') {
+      throw AppError.badRequest('חובה לשלוח פרמטרים start ו-end בפורמט YYYY-MM-DD');
     }
-  },
 
-  async lockDate(req: Request, res: Response) {
-    try {
-      const dateStr = req.params.dateStr as string;
-      const { employeeName } = req.body;
-      const result = await calendarService.lockDateForChecking(dateStr, employeeName);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  },
+    const dates = await calendarService.getAllCalendarDates(
+      parseLocalDateStart(start),
+      parseLocalDateEnd(end),
+      eventType as string,
+    );
+    res.json(dates);
+  }),
 
-  async releaseDate(req: Request, res: Response) {
-    try {
-      const dateStr = req.params.dateStr as string;
-      const result = await calendarService.releaseDate(dateStr);
-      res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: 'שגיאה בשחרור התאריך' });
-    }
-  },
+  lockDate: catchAsync(async (req: Request, res: Response) => {
+    const dateStr = req.params.dateStr as string;
+    const { employeeName } = req.body;
+    const tenantId = (req as any).user?.tenantId;
+    const result = await calendarService.lockDateForChecking(dateStr, employeeName, tenantId);
+    await invalidateCache('calendar');
+    res.json(result);
+  }),
 
-  async createOption(req: Request, res: Response) {
-    try {
-      const dateId = req.params.dateId as string;
-      const bookingDetails = req.body;
-      const result = await calendarService.createOption(dateId, bookingDetails);
-      res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: 'שגיאה ביצירת אופציה' });
-    }
-  },
+  releaseDate: catchAsync(async (req: Request, res: Response) => {
+    const dateStr = req.params.dateStr as string;
+    const result = await calendarService.releaseDate(dateStr);
+    await invalidateCache('calendar');
+    res.json(result);
+  }),
 
-  async bookFinal(req: Request, res: Response) {
-    try {
-      const dateId = req.params.dateId as string;
-      const bookingDetails = req.body;
-      
-      // כאן ה-Service בודק התנגשויות לפי ה-timeOfDay שמועבר ב-bookingDetails
-      const result = await calendarService.bookEventFinal(dateId, bookingDetails);
-      res.json(result);
-    } catch (error: any) {
-      // אם יש התנגשות, ה-Service יזרוק שגיאה והיא תחזור ללקוח כאן
-      res.status(400).json({ error: error.message });
-    }
-  }
+  createOption: catchAsync(async (req: Request, res: Response) => {
+    const dateId = req.params.dateId as string;
+    const bookingDetails = req.body;
+    const result = await calendarService.createOption(dateId, bookingDetails);
+    await invalidateCache('calendar');
+    res.json(result);
+  }),
+
+  bookFinal: catchAsync(async (req: Request, res: Response) => {
+    const dateId = req.params.dateId as string;
+    const bookingDetails = req.body;
+    const result = await calendarService.bookEventFinal(dateId, bookingDetails);
+    await invalidateCache('calendar');
+    res.json(result);
+  }),
 };

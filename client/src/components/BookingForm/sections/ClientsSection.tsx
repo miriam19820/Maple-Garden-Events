@@ -1,158 +1,331 @@
-import React, { useState } from 'react';
+import { useState, type ChangeEvent, type ReactNode } from 'react';
+import type { BookingFormChangeHandler, BookingFormData } from '../bookingFormTypes';
+import { useTranslation } from '../../../i18n/useTranslation';
+import styles from './ClientsSection.module.css';
 
-const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption, styles }: any) => {
+interface ClientsSectionProps {
+  formData: BookingFormData;
+  handleChange: BookingFormChangeHandler;
+  errors: Record<string, string>;
+  isWedding: boolean;
+  isOption: boolean;
+}
+
+type EmailFieldName = 'clientAEmail' | 'clientBEmail';
+
+function FieldRow({
+  children,
+  single = false,
+}: {
+  children: ReactNode;
+  single?: boolean;
+}) {
+  return <div className={`${styles.row} ${single ? styles.rowSingle : ''}`}>{children}</div>;
+}
+
+function Field({
+  label,
+  wide = false,
+  children,
+}: {
+  label: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  if (wide) {
+    return (
+      <div className={styles.fieldWide}>
+        <label className={styles.label}>{label}</label>
+        <div className={styles.control}>{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.field}>
+      <label className={styles.label}>{label}</label>
+      <div className={styles.control}>{children}</div>
+    </div>
+  );
+}
+
+const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }: ClientsSectionProps) => {
+  const { t, T } = useTranslation();
   const [activeEmailField, setActiveEmailField] = useState<string | null>(null);
   const emailSuffixes = ['@gmail.com', '@hotmail.com', '@yahoo.com', '@walla.co.il'];
 
-  const handleEmailSelect = (fieldName: string, suffix: string) => {
+  const handleEmailSelect = (fieldName: EmailFieldName, suffix: string) => {
     const baseEmail = formData[fieldName].split('@')[0];
-    handleChange({ target: { name: fieldName, value: baseEmail + suffix } });
+    handleChange({
+      target: { name: fieldName, value: baseEmail + suffix },
+    } as ChangeEvent<HTMLInputElement>);
     setActiveEmailField(null);
   };
 
-  return (
-    <div className={styles.sectionCard}>
-      <h3 className={styles.sectionHeader}>פרטי בעלי השמחה</h3>
-      <div className={isWedding ? styles.clientsSectionWedding : styles.clientsSectionSingle}>
-        
-        {/* צד החתן / בעל השמחה */}
-        <div className={styles.clientBlock}>
-          <h3 className={styles.sectionTitlePrimary}>{isWedding ? "פרטי צד החתן" : "פרטי בעל השמחה / הלקוח"}</h3>
-          <div className={styles.inputRow}>
-            {isOption ? (
-              <>
-                <div className={styles.inputGroup}>
-                  <label>שם פרטי </label>
-                  <input type="text" name="clientAFirstName" required value={formData.clientAFirstName} onChange={handleChange} className={`${styles.input} ${errors?.clientAFirstName ? styles.inputError : ''}`} />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>שם משפחה </label>
-                  <input type="text" name="clientALastName" required value={formData.clientALastName} onChange={handleChange} className={`${styles.input} ${errors?.clientALastName ? styles.inputError : ''}`} />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className={styles.inputGroup}>
-                  <label>שם מלא</label>
-                  <input type="text" name="clientAFullName" required value={formData.clientAFullName} onChange={handleChange} className={`${styles.input} ${errors?.clientAFullName ? styles.inputError : ''}`} />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>תעודת זהות</label>
-                  <input type="text" name="clientAIdNumber" value={formData.clientAIdNumber} onChange={handleChange} className={styles.input} />
-                </div>
-              </>
-            )}
-          </div>
-          {isOption && (
-            <div className={styles.inputRow}>
-              <div className={styles.inputGroup}>
-                <label>תעודת זהות</label>
-                <input type="text" name="clientAIdNumber" value={formData.clientAIdNumber} onChange={handleChange} className={styles.input} />
-              </div>
-            </div>
-          )}
-          <div className={styles.inputRow}>
-            <div className={styles.inputGroup}>
-              <label>טלפון 1 </label>
-              <input type="tel" name="clientAPhone" required value={formData.clientAPhone} onChange={handleChange} className={`${styles.input} ${errors?.clientAPhone ? styles.inputError : ''}`} />
-            </div>
-            <div className={styles.inputGroup}>
-              <label>טלפון 2</label>
-              <input type="tel" name="clientAPhone2" value={formData.clientAPhone2} onChange={handleChange} className={styles.input} />
-            </div>
-          </div>
-          <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
-            <label>אימייל</label>
-            <input type="email" name="clientAEmail" value={formData.clientAEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientAEmail'); }} dir="ltr" style={{ textAlign: 'right' }} className={styles.input} autoComplete="off" />
-            {activeEmailField === 'clientAEmail' && formData.clientAEmail.includes('@') && (
-              <ul className={styles.emailSuggestions}>
-                {emailSuffixes.map(s => <li key={s} onClick={() => handleEmailSelect('clientAEmail', s)} dir="ltr">{formData.clientAEmail.split('@')[0]}{s}</li>)}
-              </ul>
-            )}
-          </div>
-          <div className={styles.inputRow}>
-            <div className={styles.inputGroup}><label>עיר</label><input type="text" name="clientACity" value={formData.clientACity} onChange={handleChange} className={styles.input} /></div>
-            <div className={styles.inputGroup}><label>כתובת</label><input type="text" name="clientAAddress" value={formData.clientAAddress} onChange={handleChange} className={styles.input} /></div>
-          </div>
-        </div>
+  const renderEmailField = (
+    fieldName: EmailFieldName,
+    labelKey: typeof T.BOOKING.CLIENTS.EMAIL | typeof T.BOOKING.CLIENTS.EMAIL_REQUIRED,
+    required = false,
+  ) => (
+    <Field label={t(labelKey)} wide>
+      <input
+        type="email"
+        name={fieldName}
+        required={required}
+        value={formData[fieldName]}
+        onChange={(e) => {
+          handleChange(e);
+          setActiveEmailField(fieldName);
+        }}
+        className={`${styles.input} ${styles.emailInput}`}
+        autoComplete="off"
+        title={formData[fieldName] || undefined}
+      />
+      {activeEmailField === fieldName && formData[fieldName].includes('@') && (
+        <ul className="maple-email-suggestions">
+          {emailSuffixes.map((suffix) => (
+            <li key={suffix} onClick={() => handleEmailSelect(fieldName, suffix)} dir="ltr">
+              {formData[fieldName].split('@')[0]}
+              {suffix}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Field>
+  );
 
-        {/* צד הכלה (מוצג רק בחתונות) */}
-        {isWedding && !isOption && (
-          <div className={styles.clientBlock}>
-            <h3 className={styles.sectionTitleSecondary}>פרטי צד הכלה</h3>
-            <div className={styles.inputRow}>
-                <div className={styles.inputGroup}>
-                  <label>שם מלא</label>
-                  <input type="text" name="clientBFullName" required value={formData.clientBFullName} onChange={handleChange} className={`${styles.input} ${errors?.clientBFullName ? styles.inputError : ''}`} />
+  const sideATitle = isWedding ? t(T.BOOKING.CLIENTS.GROOM_SIDE) : t(T.BOOKING.CLIENTS.CLIENT_SIDE);
+  const sideBTitle = isOption
+    ? t(T.BOOKING.CLIENTS.BRIDE_SIDE_OPTIONAL)
+    : t(T.BOOKING.CLIENTS.BRIDE_SIDE);
+
+  return (
+    <div className={`card mb-3 ${styles.clientsCard}`}>
+      <div className="card-header maple-section-header">{t(T.BOOKING.CLIENTS.SECTION_TITLE)}</div>
+      <div className="card-body">
+        <div className={`${styles.sides} ${isWedding ? styles.sidesSplit : ''}`}>
+          <section className={styles.sidePanel}>
+            <h4 className={styles.sideTitle}>{sideATitle}</h4>
+            <div className={styles.fieldsStack}>
+              {isOption ? (
+                <>
+                  <FieldRow>
+                    <Field label={t(T.BOOKING.CLIENTS.FIRST_NAME)}>
+                      <input
+                        type="text"
+                        name="clientAFirstName"
+                        required
+                        value={formData.clientAFirstName}
+                        onChange={handleChange}
+                        className={`${styles.input} ${errors?.clientAFirstName ? 'is-invalid' : ''}`}
+                        title={formData.clientAFirstName || undefined}
+                      />
+                      {errors?.clientAFirstName && (
+                        <div className={styles.error}>{errors.clientAFirstName}</div>
+                      )}
+                    </Field>
+                    <Field label={t(T.BOOKING.CLIENTS.LAST_NAME)}>
+                      <input
+                        type="text"
+                        name="clientALastName"
+                        required
+                        value={formData.clientALastName}
+                        onChange={handleChange}
+                        className={`${styles.input} ${errors?.clientALastName ? 'is-invalid' : ''}`}
+                        title={formData.clientALastName || undefined}
+                      />
+                      {errors?.clientALastName && (
+                        <div className={styles.error}>{errors.clientALastName}</div>
+                      )}
+                    </Field>
+                  </FieldRow>
+                  <FieldRow single>
+                    <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)} wide>
+                      <input
+                        type="text"
+                        name="clientAIdNumber"
+                        value={formData.clientAIdNumber}
+                        onChange={handleChange}
+                        className={styles.input}
+                        title={formData.clientAIdNumber || undefined}
+                      />
+                    </Field>
+                  </FieldRow>
+                </>
+              ) : (
+                <FieldRow>
+                  <Field label={t(T.BOOKING.CLIENTS.FULL_NAME)}>
+                    <input
+                      type="text"
+                      name="clientAFullName"
+                      required
+                      value={formData.clientAFullName}
+                      onChange={handleChange}
+                      className={`${styles.input} ${errors?.clientAFullName ? 'is-invalid' : ''}`}
+                      title={formData.clientAFullName || undefined}
+                    />
+                    {errors?.clientAFullName && (
+                      <div className={styles.error}>{errors.clientAFullName}</div>
+                    )}
+                  </Field>
+                  <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)}>
+                    <input
+                      type="text"
+                      name="clientAIdNumber"
+                      value={formData.clientAIdNumber}
+                      onChange={handleChange}
+                      className={styles.input}
+                      title={formData.clientAIdNumber || undefined}
+                    />
+                  </Field>
+                </FieldRow>
+              )}
+
+              <FieldRow>
+                <Field label={t(T.BOOKING.CLIENTS.PHONE_1)}>
+                  <input
+                    type="tel"
+                    name="clientAPhone"
+                    required
+                    value={formData.clientAPhone}
+                    onChange={handleChange}
+                    className={`${styles.input} ${errors?.clientAPhone ? 'is-invalid' : ''}`}
+                    title={formData.clientAPhone || undefined}
+                  />
+                  {errors?.clientAPhone && <div className={styles.error}>{errors.clientAPhone}</div>}
+                </Field>
+                <Field label={t(T.BOOKING.CLIENTS.PHONE_2)}>
+                  <input
+                    type="tel"
+                    name="clientAPhone2"
+                    value={formData.clientAPhone2}
+                    onChange={handleChange}
+                    className={styles.input}
+                    title={formData.clientAPhone2 || undefined}
+                  />
+                </Field>
+              </FieldRow>
+
+              {renderEmailField(
+                'clientAEmail',
+                isOption ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
+                isOption,
+              )}
+
+              <FieldRow>
+                <Field label={t(T.BOOKING.CLIENTS.CITY)}>
+                  <input
+                    type="text"
+                    name="clientACity"
+                    value={formData.clientACity}
+                    onChange={handleChange}
+                    className={styles.input}
+                    title={formData.clientACity || undefined}
+                  />
+                </Field>
+                <Field label={t(T.BOOKING.CLIENTS.ADDRESS)}>
+                  <input
+                    type="text"
+                    name="clientAAddress"
+                    value={formData.clientAAddress}
+                    onChange={handleChange}
+                    className={styles.input}
+                    title={formData.clientAAddress || undefined}
+                  />
+                </Field>
+              </FieldRow>
+            </div>
+          </section>
+
+          {isWedding && (
+            <>
+              <div className={styles.divider} aria-hidden="true" />
+              <section className={styles.sidePanel}>
+                <h4 className={styles.sideTitle}>{sideBTitle}</h4>
+                <div className={styles.fieldsStack}>
+                  <FieldRow>
+                    <Field label={t(T.BOOKING.CLIENTS.FULL_NAME)}>
+                      <input
+                        type="text"
+                        name="clientBFullName"
+                        required={!isOption}
+                        value={formData.clientBFullName}
+                        onChange={handleChange}
+                        className={`${styles.input} ${errors?.clientBFullName ? 'is-invalid' : ''}`}
+                        title={formData.clientBFullName || undefined}
+                      />
+                      {errors?.clientBFullName && (
+                        <div className={styles.error}>{errors.clientBFullName}</div>
+                      )}
+                    </Field>
+                    <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)}>
+                      <input
+                        type="text"
+                        name="clientBIdNumber"
+                        value={formData.clientBIdNumber}
+                        onChange={handleChange}
+                        className={styles.input}
+                        title={formData.clientBIdNumber || undefined}
+                      />
+                    </Field>
+                  </FieldRow>
+
+                  <FieldRow>
+                    <Field label={t(T.BOOKING.CLIENTS.PHONE_1)}>
+                      <input
+                        type="tel"
+                        name="clientBPhone"
+                        required={!isOption}
+                        value={formData.clientBPhone}
+                        onChange={handleChange}
+                        className={`${styles.input} ${errors?.clientBPhone ? 'is-invalid' : ''}`}
+                        title={formData.clientBPhone || undefined}
+                      />
+                      {errors?.clientBPhone && (
+                        <div className={styles.error}>{errors.clientBPhone}</div>
+                      )}
+                    </Field>
+                    <Field label={t(T.BOOKING.CLIENTS.PHONE_2)}>
+                      <input
+                        type="tel"
+                        name="clientBPhone2"
+                        value={formData.clientBPhone2}
+                        onChange={handleChange}
+                        className={styles.input}
+                        title={formData.clientBPhone2 || undefined}
+                      />
+                    </Field>
+                  </FieldRow>
+
+                  {renderEmailField('clientBEmail', T.BOOKING.CLIENTS.EMAIL)}
+
+                  <FieldRow>
+                    <Field label={t(T.BOOKING.CLIENTS.CITY)}>
+                      <input
+                        type="text"
+                        name="clientBCity"
+                        value={formData.clientBCity}
+                        onChange={handleChange}
+                        className={styles.input}
+                        title={formData.clientBCity || undefined}
+                      />
+                    </Field>
+                    <Field label={t(T.BOOKING.CLIENTS.ADDRESS)}>
+                      <input
+                        type="text"
+                        name="clientBAddress"
+                        value={formData.clientBAddress}
+                        onChange={handleChange}
+                        className={styles.input}
+                        title={formData.clientBAddress || undefined}
+                      />
+                    </Field>
+                  </FieldRow>
                 </div>
-                <div className={styles.inputGroup}>
-                  <label>תעודת זהות</label>
-                  <input type="text" name="clientBIdNumber" value={formData.clientBIdNumber} onChange={handleChange} className={styles.input} />
-                </div>
-              </div>
-              <div className={styles.inputRow}>
-                <div className={styles.inputGroup}>
-                  <label>טלפון 1 </label>
-                  <input type="tel" name="clientBPhone" required value={formData.clientBPhone} onChange={handleChange} className={`${styles.input} ${errors?.clientBPhone ? styles.inputError : ''}`} />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>טלפון 2</label>
-                  <input type="tel" name="clientBPhone2" value={formData.clientBPhone2} onChange={handleChange} className={styles.input} />
-                </div>
-              </div>
-              <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
-                  <label>אימייל</label>
-                  <input type="email" name="clientBEmail" value={formData.clientBEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientBEmail'); }} className={styles.input} dir="ltr" style={{textAlign: 'right'}} autoComplete="off" />
-                  {activeEmailField === 'clientBEmail' && formData.clientBEmail.includes('@') && (
-                    <ul className={styles.emailSuggestions}>
-                      {emailSuffixes.map(s => <li key={s} onClick={() => handleEmailSelect('clientBEmail', s)} dir="ltr">{formData.clientBEmail.split('@')[0]}{s}</li>)}
-                    </ul>
-                  )}
-              </div>
-              <div className={styles.inputRow}>
-                <div className={styles.inputGroup}><label>עיר</label><input type="text" name="clientBCity" value={formData.clientBCity} onChange={handleChange} className={styles.input} /></div>
-                <div className={styles.inputGroup}><label>כתובת</label><input type="text" name="clientBAddress" value={formData.clientBAddress} onChange={handleChange} className={styles.input} /></div>
-              </div>
-          </div>
-        )}
-        {isWedding && isOption && (
-          <div className={styles.clientBlock}>
-            <h3 className={styles.sectionTitleSecondary}>פרטי צד הכלה (אופציונלי)</h3>
-            <div className={styles.inputRow}>
-                <div className={styles.inputGroup}>
-                  <label>שם מלא</label>
-                  <input type="text" name="clientBFullName" value={formData.clientBFullName} onChange={handleChange} className={styles.input} />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>תעודת זהות</label>
-                  <input type="text" name="clientBIdNumber" value={formData.clientBIdNumber} onChange={handleChange} className={styles.input} />
-                </div>
-              </div>
-              <div className={styles.inputRow}>
-                <div className={styles.inputGroup}>
-                  <label>טלפון 1</label>
-                  <input type="tel" name="clientBPhone" value={formData.clientBPhone} onChange={handleChange} className={styles.input} />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>טלפון 2</label>
-                  <input type="tel" name="clientBPhone2" value={formData.clientBPhone2} onChange={handleChange} className={styles.input} />
-                </div>
-              </div>
-              <div className={`${styles.inputGroup} ${styles.emailWrap}`}>
-                  <label>אימייל</label>
-                  <input type="email" name="clientBEmail" value={formData.clientBEmail} onChange={(e) => { handleChange(e); setActiveEmailField('clientBEmail'); }} className={styles.input} dir="ltr" style={{textAlign: 'right'}} autoComplete="off" />
-                  {activeEmailField === 'clientBEmail' && formData.clientBEmail.includes('@') && (
-                    <ul className={styles.emailSuggestions}>
-                      {emailSuffixes.map(s => <li key={s} onClick={() => handleEmailSelect('clientBEmail', s)} dir="ltr">{formData.clientBEmail.split('@')[0]}{s}</li>)}
-                    </ul>
-                  )}
-              </div>
-              <div className={styles.inputRow}>
-                <div className={styles.inputGroup}><label>עיר</label><input type="text" name="clientBCity" value={formData.clientBCity} onChange={handleChange} className={styles.input} /></div>
-                <div className={styles.inputGroup}><label>כתובת</label><input type="text" name="clientBAddress" value={formData.clientBAddress} onChange={handleChange} className={styles.input} /></div>
-              </div>
-          </div>
-        )}
+              </section>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

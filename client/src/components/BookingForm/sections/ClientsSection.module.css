@@ -1,0 +1,203 @@
+.clientsCard :global(.card-body) {
+  padding: 0.85rem 1rem 1rem;
+}
+
+.sides {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  direction: rtl;
+  align-items: stretch;
+}
+
+.sidesSplit {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0;
+}
+
+.sidePanel {
+  min-width: 0;
+  background: var(--brand-bg, #f8fafc);
+  border: 1px solid var(--brand-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 0.85rem 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidesSplit .sidePanel {
+  height: 100%;
+}
+
+.divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--brand-border-strong, #cbd5e1);
+  margin: 0.25rem 0.85rem;
+}
+
+.sideTitle {
+  font-size: var(--brand-text-sm, 0.9rem);
+  font-weight: 700;
+  color: var(--brand-green-deep, #1b5e20);
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--brand-border, #e2e8f0);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.fieldsStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* One horizontal band: labels share a row, inputs share the next row */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  grid-template-rows: 1.35rem auto;
+  column-gap: 0.85rem;
+  row-gap: 0.3rem;
+  align-items: stretch;
+  direction: rtl;
+  min-width: 0;
+}
+
+.rowSingle {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.field,
+.fieldWide {
+  display: contents;
+}
+
+.fieldWide {
+  /* full-width band: label + control stacked */
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  position: relative;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  grid-row: 1;
+  height: 1.35rem;
+  margin: 0;
+  padding: 0;
+  text-align: right;
+  font-size: var(--brand-form-label-size, 0.82rem);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--brand-text-secondary, #4a5568);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fieldWide .label {
+  height: auto;
+  min-height: 1.35rem;
+}
+
+.control {
+  grid-row: 2;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--brand-border-strong, #cbd5e1);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--brand-text, #1e293b);
+  font-size: 0.95rem;
+  font-family: inherit;
+  line-height: 1.35;
+  box-shadow: none;
+  /* Keep typed value readable — never ellipsis-clip inside the field */
+  overflow-x: auto;
+  text-overflow: clip;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--brand-green, #4f7f52);
+  box-shadow: 0 0 0 0.2rem rgba(79, 127, 82, 0.18);
+}
+
+.input:global(.is-invalid) {
+  border-color: var(--bs-danger, #c53030);
+}
+
+.emailInput {
+  direction: ltr;
+  text-align: right;
+}
+
+.error {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--bs-danger, #c53030);
+  text-align: right;
+  line-height: 1.25;
+  /* Errors sit under the control without shifting the sibling input in the same row */
+  min-height: 0;
+}
+
+@media (max-width: 991.98px) {
+  .sidesSplit {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .divider {
+    width: auto;
+    height: 1px;
+    margin: 0;
+  }
+}
+
+@media (max-width: 675px) {
+  .row {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    gap: 0.55rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .label,
+  .control {
+    grid-row: auto;
+  }
+
+  .label {
+    height: auto;
+    min-height: 1.2rem;
+    white-space: normal;
+  }
+}

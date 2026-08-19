@@ -1,86 +1,104 @@
-import { Router, Request, Response } from 'express';
-import multer from 'multer';
+import { Router } from 'express';
 import { validate } from '../middlewares/validate';
-import { createBookingSchema } from '../validators/booking.validator';
+import { createBookingSchema, updateBookingSchema } from '../validators/booking.validator';
+import {
+  addEventAdditionSchema,
+  bumpOptionSchema,
+  addBookingUpgradeSchema,
+  finalizeBookingSchema,
+  notifyOptionInterestSchema,
+  releaseOptionsSchema,
+  reissueEasyCountSchema,
+  listBookingPaymentsSchema,
+  createBookingPaymentSchema,
+} from '../validators/bookingActions.validator';
+import { sendGreetingSchema } from '../validators/greeting.validator';
 import { requireAuth } from '../middlewares/auth';
-import { catchAsync } from '../middlewares/errorHandler';
-import prisma from '../config/prisma';
+import { requireRole } from '../middlewares/requireRole';
+import { RBAC } from '../config/rbac';
+import {
+  assertUploadedFileMagicBytes,
+  upload,
+} from '../middlewares/uploadMiddleware';
 
 import {
   createBooking,
   getAllBookings,
   getBookingById,
+  getRelatedOptionBookings,
   updateBooking,
   releaseOptions,
   bumpOption,
+  notifyOptionInterest,
   finalizeBooking,
   getCancellationStats,
   addEventAddition,
   getNextEventCode,
   getContractTemplate,
+  reissueEasyCountReceipt,
+  addBookingUpgrade,
+  signAndSendContract,
+  getBookingPayments,
+  createBookingPayment,
+  getBookingContractPdf,
 } from '../controllers/booking';
-import { sendGreeting } from '../controllers/greeting';
-import { generateEventFormPDF } from '../utils/pdfGenerator';
+import { sendGreeting, getScheduledGreetings, cancelScheduledGreetingHandler } from '../controllers/greeting';
+import {
+  createBookingHallInvoice,
+  getBookingHallInvoices,
+} from '../controllers/easyCount.controller';
+import { createHallInvoiceSchema } from '../validators/easyCount.validator';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+router.use(requireAuth);
 
-// --- ראוט להורדת חוזה חתום (צפייה ב-PDF) ---
-// --- ראוט להורדת חוזה חתום ---
-router.get('/:id/contract-pdf', requireAuth, catchAsync(async (req: Request, res: Response) => {
-  // תיקון הטיפוס כאן: מוודאים שזה תמיד string בודד
-  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+const { MANAGEMENT, MANAGER_ONLY, FINANCE_READ } = RBAC;
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: id }, // משתמשים במשתנה הבטוח שהגדרנו למעלה
-    include: { eventDate: true, eventForm: true }
-  }) as any;
+// --- חוזה PDF (קריאה) ---
+router.get('/:id/contract-pdf', requireRole(...MANAGEMENT), getBookingContractPdf);
 
-  if (!booking || !booking.clientSignatureUrl) {
-    return res.status(404).json({ success: false, message: 'חוזה חתום לא נמצא.' });
-  }
-  
-  // ... שאר הקוד נשאר בדיוק כפי שהיה ...
+// --- EasyCount / חשבוניות (Manager בלבד — Staff ללא הפקת מסמכים) ---
+router.post('/:id/invoice', requireRole(...MANAGER_ONLY), validate(createHallInvoiceSchema), createBookingHallInvoice);
+router.get('/:id/invoices', requireRole(...FINANCE_READ), getBookingHallInvoices);
+router.post('/:id/easycount-receipt', requireRole(...MANAGER_ONLY), validate(reissueEasyCountSchema), reissueEasyCountReceipt);
 
-  // פונקציית עזר להמרת כל ערך למחרוזת בטוחה
-  const toStr = (val: unknown): string => (val ? String(val) : '');
+// --- יומן תשלומים / יתרה ---
+router.get('/:id/payments', requireRole(...FINANCE_READ), validate(listBookingPaymentsSchema), getBookingPayments);
+router.post('/:id/payments', requireRole(...MANAGER_ONLY), validate(createBookingPaymentSchema), createBookingPayment);
 
-  // יצירת ה-PDF
-  const pdfBuffer = await generateEventFormPDF({
-    eventCode: toStr(booking.eventCode),
-    clientAFullName: toStr(booking.clientAFullName),
-    clientAIdNumber: toStr(booking.clientAIdNumber),
-    clientAPhone: booking.clientAPhone ? toStr(booking.clientAPhone) : undefined,
-    clientAEmail: booking.clientAEmail ? toStr(booking.clientAEmail) : undefined,
-    eventDate: booking.eventDate?.date ? booking.eventDate.date.toISOString() : new Date().toISOString(),
-    guestCount: Number(booking.guestCount || 0),
-    eventType: toStr(booking.eventType),
-    clientSignatureUrl: booking.clientSignatureUrl,
-    contractText: booking.contractText,
-    eventForm: booking.eventForm || {}
-  });
+// --- סטטיסטיקה וקודים (קריאה) ---
+router.get('/stats/cancellations', requireRole(...MANAGEMENT), getCancellationStats); 
+router.get('/next-code', requireRole(...MANAGEMENT), getNextEventCode);
+router.get('/contract-template', requireRole(...MANAGEMENT), getContractTemplate);
+router.get('/scheduled-greetings', requireRole(...MANAGEMENT), getScheduledGreetings);
 
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="contract_${booking.eventCode || booking.id}.pdf"`);
-  res.send(pdfBuffer);
-}));
+// --- מחיקה / שחרור (Manager בלבד — Staff ללא מחיקה) ---
+router.delete('/scheduled-greetings/:id', requireRole(...MANAGER_ONLY), cancelScheduledGreetingHandler);
+router.post('/release', requireRole(...MANAGER_ONLY), validate(releaseOptionsSchema), releaseOptions);
 
-// --- ראוטים סטטיסטיקה וקודים ---
-router.get('/stats/cancellations', getCancellationStats); 
-router.get('/next-code', getNextEventCode);
-router.get('/contract-template', getContractTemplate);
+// --- הזמנות — CRUD ---
+router.post('/', requireRole(...MANAGEMENT), validate(createBookingSchema), createBooking);
+router.get('/', requireRole(...MANAGEMENT), getAllBookings);
+router.get('/:id/related-options', requireRole(...MANAGEMENT), getRelatedOptionBookings);
+router.get('/:id', requireRole(...MANAGEMENT), getBookingById);
+router.put('/:id', requireRole(...MANAGEMENT), validate(updateBookingSchema), updateBooking);
+router.patch('/:id/upgrades', requireRole(...MANAGEMENT), validate(addBookingUpgradeSchema), addBookingUpgrade);
 
-// --- ראוטים של הזמנות ---
-router.post('/', requireAuth, validate(createBookingSchema), createBooking);
-router.get('/', getAllBookings);
-router.get('/:id', getBookingById);
-router.put('/:id', updateBooking);
-router.post('/release', releaseOptions);
-router.post('/bump', bumpOption);
-router.post('/finalize', finalizeBooking);
-router.post('/send-greeting', upload.single('attachment'), sendGreeting);
+// --- פעולות אופציה ---
+router.post('/bump', requireRole(...MANAGEMENT), validate(bumpOptionSchema), bumpOption);
+router.post('/notify-option-interest', requireRole(...MANAGEMENT), validate(notifyOptionInterestSchema), notifyOptionInterest);
+router.post('/finalize', requireRole(...MANAGEMENT), validate(finalizeBookingSchema), finalizeBooking);
+router.post('/:id/sign-and-send', requireRole(...MANAGEMENT), signAndSendContract);
 
-// --- ראוט לתוספות אירוע ---
-router.post('/:id/additions', addEventAddition);
+// --- ברכות ותוספות ---
+router.post(
+  '/send-greeting',
+  requireRole(...MANAGEMENT),
+  upload.single('attachment'),
+  assertUploadedFileMagicBytes,
+  validate(sendGreetingSchema),
+  sendGreeting,
+);
+router.post('/:id/additions', requireRole(...MANAGEMENT), validate(addEventAdditionSchema), addEventAddition);
 
 export default router;

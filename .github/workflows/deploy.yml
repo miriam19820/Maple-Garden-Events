@@ -1,0 +1,171 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, staging, CICD]
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  EC2_USER:                       ubuntu
+  VITE_TENANT_NAME:               maple-garden
+  VITE_SENTRY_TRACES_SAMPLE_RATE: "0.1"
+
+jobs:
+
+  # ─── Build Docker images → push to ECR ──────────────────────────────────────
+  build:
+    name: Build & push images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      ECR_REPO_SERVER: ${{ github.ref_name == 'main' && 'maple-garden-server-production' || 'maple-garden-server-staging' }}
+      ECR_REPO_PROXY: ${{ github.ref_name == 'main' && 'maple-garden-proxy-production' || 'maple-garden-proxy-staging' }}
+      ECR_REPO_CLIENT: ${{ github.ref_name == 'main' && 'maple-garden-client-production' || 'maple-garden-client-staging' }}
+
+    outputs:
+      registry:        ${{ steps.ecr.outputs.registry }}
+      ecr_repo_server: ${{ steps.vars.outputs.ecr_repo_server }}
+      ecr_repo_proxy:  ${{ steps.vars.outputs.ecr_repo_proxy }}
+      ecr_repo_client: ${{ steps.vars.outputs.ecr_repo_client }}
+      image_tag:       ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export repo names
+        id: vars
+        run: |
+          echo "ecr_repo_server=$ECR_REPO_SERVER" >> $GITHUB_OUTPUT
+          echo "ecr_repo_proxy=$ECR_REPO_PROXY"   >> $GITHUB_OUTPUT
+          echo "ecr_repo_client=$ECR_REPO_CLIENT" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push server
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG:      ${{ github.sha }}
+        run: |
+          docker build -f server/Dockerfile \
+            -t "$REGISTRY/$ECR_REPO_SERVER:$TAG" \
+            -t "$REGISTRY/$ECR_REPO_SERVER:latest" .
+          docker push "$REGISTRY/$ECR_REPO_SERVER:$TAG"
+          docker push "$REGISTRY/$ECR_REPO_SERVER:latest"
+
+      - name: Build & push client
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG:      ${{ github.sha }}
+        run: |
+          docker build -f client/Dockerfile \
+            --build-arg VITE_GOOGLE_CLIENT_ID="${{ secrets.VITE_GOOGLE_CLIENT_ID }}" \
+            --build-arg VITE_API_URL="" \
+            --build-arg VITE_SENTRY_DSN="${{ secrets.VITE_SENTRY_DSN }}" \
+            --build-arg VITE_SENTRY_TRACES_SAMPLE_RATE="$VITE_SENTRY_TRACES_SAMPLE_RATE" \
+            --build-arg VITE_TENANT_NAME="$VITE_TENANT_NAME" \
+            -t "$REGISTRY/$ECR_REPO_CLIENT:$TAG" \
+            -t "$REGISTRY/$ECR_REPO_CLIENT:latest" .
+          docker push "$REGISTRY/$ECR_REPO_CLIENT:$TAG"
+          docker push "$REGISTRY/$ECR_REPO_CLIENT:latest"
+
+      - name: Build & push proxy
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG:      ${{ github.sha }}
+        run: |
+          docker build -f routing/Dockerfile \
+            -t "$REGISTRY/$ECR_REPO_PROXY:$TAG" \
+            -t "$REGISTRY/$ECR_REPO_PROXY:latest" .
+          docker push "$REGISTRY/$ECR_REPO_PROXY:$TAG"
+          docker push "$REGISTRY/$ECR_REPO_PROXY:latest"
+
+  # ─── Deploy to EC2 ───────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    env:
+      ECR_REPO_SERVER: ${{ needs.build.outputs.ecr_repo_server }}
+      ECR_REPO_PROXY:  ${{ needs.build.outputs.ecr_repo_proxy }}
+      ECR_REPO_CLIENT: ${{ needs.build.outputs.ecr_repo_client }}
+      IMAGE_TAG:       ${{ needs.build.outputs.image_tag }}
+      EC2_HOST:        ${{ github.ref_name == 'main' && secrets.PROD_EC2_HOST        || secrets.EC2_HOST }}
+      EC2_SSH_KEY:     ${{ github.ref_name == 'main' && secrets.PROD_EC2_SSH_KEY     || secrets.EC2_SSH_KEY }}
+      ECR_REGISTRY:    ${{ github.ref_name == 'main' && secrets.PROD_ECR_REGISTRY    || secrets.ECR_REGISTRY }}
+      DOMAIN:          ${{ github.ref_name == 'main' && secrets.PROD_DOMAIN          || secrets.DOMAIN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Always deploy the tracked compose file fresh — no more editing a stale
+      # copy that lives only on the server and silently drifts from the repo.
+      - name: Copy production compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:        ${{ env.EC2_HOST }}
+          username:    ${{ env.EC2_USER }}
+          key:         ${{ env.EC2_SSH_KEY }}
+          source:      "docker-compose.prod.yml"
+          target:      "~"
+          strip_components: 0
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host:     ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key:      ${{ env.EC2_SSH_KEY }}
+          script: |
+            ECR_PASS=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }})
+            echo "$ECR_PASS" | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+
+            # Pull the exact commit image
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_SERVER }}:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_PROXY }}:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_CLIENT }}:${{ env.IMAGE_TAG }}
+
+            # Replace the tracked compose file with this deploy's real values
+            # (scp lands it in the home dir — /app itself is root-owned)
+            sudo mv ~/docker-compose.prod.yml /app/docker-compose.yml
+            cd /app
+            sudo sed -i \
+              -e "s|__REGISTRY__|${{ env.ECR_REGISTRY }}|g" \
+              -e "s|__ECR_REPO_SERVER__|${{ env.ECR_REPO_SERVER }}|g" \
+              -e "s|__ECR_REPO_PROXY__|${{ env.ECR_REPO_PROXY }}|g" \
+              -e "s|__ECR_REPO_CLIENT__|${{ env.ECR_REPO_CLIENT }}|g" \
+              -e "s|__IMAGE_TAG__|${{ env.IMAGE_TAG }}|g" \
+              -e "s|__DOMAIN__|${{ env.DOMAIN }}|g" \
+              docker-compose.yml
+
+            docker compose up -d --remove-orphans
+            docker image prune -f
+
+            # ─── Health check: fail the deploy if the app never comes up healthy ──
+            echo "Waiting for app to become healthy..."
+            for i in $(seq 1 15); do
+              if curl -sf http://localhost/api/health > /dev/null; then
+                echo "✅ Health check passed"
+                exit 0
+              fi
+              echo "  attempt $i/15 — not ready yet, waiting 5s..."
+              sleep 5
+            done
+            echo "❌ Health check failed after 75s — deployment is broken!"
+            docker logs maple-server --tail 50
+            exit 1
