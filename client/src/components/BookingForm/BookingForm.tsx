@@ -214,7 +214,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   const initialCalendarDateId = datesToProcess.length > 0
     ? normalizeOptionDate(datesToProcess[0]).date
-    : ((location.state?.date as string) || '');
+    : (primaryDateStr || (location.state?.date as string) || '');
   const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<OptionDateItem[]>(
     datesToProcess.map(normalizeOptionDate)
   );
@@ -296,23 +296,27 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       }
       const restore = window.confirm(t(T.BOOKING.FORM.DRAFT_RESTORE_CONFIRM));
       if (restore) {
+        const dates = (draft.selectedDatesDisplay as ReturnType<typeof normalizeOptionDate>[]).map(normalizeOptionDate);
+        const firstDate = dates[0]?.date || '';
         const draftEventType = String((draft.formData as { eventType?: string }).eventType || '').trim();
-        setFormData((prev) => ({
-          ...prev,
-          ...(draft.formData as typeof prev),
-          // Keep Wedding default on option drafts that were saved without an event type.
-          eventType:
-            draftEventType ||
-            (isOptionMode ? DEFAULT_EVENT_TYPE : prev.eventType),
-        }));
+        setFormData((prev) => {
+          const merged = {
+            ...prev,
+            ...(draft.formData as typeof prev),
+            eventType: draftEventType || (isOptionMode ? DEFAULT_EVENT_TYPE : prev.eventType),
+          };
+          return firstDate ? { ...merged, calendarDateId: firstDate } : merged;
+        });
         setMenuNotesList(draft.menuNotesList);
         setInternalNotesList(draft.internalNotesList);
         setServingStyle(draft.servingStyle);
         setKosherType(draft.kosherType);
         setUpgrades(draft.upgrades);
         setDepositMethod(draft.depositMethod);
-        setContractSigned(draft.contractSigned);
-        setSelectedDatesDisplay(draft.selectedDatesDisplay as OptionDateItem[]);
+        setContractSigned(false);
+        setSavedSignature(null);
+        setSelectedDatesDisplay(dates);
+        setIsOption(draft.isOption);
         setOptionDurationHours(draft.optionDurationHours);
         setPaymentTemplateId(draft.paymentTemplateId);
         setPaymentTermsCustom(draft.paymentTermsCustom);
@@ -698,9 +702,31 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     }
   };
 
-  const handleUpgradeChange = (key: keyof typeof upgrades) => {
+  const handleUpgradeChange = async (key: keyof typeof upgrades) => {
     if (key === 'baseDesign') return;
-    setUpgrades((prev) => ({ ...prev, [key]: !prev[key] }));
+    const newValue = !upgrades[key];
+
+    if (editId && newValue) {
+      try {
+        const res = await apiFetch(`${API_URL}/bookings/${editId}/upgrades`, {
+          method: 'PATCH',
+          body: JSON.stringify({ upgradeKey: key }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          alert(json.message || t(T.BOOKING.ALERTS.UPGRADE_ADD_FAILED));
+          return;
+        }
+        setUpgrades((prev) => ({ ...prev, [key]: true }));
+        if (json.data?.contractText) setContractText(json.data.contractText);
+        if (json.data?.paymentTermsText) setPaymentTermsText(json.data.paymentTermsText);
+      } catch {
+        alert(t(T.BOOKING.ALERTS.UPGRADE_ADD_FAILED));
+      }
+      return;
+    }
+
+    setUpgrades((prev) => ({ ...prev, [key]: newValue }));
   };
 
   const processCheckImage = async (imageSrc: string) => {
@@ -1211,6 +1237,24 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 upgradeDisplayOrder={visibleUpgradeKeys}
                 isHallOnly={isHallOnly}
               />
+            </div>
+
+            <div className="col-lg-4">
+              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
+              {isFoodRelevant && (
+                <div className="card mb-3">
+                  <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.MENU_TITLE)}</div>
+                  <div className="card-body py-2">
+                    <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder={t(T.BOOKING.NOTES.MENU_PLACEHOLDER)} />
+                  </div>
+                </div>
+              )}
+              <div className="card mb-3">
+                <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.INTERNAL_TITLE)}</div>
+                <div className="card-body py-2">
+                  <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder={t(T.BOOKING.NOTES.INTERNAL_PLACEHOLDER)} />
+                </div>
+              </div>
               {!isOption && (
                 <div className="card border-info mb-3">
                   <div className="card-body">
@@ -1260,24 +1304,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="col-lg-4">
-              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
-              {isFoodRelevant && (
-                <div className="card mb-3">
-                  <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.MENU_TITLE)}</div>
-                  <div className="card-body py-2">
-                    <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder={t(T.BOOKING.NOTES.MENU_PLACEHOLDER)} />
-                  </div>
-                </div>
-              )}
-              <div className="card mb-3">
-                <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.INTERNAL_TITLE)}</div>
-                <div className="card-body py-2">
-                  <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder={t(T.BOOKING.NOTES.INTERNAL_PLACEHOLDER)} />
-                </div>
-              </div>
             </div>
 
             <div className="col-lg-4">

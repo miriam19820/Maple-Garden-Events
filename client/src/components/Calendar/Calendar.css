@@ -42,10 +42,10 @@
 }
 
 .calendar-control-bar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px 16px;
   direction: rtl;
 }
@@ -54,7 +54,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
   min-width: 0;
 }
 
@@ -91,7 +93,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
 }
 
 .inline-date-nav {
@@ -169,7 +173,7 @@
   --event-pill-gap: clamp(3px, 0.5vh, 6px);
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(var(--calendar-week-rows, 5), 1fr);
+  grid-template-rows: repeat(var(--calendar-week-rows, 5), minmax(0, 1fr));
   gap: 6px;
   direction: ltr;
   width: 100%;
@@ -248,10 +252,15 @@
 
 .calendar-cell.out-of-month {
   background: var(--brand-bg);
-  border: 1px solid var(--brand-border);
-  opacity: 0.45;
+  border: 1px dashed var(--brand-border);
+  opacity: 0.72;
   cursor: default;
   box-shadow: none;
+}
+
+.calendar-cell.out-of-month .gregorian-num,
+.calendar-cell.out-of-month .hebrew-text {
+  color: var(--brand-text-muted);
 }
 
 .calendar-cell.selected-for-option {
@@ -614,7 +623,7 @@
   .app-layout-viewport-fill .calendar-page-layout {
     flex: 1;
     min-height: 0;
-    padding: 1.2cm 24px 16px;
+    padding: 16px 24px 16px;
     overflow: hidden;
   }
 
@@ -635,13 +644,14 @@
     height: 100%;
     min-height: 0;
     gap: clamp(4px, 0.7vh, 8px);
+    grid-template-rows: repeat(var(--calendar-week-rows, 5), minmax(0, 1fr));
     --event-pill-height: 24px;
     --event-pill-gap: clamp(2px, 0.4vh, 4px);
   }
 
   .app-layout-viewport-fill .calendar-cell {
-    height: 100%;
     min-height: 0;
+    height: 100%;
   }
 
   .app-layout-viewport-fill .cell-header-row {
@@ -684,7 +694,7 @@
 
 @media (min-width: 1024px) {
   .app-layout-viewport-fill .calendar-grid-uniform .calendar-cell {
-    min-height: clamp(80px, 12vh, 140px);
+    min-height: 0;
   }
 }
 
@@ -709,21 +719,11 @@
   }
 
   .calendar-control-bar {
-    gap: 12px;
+    gap: 10px 12px;
   }
 
   .calendar-availability-group {
-    flex: 1 1 100%;
-    justify-content: space-between;
-  }
-
-  .calendar-inline-nav {
-    flex: 1 1 100%;
-  }
-
-  .inline-date-nav {
-    justify-content: center;
-    width: 100%;
+    justify-content: flex-start;
   }
 
   .calendar-grid-wrapper {
