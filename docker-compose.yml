@@ -65,12 +65,6 @@ services:
     build:
       context: .
       dockerfile: routing/Dockerfile
-      args:
-        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
-        VITE_API_URL: ""
-        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
-        VITE_SENTRY_TRACES_SAMPLE_RATE: ${VITE_SENTRY_TRACES_SAMPLE_RATE}
-        VITE_TENANT_NAME: ${VITE_TENANT_NAME}
     container_name: maple-proxy
     environment:
       DOMAIN: localhost
