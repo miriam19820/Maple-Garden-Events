@@ -7,13 +7,13 @@ import { Login } from './components/Login/Login';
 import { PageLoader } from './components/PageLoader/PageLoader';
 import { AccessibilityWidget } from './components/AccessibilityWidget/AccessibilityWidget';
 import { AccessibilityProvider } from './context/AccessibilityProvider';
+import { TenantBrandingProvider } from './contexts/TenantBrandingContext';
 import { checkAuthSession } from './services/api';
 import { connectSocket, disconnectSocket } from './services/socketService';
 import { setupRealtimeSync, teardownRealtimeSync } from './services/realtimeSync';
 import { setupOfflineCheckInSync } from './utils/offlineCheckInQueue';
 import { cleanExpiredLocalDrafts } from './utils/localDraft';
 import { queryClient } from './lib/queryClient';
-import { TenantBrandingProvider } from './contexts/TenantBrandingContext';
 
 const BookingForm = lazy(() => import('./components/BookingForm/BookingForm'));
 const BookingFormDesignExport = lazy(() => import('./components/BookingForm/BookingFormDesignExport'));

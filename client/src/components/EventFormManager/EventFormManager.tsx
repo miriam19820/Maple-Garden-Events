@@ -22,13 +22,7 @@ import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
 import { hasEventEnded, type EventFormTime } from '../../utils/eventStart';
 import { API_URL } from '../../config/api';
-import { secureFetch, getAuthUser } from '../../services/api';
-import {
-  saveEventFormDraft,
-  loadEventFormDraft,
-  clearEventFormDraft,
-  type EventFormDraftSnapshot,
-} from '../../utils/eventFormDraft';
+import { secureFetch } from '../../services/api';
 import { consumePendingDesignSelections } from '../../utils/designGallerySelection';
 import { buildProductionPdfFilename, filenameFromContentDisposition } from '@shared/contract';
 import { DesignSelectionSummary } from '../DesignGallery/DesignSelectionSummary';
@@ -435,7 +429,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
 
     secureFetch(`${API_URL}/event-forms/${selected.id}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(async (form) => {
+      .then((form) => {
         if (form && form.id) {
           const { booking, tables, ...restForm } = form;
           const cleanForm = { ...restForm };
@@ -461,22 +455,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
           setSelectedMenu(form.menuSelections || null);
           setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
           setTableLayoutImageUrl(form.tableLayoutImageUrl || null);
-
-          const currentUser = await getAuthUser();
-          if (currentUser?.email) {
-            const draft = loadEventFormDraft(selected.id, currentUser.email);
-            if (draft) {
-              if (window.confirm('מצאנו טיוטה מקומית לא שמורה. האם תרצה לשחזר אותה?')) {
-                setFormData(draft.formData as EventFormData);
-                setHasHonorTable(draft.hasHonorTable);
-                setHasEntertainers(draft.hasEntertainers);
-                setNotesList(draft.notesList);
-                setSelectedMenu(draft.selectedMenu);
-              } else {
-                clearEventFormDraft(selected.id);
-              }
-            }
-          }
 
           const pendingDesign = consumePendingDesignSelections(selected.id);
           if (pendingDesign && Object.keys(pendingDesign).length > 0) {
@@ -535,31 +513,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     if (selected?.id !== restoredBooking.id) return;
     navigate(location.pathname, { replace: true, state: {} });
   }, [restoredBooking, selected?.id, locationState?.bookingId, location.pathname, navigate]);
-
-  useEffect(() => {
-    if (!selected || actionBusy) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    getAuthUser().then((currentUser) => {
-      if (cancelled || !currentUser?.email) return;
-      timer = setTimeout(() => {
-        const snapshot: EventFormDraftSnapshot = {
-          formData,
-          hasHonorTable,
-          hasEntertainers,
-          notesList,
-          selectedMenu,
-        };
-        saveEventFormDraft(selected.id, currentUser.email, snapshot);
-      }, 1000);
-    });
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [selected, formData, hasHonorTable, hasEntertainers, notesList, selectedMenu, actionBusy]);
 
   const handleTableLayoutSave = async (tables: TableData[], imageDataUrl: string) => {
     if (!selected || isSelectedArchived) return;
@@ -844,7 +797,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       
       const result = await response.json();
       if (result.success) {
-        clearEventFormDraft(selected.id);
         setDepositCheckFile(null);
         showEmailSaveMessage(result);
         clearSelected();
@@ -882,8 +834,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
         return;
       }
 
-      clearEventFormDraft(selected.id);
-
       const saveResult = await saveResponse.json();
       if (saveResult.emailSent || saveResult.emailSkipped || saveResult.emailError) {
         showEmailSaveMessage(saveResult);
@@ -915,8 +865,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
         alert(t(T.UI.SAVE_ERROR));
         return;
       }
-
-      clearEventFormDraft(selected.id);
 
       const saveResult = await saveResponse.json();
 

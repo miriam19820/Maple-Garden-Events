@@ -167,6 +167,10 @@ export async function getAuthUser(): Promise<AuthUserInfo | null> {
         return null;
       }
     }
+    if (response.status === 403) {
+      clearUserCache();
+      return null;
+    }
     if (!response.ok) {
       clearUserCache();
       return null;

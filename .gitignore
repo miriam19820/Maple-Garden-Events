@@ -24,3 +24,17 @@ server/src/vendor/
 
 # Design exports (generated locally)
 /design-exports/
+
+.terraform/
+.terraform*
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfplan
+
+# Ansible secrets — contains real credentials, never commit
+infra/ansible/group_vars/staging.yml
+infra/ansible/group_vars/production.yml
+infra/ansible/inventory/group_vars/staging.yml
+infra/ansible/inventory/group_vars/production.yml
