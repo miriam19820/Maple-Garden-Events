@@ -187,7 +187,10 @@ jobs:
               docker-compose.yml
 
             docker compose up -d --remove-orphans
-            docker image prune -f
+            # -a removes ALL unused images (not just dangling ones) — every
+            # deploy pulls a uniquely SHA-tagged image, so old tagged versions
+            # from previous deploys pile up forever unless we prune them here.
+            docker image prune -af
 
             # ─── Health check: fail the deploy if the app never comes up healthy ──
             echo "Waiting for app to become healthy..."
