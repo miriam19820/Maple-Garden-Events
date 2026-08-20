@@ -4,6 +4,7 @@ import { notifyEventFormViaWhatsApp } from '../Services/whatsappDealNotify.servi
 import { buildBookingPdfData, generateEventProductionPDF } from './pdfGenerator';
 import { DEFAULT_LOCALE, getServerTranslation, T, type Locale } from '../i18n/getServerTranslation';
 import { reportUnexpectedError } from './reportUnexpectedError';
+import { buildProductionPdfFilename } from '@maple/shared/contract';
 
 export const EVENT_FORM_EMAIL_COOLDOWN_MS = 60 * 1000;
 
@@ -70,6 +71,7 @@ export async function sendEventFormEmailIfAllowed(
     }
 
     const pdfBuffer = await generateEventProductionPDF(buildBookingPdfData(booking), locale);
+    const attachmentFilename = buildProductionPdfFilename(booking);
 
     for (const email of emails) {
       await sendPDFToClient(
@@ -78,6 +80,7 @@ export async function sendEventFormEmailIfAllowed(
         booking.eventDate.date.toString(),
         pdfBuffer,
         locale,
+        attachmentFilename,
       );
     }
 

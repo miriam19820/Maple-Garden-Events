@@ -159,7 +159,7 @@ const EventSettingsSection = ({
             )}
           </div>
 
-          <p className={`maple-time-note ${styles.note}`}>{t(T.BOOKING.EVENT.OVERTIME_NOTE)}</p>
+          <p className={styles.note}>{t(T.BOOKING.EVENT.OVERTIME_NOTE)}</p>
 
           {formData.eventType !== HALL_ONLY_EVENT_TYPE && (
             <div className={styles.row2}>

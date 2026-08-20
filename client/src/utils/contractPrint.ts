@@ -13,7 +13,18 @@ export function getContractPdfUrl(bookingId: string | number): string {
   return `${API_BASE}/api/bookings/${bookingId}/contract-pdf`;
 }
 
-export async function fetchContractPdf(bookingId: string | number, t: TranslateFn): Promise<Blob> {
+export async function fetchContractPdf(
+  bookingId: string | number,
+  t: TranslateFn,
+): Promise<Blob> {
+  const { blob } = await fetchContractPdfWithMeta(bookingId, t);
+  return blob;
+}
+
+export async function fetchContractPdfWithMeta(
+  bookingId: string | number,
+  t: TranslateFn,
+): Promise<{ blob: Blob; filenameHeader: string | null }> {
   const response = await secureFetch(getContractPdfUrl(bookingId));
   const contentType = response.headers.get('Content-Type') || '';
 
@@ -25,7 +36,10 @@ export async function fetchContractPdf(bookingId: string | number, t: TranslateF
     throw new Error(await parseApiError(response, t));
   }
 
-  return response.blob();
+  return {
+    blob: await response.blob(),
+    filenameHeader: response.headers.get('Content-Disposition'),
+  };
 }
 
 export async function openContractPdf(

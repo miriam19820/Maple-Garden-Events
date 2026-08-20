@@ -10,6 +10,7 @@ import {
   parseEasyCountWebhook,
 } from '../Services/easyCount';
 import { emitBookingUpdated } from '../utils/realtime';
+import { assertBookingNotArchived } from '../Services/booking/helpers';
 
 export const getEasyCountStatus = catchAsync(async (_req: Request, res: Response) => {
   const meta = getEasyCountMeta();
@@ -27,6 +28,7 @@ export const getEasyCountStatus = catchAsync(async (_req: Request, res: Response
 
 export const createBookingHallInvoice = catchAsync(async (req: Request, res: Response) => {
   const bookingId = String(req.params.id);
+  await assertBookingNotArchived(bookingId);
 
   const { booking, balance } = await loadHallBalanceForBooking(bookingId);
 

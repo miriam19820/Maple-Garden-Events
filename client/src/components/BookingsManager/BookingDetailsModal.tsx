@@ -468,7 +468,7 @@ const BookingDetailsModal = ({ booking, onClose, onBookingUpdated }: BookingDeta
               </>
             )}
 
-            {booking.isContractSigned && !booking.clientSignatureUrl && (
+            {booking.isContractSigned && (!booking.clientSignatureUrl || (booking.eventType === DEFAULT_EVENT_TYPE && !booking.clientBSignatureUrl)) && (
               <p className={styles.editBlockedMsg}>{t(T.BOOKINGS.CONTRACT_SIGNED_NO_IMAGE)}</p>
             )}
 

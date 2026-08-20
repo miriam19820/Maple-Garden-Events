@@ -50,7 +50,16 @@ export const finalizeBookingSchema = z.object({
     akumApprovalCode: z.string().optional(),
     hasMusic: z.boolean().optional(),
     clientSignature: z.string().optional(),
+    clientBSignature: z.string().optional(),
     tables: z.array(z.unknown()).optional(),
+  }),
+});
+
+export const signAndSendContractSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    clientSignature: z.string().optional(),
+    clientBSignature: z.string().optional(),
   }),
 });
 

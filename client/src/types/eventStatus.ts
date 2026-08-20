@@ -3,6 +3,7 @@ export const EventStatus = {
   CHECKING: 'CHECKING',
   OPTION: 'OPTION',
   BOOKED: 'BOOKED',
+  ARCHIVED: 'ARCHIVED',
   BLOCKED: 'BLOCKED',
   FORBIDDEN: 'FORBIDDEN'
 } as const;

@@ -8,76 +8,141 @@ import { useTranslation } from '../../../i18n/useTranslation';
 import { secureFetch } from '../../../services/api';
 import { API_URL } from '../../../config/api';
 import { runUserAction } from '../../../utils/runUserAction';
+import { isContractFullySigned } from '@shared/contract';
 
 interface ContractModalProps {
   isOpen: boolean;
   onClose: () => void;
   isOption: boolean;
-  sigCanvas: React.RefObject<SignatureCanvas | null>;
+  isWedding: boolean;
+  eventType?: string | null;
   setContractSigned: (signed: boolean) => void;
-  onSignatureSaved?: (dataUrl: string) => void;
+  onSignaturesSaved?: (signatures: { a: string | null; b: string | null }) => void;
   contractText: string;
   onContractTextChange: (text: string) => void;
   bookingId?: string;
   styles?: Record<string, string>;
-  savedSignature?: string | null;
+  savedSignatureA?: string | null;
+  savedSignatureB?: string | null;
 }
 
-/** Locked bitmap size — avoids ResizeObserver remounts that wipe strokes. */
 const SIGNATURE_SIZE = { width: 700, height: 200 };
+const DUAL_SIGNATURE_SIZE = { width: 400, height: 160 };
+
+type PadSide = 'A' | 'B';
+
+function useSignaturePad(saved: string | null | undefined, isOpen: boolean, padGeneration: number) {
+  const canvasRef = useRef<SignatureCanvas | null>(null);
+  const latestRef = useRef<{ gen: number; data: string } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !saved || !canvasRef.current) return;
+    const timer = window.setTimeout(() => {
+      canvasRef.current?.fromDataURL(saved);
+      latestRef.current = { gen: padGeneration, data: saved };
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, saved, padGeneration]);
+
+  const capture = (): string | null => {
+    const fromPad = getSignatureDataUrl(canvasRef);
+    if (fromPad) {
+      latestRef.current = { gen: padGeneration, data: fromPad };
+      return fromPad;
+    }
+    const cached = latestRef.current;
+    if (cached && cached.gen === padGeneration) return cached.data;
+    return null;
+  };
+
+  const snapshotOnEnd = () => {
+    const snap = getSignatureDataUrl(canvasRef);
+    if (snap) latestRef.current = { gen: padGeneration, data: snap };
+  };
+
+  const clear = () => {
+    canvasRef.current?.clear();
+    latestRef.current = null;
+  };
+
+  return { canvasRef, capture, snapshotOnEnd, clear };
+}
 
 const ContractModal = ({
   isOpen,
   onClose,
   isOption,
-  sigCanvas,
+  isWedding,
+  eventType,
   setContractSigned,
-  onSignatureSaved,
+  onSignaturesSaved,
   contractText,
   onContractTextChange,
   bookingId,
-  savedSignature,
+  savedSignatureA,
+  savedSignatureB,
 }: ContractModalProps) => {
   const { t, T } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [padGeneration, setPadGeneration] = useState(0);
   const [wasOpen, setWasOpen] = useState(isOpen);
-  const latestSignatureRef = useRef<{ gen: number; data: string } | null>(null);
+  const [isSigning, setIsSigning] = useState(false);
+  const [localA, setLocalA] = useState<string | null>(savedSignatureA || null);
+  const [localB, setLocalB] = useState<string | null>(savedSignatureB || null);
 
-  // Reset pad session when the modal opens (render-time adjust — no effect setState).
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     if (isOpen) {
       setIsEditing(false);
       setDraftText('');
       setPadGeneration((g) => g + 1);
+      setLocalA(savedSignatureA || null);
+      setLocalB(savedSignatureB || null);
     }
   }
 
-  useEffect(() => {
-    if (isOpen && savedSignature && sigCanvas.current) {
-      // Small timeout to ensure canvas is fully mounted
-      setTimeout(() => {
-        sigCanvas.current?.fromDataURL(savedSignature);
-        latestSignatureRef.current = { gen: padGeneration, data: savedSignature };
-      }, 50);
-    }
-  }, [isOpen, savedSignature, sigCanvas, padGeneration]);
-
-  const [isSigning, setIsSigning] = useState(false);
+  const lockedA = !!localA;
+  const lockedB = !!localB;
+  const padA = useSignaturePad(lockedA ? null : localA, isOpen && !lockedA, padGeneration);
+  const padB = useSignaturePad(lockedB ? null : localB, isOpen && !lockedB && isWedding, padGeneration);
 
   if (!isOpen) return null;
 
-  const captureFromPad = (): string | null => {
-    const fromPad = getSignatureDataUrl(sigCanvas);
-    if (fromPad) {
-      latestSignatureRef.current = { gen: padGeneration, data: fromPad };
-      return fromPad;
-    }
-    const cached = latestSignatureRef.current;
-    if (cached && cached.gen === padGeneration) return cached.data;
-    return null;
+  const persistSignatures = async (nextA: string | null, nextB: string | null, fullySigned: boolean) => {
+    if (!bookingId) return { ok: true, fullySigned };
+    let ok = false;
+    let signed = fullySigned;
+    await runUserAction(
+      async () => {
+        const response = await secureFetch(`${API_URL}/bookings/${bookingId}/sign-and-send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientSignature: nextA || undefined,
+            clientBSignature: nextB || undefined,
+          }),
+        });
+        const resData = await response.json().catch(() => ({}));
+        if (response.ok && resData.success) {
+          signed = resData.fullySigned === true;
+          ok = true;
+          return;
+        }
+        throw new Error(
+          t(T.BOOKING.CONTRACT.SIGN_SEND_ERROR, {
+            detail: resData.message || `HTTP ${response.status}`,
+          }),
+        );
+      },
+      {
+        tags: { source: 'ContractModal', action: 'signAndSend' },
+        extra: { bookingId },
+        fallbackMessage: t(T.BOOKING.CONTRACT.SIGN_NETWORK_ERROR),
+        onError: (_err, msg) => alert(msg),
+      },
+    );
+    return { ok, fullySigned: signed };
   };
 
   const handleConfirmSignature = async () => {
@@ -85,44 +150,56 @@ const ContractModal = ({
       alert(t(T.BOOKING.CONTRACT.SAVE_EDIT_BEFORE_SIGN));
       return;
     }
-    const dataUrl = captureFromPad();
-    if (!dataUrl) {
+
+    const nextA = lockedA ? localA : (padA.capture() || localA);
+    const nextB = isWedding ? (lockedB ? localB : (padB.capture() || localB)) : null;
+
+    if (!nextA && !nextB) {
+      alert(t(T.BOOKING.CONTRACT.SIGN_REQUIRED));
+      return;
+    }
+    if (isWedding && !nextA && !nextB) {
+      alert(t(T.BOOKING.CONTRACT.SIGN_REQUIRED));
+      return;
+    }
+    if (!isWedding && !nextA) {
       alert(t(T.BOOKING.CONTRACT.SIGN_REQUIRED));
       return;
     }
 
-    if (bookingId) {
-      setIsSigning(true);
-      await runUserAction(
-        async () => {
-          const response = await secureFetch(`${API_URL}/bookings/${bookingId}/sign-and-send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clientSignature: dataUrl }),
-          });
-          const resData = await response.json().catch(() => ({}));
-          if (response.ok && resData.success) {
-            alert('החוזה נחתם בהצלחה ונשלח למייל (ולוואטסאפ אם מוגדר) של בעל האירוע.');
-            return;
-          }
-          throw new Error(
-            'החתימה נשמרה אך אירעה שגיאה בשליחת המסמך: '
-              + (resData.message || `HTTP ${response.status}`),
-          );
-        },
-        {
-          tags: { source: 'ContractModal', action: 'signAndSend' },
-          extra: { bookingId },
-          fallbackMessage: 'שגיאה בתקשורת עם השרת בזמן שמירת החתימה.',
-          onError: (_err, msg) => alert(msg),
-        },
-      );
-      setIsSigning(false);
+    const fullySigned = isContractFullySigned({
+      eventType,
+      signatureA: nextA,
+      signatureB: nextB,
+    });
+
+    if (isWedding && !nextA && nextB) {
+      // Side B alone is allowed to save, but the contract is not fully signed yet.
+    } else if (!isWedding && !nextA) {
+      alert(t(T.BOOKING.CONTRACT.SIGN_REQUIRED));
+      return;
     }
 
-    onSignatureSaved?.(dataUrl);
-    setContractSigned(true);
-    onClose();
+    setIsSigning(true);
+    const result = await persistSignatures(nextA, nextB, fullySigned);
+    setIsSigning(false);
+    if (bookingId && !result.ok) return;
+
+    setLocalA(nextA);
+    setLocalB(nextB);
+    onSignaturesSaved?.({ a: nextA, b: nextB });
+
+    const done = bookingId ? result.fullySigned : fullySigned;
+    if (done) {
+      if (bookingId) alert(t(T.BOOKING.CONTRACT.SIGNED_AND_SENT));
+      setContractSigned(true);
+      onClose();
+      return;
+    }
+
+    if (isWedding) {
+      alert(t(T.BOOKING.CONTRACT.PARTIAL_SAVED));
+    }
   };
 
   const startEditing = () => {
@@ -138,6 +215,57 @@ const ContractModal = ({
   const cancelEditing = () => {
     setDraftText(contractText);
     setIsEditing(false);
+  };
+
+  const handleClear = () => {
+    if (!lockedA) {
+      padA.clear();
+      setLocalA(null);
+    }
+    if (isWedding && !lockedB) {
+      padB.clear();
+      setLocalB(null);
+    }
+  };
+
+  const renderPad = (
+    side: PadSide,
+    locked: boolean,
+    saved: string | null,
+    pad: ReturnType<typeof useSignaturePad>,
+  ) => {
+    const size = isWedding ? DUAL_SIGNATURE_SIZE : SIGNATURE_SIZE;
+    const title = isWedding
+      ? (side === 'A' ? t(T.BOOKING.CONTRACT.SIGNATURE_SIDE_A) : t(T.BOOKING.CONTRACT.SIGNATURE_SIDE_B))
+      : t(T.BOOKING.CONTRACT.SIGNATURE_TITLE);
+
+    return (
+      <div className={modalStyles.signatureSlot}>
+        <h4>
+          {title}
+          {locked ? <span className={modalStyles.lockedBadge}>{t(T.BOOKING.CONTRACT.SIGNATURE_LOCKED)}</span> : null}
+        </h4>
+        {locked && saved ? (
+          <div className={`${modalStyles.signatureBox} ${modalStyles.signatureBoxLocked}`}>
+            <img src={saved} alt={title} className={modalStyles.lockedSignatureImg} />
+          </div>
+        ) : (
+          <div className={modalStyles.signatureBox}>
+            <SignatureCanvas
+              key={`${side}-${padGeneration}`}
+              ref={pad.canvasRef}
+              penColor="#0f172a"
+              onEnd={pad.snapshotOnEnd}
+              canvasProps={{
+                width: size.width,
+                height: size.height,
+                style: { cursor: 'crosshair', width: '100%', height: 'auto', display: 'block', touchAction: 'none' },
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -206,34 +334,17 @@ const ContractModal = ({
             <p>{t(T.BOOKING.CONTRACT.DISCLAIMER)}</p>
           </div>
 
-          <div className={modalStyles.signatureSection}>
-            <h4>{t(T.BOOKING.CONTRACT.SIGNATURE_TITLE)}</h4>
-            <div className={modalStyles.signatureBox}>
-              <SignatureCanvas
-                key={padGeneration}
-                ref={sigCanvas}
-                penColor="#0f172a"
-                onEnd={() => {
-                  const snap = getSignatureDataUrl(sigCanvas);
-                  if (snap) latestSignatureRef.current = { gen: padGeneration, data: snap };
-                }}
-                canvasProps={{
-                  width: SIGNATURE_SIZE.width,
-                  height: SIGNATURE_SIZE.height,
-                  style: { cursor: 'crosshair', width: '100%', height: 'auto', display: 'block', touchAction: 'none' },
-                }}
-              />
-            </div>
+          <div className={`${modalStyles.signatureSection} ${isWedding ? modalStyles.signatureSectionDual : ''}`}>
+            {renderPad('A', lockedA, localA, padA)}
+            {isWedding ? renderPad('B', lockedB, localB, padB) : null}
           </div>
 
           <div className={modalStyles.actions}>
             <button
               type="button"
-              onClick={() => {
-                sigCanvas.current?.clear();
-                latestSignatureRef.current = null;
-              }}
+              onClick={handleClear}
               className="maple-btn maple-btn-danger"
+              disabled={(!isWedding && lockedA) || (isWedding && lockedA && lockedB)}
             >
               {t(T.BOOKING.CONTRACT.CLEAR_SIGNATURE)}
             </button>
@@ -244,7 +355,7 @@ const ContractModal = ({
               disabled={isSigning}
               className={`maple-btn maple-btn-primary ${modalStyles.signBtn}`}
             >
-              {isSigning ? 'שומר חתימה ושולח...' : t(T.BOOKING.CONTRACT.CONFIRM_SIGN)}
+              {isSigning ? t(T.BOOKING.CONTRACT.SIGNING_IN_PROGRESS) : t(T.BOOKING.CONTRACT.CONFIRM_SIGN)}
             </button>
           </div>
         </div>
