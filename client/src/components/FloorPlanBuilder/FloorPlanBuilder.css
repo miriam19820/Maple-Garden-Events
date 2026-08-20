@@ -77,9 +77,15 @@
   color: #fff;
 }
 
-.btn-close {
-  background: #64748b;
+.btn-floor-close {
+  background: #475569;
   color: #fff;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: auto;
+  height: auto;
+  min-width: unset;
+  opacity: 1;
 }
 
 .floor-plan-viewport {
