@@ -12,7 +12,7 @@ import {
   TIME_SLOT_KEYS,
 } from '@shared/i18n/bookingLookups';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
-import { apiFetch, getAuthUser } from '../../services/api';
+import { apiFetch } from '../../services/api';
 import { reportClientError } from '../../utils/reportError';
 import { useGlobalSettingsQuery } from '../../hooks/queries';
 import {
@@ -48,13 +48,6 @@ import { NotesList } from '../NotesList/NotesList';
 import { PageLoader } from '../PageLoader/PageLoader';
 
 const MenuDisplay = React.lazy(() => import('../MenuDisplay/MenuDisplay'));
-import {
-  clearBookingDraft,
-  loadBookingDraft,
-  saveBookingDraft,
-  type BookingDraftSnapshot,
-} from '../../utils/bookingDraft';
-
 import {
   DEFAULT_KOSHER_TYPE,
   DEFAULT_VAT_TYPE,
@@ -203,8 +196,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [relatedOptions, setRelatedOptions] = useState<RelatedBookingOption[]>([]);
   const [activeBookingId, setActiveBookingId] = useState(activeEditId || '');
   const [bookingUpdatedAt, setBookingUpdatedAt] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [draftRestored, setDraftRestored] = useState(false);
 
   let datesToProcess: BookingInitialDate[] = [];
   if (initialDates && initialDates.length > 0) datesToProcess = initialDates;
@@ -280,54 +271,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     [globalSettings],
   );
 
-  useEffect(() => {
-    getAuthUser().then((user) => {
-      if (user?.email) setUserEmail(user.email);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (isEditMode || !userEmail || draftRestored) return;
-    void Promise.resolve().then(() => {
-      const draft = loadBookingDraft(userEmail, isOptionMode);
-      if (!draft) {
-        setDraftRestored(true);
-        return;
-      }
-      const restore = window.confirm(t(T.BOOKING.FORM.DRAFT_RESTORE_CONFIRM));
-      if (restore) {
-        const dates = (draft.selectedDatesDisplay as ReturnType<typeof normalizeOptionDate>[]).map(normalizeOptionDate);
-        const firstDate = dates[0]?.date || '';
-        const draftEventType = String((draft.formData as { eventType?: string }).eventType || '').trim();
-        setFormData((prev) => {
-          const merged = {
-            ...prev,
-            ...(draft.formData as typeof prev),
-            eventType: draftEventType || (isOptionMode ? DEFAULT_EVENT_TYPE : prev.eventType),
-          };
-          return firstDate ? { ...merged, calendarDateId: firstDate } : merged;
-        });
-        setMenuNotesList(draft.menuNotesList);
-        setInternalNotesList(draft.internalNotesList);
-        setServingStyle(draft.servingStyle);
-        setKosherType(draft.kosherType);
-        setUpgrades(draft.upgrades);
-        setDepositMethod(draft.depositMethod);
-        setContractSigned(false);
-        setSavedSignature(null);
-        setSelectedDatesDisplay(dates);
-        setIsOption(draft.isOption);
-        setOptionDurationHours(draft.optionDurationHours);
-        setPaymentTemplateId(draft.paymentTemplateId);
-        setPaymentTermsCustom(draft.paymentTermsCustom);
-        setPaymentTermsText(draft.paymentTermsText);
-      } else {
-        clearBookingDraft(isOptionMode);
-      }
-      setDraftRestored(true);
-    });
-  }, [isEditMode, userEmail, draftRestored, isOptionMode, t, T]);
-
   const updateSelectedDatesDisplay = (dates: OptionDateItem[]) => {
     const firstDate = dates.length > 0 ? dates[0].date : '';
     setSelectedDatesDisplay(dates);
@@ -340,31 +283,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     : !effectiveSlotForWarning
       ? t(T.BOOKING.FORM.SELECT_TIME_BEFORE_DATES)
       : asyncOptionDatesWarning;
-
-  const draftSnapshot = useMemo<BookingDraftSnapshot>(() => ({
-    formData: { ...formData },
-    menuNotesList,
-    internalNotesList,
-    servingStyle,
-    kosherType,
-    upgrades,
-    depositMethod,
-    contractSigned,
-    selectedDatesDisplay,
-    isOption,
-    optionDurationHours,
-    paymentTemplateId,
-    paymentTermsCustom,
-    paymentTermsText,
-  }), [formData, menuNotesList, internalNotesList, servingStyle, kosherType, upgrades, depositMethod, contractSigned, selectedDatesDisplay, isOption, optionDurationHours, paymentTemplateId, paymentTermsCustom, paymentTermsText]);
-
-  useEffect(() => {
-    if (isEditMode || !userEmail || !draftRestored) return;
-    const timer = setTimeout(() => {
-      saveBookingDraft(userEmail, isOptionMode, draftSnapshot);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [isEditMode, userEmail, draftRestored, isOptionMode, draftSnapshot]);
 
   useEffect(() => {
     apiFetch(`${API_URL}/bookings/contract-template`)
@@ -1139,7 +1057,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       const resData = await response.json();
 
       if (response.ok) {
-        clearBookingDraft(isOption);
         const savedBooking = Array.isArray(resData.data) ? resData.data[0] : resData.data;
         const savedCode = savedBooking?.eventCode;
         const savedId = savedBooking?.id || submitId;
