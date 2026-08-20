@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { T } from '../i18n/getServerTranslation';
+import { hasRequiredWeddingClientDetails, isWeddingEventType } from '@maple/shared/contract';
 
 export const HALL_ONLY_EVENT_TYPE = 'השכרת אולם בלי אוכל';
 
@@ -28,6 +29,10 @@ export const createBookingSchema = z.object({
     
     clientAEmail: z.string().email(T.SERVER.VALIDATION.EMAIL_INVALID).optional().or(z.literal('')),
     clientBFullName: z.string().optional(),
+    clientBPhone: z.string().optional(),
+    clientSignature: z.string().nullable().optional(),
+    clientBSignature: z.string().nullable().optional(),
+    contractSigned: z.boolean().optional(),
 
     timeOfDay: z.string().optional(),
     eventType: z.string().optional(),
@@ -45,6 +50,7 @@ export const createBookingSchema = z.object({
       })
       .optional(),
   })
+    .passthrough()
     .superRefine((data, ctx) => {
       if (data.isOption) {
         const name = (data.clientAFullName || '').trim();
@@ -73,20 +79,30 @@ export const createBookingSchema = z.object({
         return;
       }
 
-      if (!(data.clientAFullName || '').trim() || (data.clientAFullName || '').trim().length < 2) {
+      if (isWeddingEventType(data.eventType)) {
+        if (!hasRequiredWeddingClientDetails(data)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: T.SERVER.VALIDATION.WEDDING_ONE_SIDE_REQUIRED,
+            path: ['clientAFullName'],
+          });
+        }
+      } else if (!(data.clientAFullName || '').trim() || (data.clientAFullName || '').trim().length < 2) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: T.SERVER.VALIDATION.CLIENT_NAME_REQUIRED,
           path: ["clientAFullName"],
         });
       }
-      const phone = (data.clientAPhone || '').trim();
-      if (phone.length < 9) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: T.SERVER.VALIDATION.PHONE_INVALID,
-          path: ["clientAPhone"],
-        });
+      if (!isWeddingEventType(data.eventType)) {
+        const phone = (data.clientAPhone || '').trim();
+        if (phone.length < 9) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: T.SERVER.VALIDATION.PHONE_INVALID,
+            path: ["clientAPhone"],
+          });
+        }
       }
       if (!(data.timeOfDay || '').trim()) {
         ctx.addIssue({
@@ -176,6 +192,7 @@ export const updateBookingSchema = z.object({
       clientComments: z.string().nullable().optional(),
       createdBy: z.string().optional(),
       clientSignature: z.string().nullable().optional(),
+      clientBSignature: z.string().nullable().optional(),
       contractSigned: z.boolean().optional(),
       depositCheckUrl: z.string().nullable().optional(),
       depositCheckDetails: z.unknown().optional(),
@@ -205,5 +222,16 @@ export const updateBookingSchema = z.object({
       allSelectedDates: z.array(z.unknown()).optional(),
       clientAFirstName: z.string().optional(),
       clientALastName: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.isOption && !data.convertFromOption) return;
+      if (!isWeddingEventType(data.eventType)) return;
+      if (!hasRequiredWeddingClientDetails(data)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: T.SERVER.VALIDATION.WEDDING_ONE_SIDE_REQUIRED,
+          path: ['clientAFullName'],
+        });
+      }
     }),
 });

@@ -1,0 +1,43 @@
+.metaBar {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: right;
+  align-items: flex-end;
+  gap: 0.85rem;
+  direction: rtl;
+  margin-bottom: 1rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 16rem;
+  width: 16rem;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.field :global(.form-label) {
+  margin-bottom: 0.35rem;
+  text-align: right;
+  width: 100%;
+}
+
+.field :global(.form-control),
+.field :global(.form-select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  line-height: 1.4;
+  margin: 0;
+  text-align: right;
+}
+
+.field :global(.form-select) {
+  padding-block: 0.45rem;
+  padding-inline-start: 0.85rem;
+  padding-inline-end: 2.5rem;
+}

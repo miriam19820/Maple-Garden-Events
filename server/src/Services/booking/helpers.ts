@@ -11,6 +11,33 @@ import {
 } from '../../utils/timeSlot';
 import { isHallOnlyBooking } from '../../validators/booking.validator';
 import type { TxClient } from '../../utils/eventDateLock';
+import type { HttpResult } from './httpResult';
+import { ForbiddenError } from '../../utils/httpErrors';
+
+export const ARCHIVED_EVENT_STATUS = 'ARCHIVED';
+
+export function isArchivedEvent(booking: {
+  eventDate?: { status?: string | null } | null;
+}): boolean {
+  return booking.eventDate?.status === ARCHIVED_EVENT_STATUS;
+}
+
+export function archiveLockedResult(): HttpResult {
+  return {
+    status: 403,
+    body: { success: false, message: 'אירוע בארכיון אינו ניתן לעריכה.' },
+  };
+}
+
+export async function assertBookingNotArchived(bookingId: string, tenantId?: string): Promise<void> {
+  const booking = await prisma.booking.findFirst({
+    where: tenantId ? { id: bookingId, tenantId } : { id: bookingId },
+    include: { eventDate: { select: { status: true } } },
+  });
+  if (booking && isArchivedEvent(booking)) {
+    throw new ForbiddenError('אירוע בארכיון אינו ניתן לעריכה.');
+  }
+}
 
 export function canEditBookingDate(eventDate: Date): boolean {
   const today = localStartOfDay(new Date());

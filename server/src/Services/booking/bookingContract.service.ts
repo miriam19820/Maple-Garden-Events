@@ -16,6 +16,11 @@ import { getPaymentTemplatesFromSettings } from '../../utils/paymentTerms';
 import { syncBookingPaymentMetadata } from '../paymentDeadlineService';
 import { sendPDFToClient } from '../emailService';
 import { notifyContractClosedViaWhatsApp } from '../whatsappDealNotify.service';
+import {
+  buildContractPdfFilename,
+  contentDispositionHeader,
+  contractAsciiFallback,
+} from '@maple/shared/contract';
 import { reportUnexpectedError } from '../../utils/reportUnexpectedError';
 import {
   emitBookingUpdated,
@@ -63,6 +68,7 @@ import {
   type EasyCountBookingResult,
 } from '../easyCount';
 import { syncContractFields } from '../../utils/contractFields';
+import { isWeddingEventType } from '@maple/shared/contract';
 import {
   recordPayment,
   getBookingFinancialSnapshot,
@@ -79,6 +85,8 @@ import {
   syncDesyncedOptionDates,
   slotConflictMessage,
   validateHallRentalPriceInput,
+  isArchivedEvent,
+  archiveLockedResult,
 } from './helpers';
 
 export async function addBookingUpgrade(req: AuthRequest | Request): Promise<HttpResult> {
@@ -101,6 +109,10 @@ export async function addBookingUpgrade(req: AuthRequest | Request): Promise<Htt
 
   if (!booking) {
     return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה.' } };
+  }
+
+  if (isArchivedEvent(booking)) {
+    return archiveLockedResult();
   }
 
   if (!canEditBookingDate(booking.eventDate.date)) {
@@ -162,31 +174,62 @@ export async function signAndSendContract(req: AuthRequest | Request): Promise<H
 
   const tenantId = (req as AuthRequest).user?.tenantId;
   const bookingId = req.params.id as string;
-  const { clientSignature } = req.body;
-  if (!clientSignature) { return { status: 400, body: { success: false, message: 'חתימה חסרה' } }; }
+  const { clientSignature, clientBSignature } = req.body;
+  if (!clientSignature && !clientBSignature) {
+    return { status: 400, body: { success: false, message: 'חתימה חסרה' } };
+  }
 
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, tenantId },
     include: { eventDate: true, eventForm: true },
   });
   if (!booking) return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה' } };
+  if (isArchivedEvent(booking)) return archiveLockedResult();
+
+  const signatureA = (typeof clientSignature === 'string' && clientSignature.trim())
+    ? clientSignature.trim()
+    : booking.clientSignatureUrl;
+  const signatureB = (typeof clientBSignature === 'string' && clientBSignature.trim())
+    ? clientBSignature.trim()
+    : (booking as { clientBSignatureUrl?: string | null }).clientBSignatureUrl;
+  const contractFields = syncContractFields(true, signatureA, signatureB, booking.eventType);
+
+  if (!isWeddingEventType(booking.eventType) && !contractFields.clientSignatureUrl) {
+    return { status: 400, body: { success: false, message: 'חתימה חסרה' } };
+  }
 
   const updated = await prisma.booking.update({
     where: { id: bookingId },
     data: {
-      clientSignatureUrl: clientSignature,
-      isContractSigned: true,
+      clientSignatureUrl: contractFields.clientSignatureUrl,
+      clientBSignatureUrl: contractFields.clientBSignatureUrl,
+      isContractSigned: contractFields.isContractSigned,
     },
     include: { eventDate: true, eventForm: true }
   });
 
+  if (!contractFields.isContractSigned) {
+    return { status: 200, body: {
+      success: true,
+      fullySigned: false,
+      message: 'החתימה נשמרה. יש להשלים את חתימת הצד השני כדי לסגור את החוזה.',
+      emailSent: false,
+      whatsappSent: false,
+      data: {
+        clientSignatureUrl: contractFields.clientSignatureUrl,
+        clientBSignatureUrl: contractFields.clientBSignatureUrl,
+        isContractSigned: false,
+      },
+    } };
+  }
+
   const systemSettings = await prisma.systemSettings.findFirst({ where: { id: 'global', tenantId } });
   const upgradesPricing = buildUpgradesPricingFromSettings(systemSettings);
-  // Always pass the fresh signature explicitly so the emailed PDF includes it.
   const contractPdfBuffer = await generateContractPDF(
     buildBookingPdfData(updated, {
       upgradesPricing,
-      clientSignatureUrl: clientSignature,
+      clientSignatureUrl: contractFields.clientSignatureUrl,
+      clientBSignatureUrl: contractFields.clientBSignatureUrl,
     }),
   );
   const clientEmail = updated.clientAEmail || updated.clientBEmail;
@@ -196,7 +239,14 @@ export async function signAndSendContract(req: AuthRequest | Request): Promise<H
   const { sendPDFToClient, sendWhatsAppMessage } = await import('../emailService');
   const formattedDate = updated.eventDate?.date ? updated.eventDate.date.toISOString() : new Date().toISOString();
   if (clientEmail) {
-    emailSent = await sendPDFToClient(clientEmail, updated.clientAFullName, formattedDate, contractPdfBuffer);
+    emailSent = await sendPDFToClient(
+      clientEmail,
+      updated.clientAFullName,
+      formattedDate,
+      contractPdfBuffer,
+      undefined,
+      buildContractPdfFilename(updated),
+    );
   }
   const phone = (updated.clientAPhone || updated.clientBPhone)?.split(' | ')[0]?.trim();
   if (phone) {
@@ -205,11 +255,17 @@ export async function signAndSendContract(req: AuthRequest | Request): Promise<H
 
   return { status: 200, body: {
     success: true,
+    fullySigned: true,
     message: emailSent
       ? 'החוזה נחתם ונשלח בהצלחה'
       : 'החוזה נחתם ונשמר. שליחת המייל נכשלה או שאין אימייל ללקוח.',
     emailSent,
     whatsappSent,
+    data: {
+      clientSignatureUrl: contractFields.clientSignatureUrl,
+      clientBSignatureUrl: contractFields.clientBSignatureUrl,
+      isContractSigned: true,
+    },
   } };
 
 }
@@ -242,7 +298,11 @@ export async function generateContractPdfForBooking(
       buffer: pdfBuffer,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="contract_${booking.eventCode || booking.id}.pdf"`,
+        'Content-Disposition': contentDispositionHeader(
+          buildContractPdfFilename(booking),
+          'inline',
+          contractAsciiFallback(booking),
+        ),
       },
     };
   } catch (error) {

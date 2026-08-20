@@ -21,16 +21,10 @@ import FloorPlanBuilder from '../FloorPlanBuilder/FloorPlanBuilder';
 import type { TableData } from '../FloorPlanBuilder/FloorPlanBuilder';
 import { serverTablesToClient, clientTablesToServer } from '../../constants/defaultTableLayout';
 import { hasEventEnded, type EventFormTime } from '../../utils/eventStart';
-import { todayCalendarKey } from '../../utils/dateLocal';
 import { API_URL } from '../../config/api';
-import { secureFetch, getAuthUser } from '../../services/api';
-import {
-  saveEventFormDraft,
-  loadEventFormDraft,
-  clearEventFormDraft,
-  type EventFormDraftSnapshot,
-} from '../../utils/eventFormDraft';
+import { secureFetch } from '../../services/api';
 import { consumePendingDesignSelections } from '../../utils/designGallerySelection';
+import { buildProductionPdfFilename, filenameFromContentDisposition } from '@shared/contract';
 import { DesignSelectionSummary } from '../DesignGallery/DesignSelectionSummary';
 import { DesignGalleryModal } from '../DesignGallery/DesignGalleryModal';
 import type { DesignFormField } from '@shared/gallery';
@@ -59,6 +53,7 @@ interface Booking {
   clientBFullName?: string;
   clientBIdNumber?: string;
   clientSignatureUrl?: string;
+  clientBSignatureUrl?: string;
   clientAEmail?: string; 
   clientBEmail?: string;
   eventDate: {
@@ -225,6 +220,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   const formatEventType = (value: string) => translateByValue(t, EVENT_TYPE_KEY_BY_VALUE, value);
   const formatKashrut = (value: string) => translateByValue(t, KASHRUT_KEY_BY_VALUE, value);
   const [selected, setSelected] = useState<Booking | null>(designExport?.booking ?? null);
+  const isSelectedArchived = selected?.eventDate?.status === 'ARCHIVED';
 
   const { data: bookingsData, isLoading: bookingsLoading } = useBookingsQuery({
     status: 'BOOKED',
@@ -421,6 +417,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   };
 
   const handleMenuSave = (menuSelections: Record<string, string[]>) => {
+    if (isSelectedArchived) return;
     setSelectedMenu(menuSelections);
     setIsMenuOpen(false); 
     alert(t(T.EVENT_FORM.MENU_SAVED));
@@ -432,7 +429,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
 
     secureFetch(`${API_URL}/event-forms/${selected.id}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(async (form) => {
+      .then((form) => {
         if (form && form.id) {
           const { booking, tables, ...restForm } = form;
           const cleanForm = { ...restForm };
@@ -458,22 +455,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
           setSelectedMenu(form.menuSelections || null);
           setSavedTables(tables?.length ? serverTablesToClient(tables) : undefined);
           setTableLayoutImageUrl(form.tableLayoutImageUrl || null);
-
-          const currentUser = await getAuthUser();
-          if (currentUser?.email) {
-            const draft = loadEventFormDraft(selected.id, currentUser.email);
-            if (draft) {
-              if (window.confirm('מצאנו טיוטה מקומית לא שמורה. האם תרצה לשחזר אותה?')) {
-                setFormData(draft.formData as EventFormData);
-                setHasHonorTable(draft.hasHonorTable);
-                setHasEntertainers(draft.hasEntertainers);
-                setNotesList(draft.notesList);
-                setSelectedMenu(draft.selectedMenu);
-              } else {
-                clearEventFormDraft(selected.id);
-              }
-            }
-          }
 
           const pendingDesign = consumePendingDesignSelections(selected.id);
           if (pendingDesign && Object.keys(pendingDesign).length > 0) {
@@ -533,33 +514,8 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
     navigate(location.pathname, { replace: true, state: {} });
   }, [restoredBooking, selected?.id, locationState?.bookingId, location.pathname, navigate]);
 
-  useEffect(() => {
-    if (!selected || actionBusy) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    getAuthUser().then((currentUser) => {
-      if (cancelled || !currentUser?.email) return;
-      timer = setTimeout(() => {
-        const snapshot: EventFormDraftSnapshot = {
-          formData,
-          hasHonorTable,
-          hasEntertainers,
-          notesList,
-          selectedMenu,
-        };
-        saveEventFormDraft(selected.id, currentUser.email, snapshot);
-      }, 1000);
-    });
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [selected, formData, hasHonorTable, hasEntertainers, notesList, selectedMenu, actionBusy]);
-
   const handleTableLayoutSave = async (tables: TableData[], imageDataUrl: string) => {
-    if (!selected) return;
+    if (!selected || isSelectedArchived) return;
     setTableLayoutSaving(true);
     try {
       const response = await secureFetch(`${API_URL}/event-forms/${selected.id}/tables`, {
@@ -741,7 +697,10 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `production-form-${selected.clientAFullName}-${todayCalendarKey()}.pdf`;
+      a.download = filenameFromContentDisposition(
+        response.headers.get('Content-Disposition'),
+        buildProductionPdfFilename(selected),
+      );
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -818,7 +777,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   );
 
   const handleSaveForm = async () => {
-    if (!selected || actionBusy) return;
+    if (!selected || actionBusy || isSelectedArchived) return;
     if (!isFormValid()) {
       alert(t(T.EVENT_FORM.REQUIRED_FIELDS));
       return;
@@ -838,7 +797,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
       
       const result = await response.json();
       if (result.success) {
-        clearEventFormDraft(selected.id);
         setDepositCheckFile(null);
         showEmailSaveMessage(result);
         clearSelected();
@@ -856,6 +814,10 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
 
   const handleSaveAndDownloadPDF = async () => {
     if (!selected || actionBusy) return;
+    if (isSelectedArchived) {
+      await handleDownloadPDF();
+      return;
+    }
     setSubmitting(true);
     try {
       const dataToSave = await buildDataToSave();
@@ -872,8 +834,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
         return;
       }
 
-      clearEventFormDraft(selected.id);
-
       const saveResult = await saveResponse.json();
       if (saveResult.emailSent || saveResult.emailSkipped || saveResult.emailError) {
         showEmailSaveMessage(saveResult);
@@ -889,7 +849,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
   };
 
   const handleSendEmail = async () => {
-    if (!selected || actionBusy) return;
+    if (!selected || actionBusy || isSelectedArchived) return;
     setEmailSending(true);
     try {
       const dataToSave = await buildDataToSave();
@@ -905,8 +865,6 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
         alert(t(T.UI.SAVE_ERROR));
         return;
       }
-
-      clearEventFormDraft(selected.id);
 
       const saveResult = await saveResponse.json();
 
@@ -1679,8 +1637,15 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                     <input type="checkbox" className="form-check-input" id="akum-paid" checked={formData.akumPaid || !!selected.akumApprovalCode} onChange={e => handleCheckboxChange('akumPaid', e.target.checked)} />
                     <label className="form-check-label" htmlFor="akum-paid">{t(T.EVENT_FORM.AKUM_PAID)}</label>
                   </div>
-                  {selected.clientSignatureUrl && (
-                    <img src={selected.clientSignatureUrl} alt={t(T.EVENT_FORM.CONTRACT_ALT)} className={styles.signatureThumb} title={t(T.EVENT_FORM.CONTRACT_SIGNED)} />
+                  {(selected.clientSignatureUrl || selected.clientBSignatureUrl) && (
+                    <div className={styles.signatureThumbs}>
+                      {selected.clientSignatureUrl && (
+                        <img src={selected.clientSignatureUrl} alt={t(T.EVENT_FORM.CONTRACT_ALT)} className={styles.signatureThumb} title={t(T.BOOKING.CONTRACT.SIGNATURE_SIDE_A)} />
+                      )}
+                      {selected.clientBSignatureUrl && (
+                        <img src={selected.clientBSignatureUrl} alt={t(T.EVENT_FORM.CONTRACT_ALT)} className={styles.signatureThumb} title={t(T.BOOKING.CONTRACT.SIGNATURE_SIDE_B)} />
+                      )}
+                    </div>
                   )}
                   {(depositCheckFile || formData.depositCheckUrl) && (
                     <button onClick={handleDeleteCheckImage} className="btn btn-sm btn-outline-danger">{t(T.EVENT_FORM.DELETE_CHECK)}</button>
@@ -1821,6 +1786,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
             <div className="card-footer maple-form-footer d-flex flex-wrap gap-2 justify-content-between">
                 <button onClick={() => clearSelected()} className="btn btn-outline-secondary">{t(T.EVENT_FORM.CANCEL)}</button>
 
+                {!isSelectedArchived && (
                 <button
                   onClick={handleSaveForm}
                   className="btn btn-primary"
@@ -1828,10 +1794,11 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                 >
                   {submitting ? t(T.EVENT_FORM.SAVING) : t(T.EVENT_FORM.SAVE_FORM)}
                 </button>
+                )}
 
                 <div className="d-flex flex-wrap gap-2">
                   <button
-                    onClick={handleSaveAndDownloadPDF}
+                    onClick={isSelectedArchived ? handleDownloadPDF : handleSaveAndDownloadPDF}
                     disabled={actionBusy}
                     className="btn btn-outline-primary"
                     title={t(T.EVENT_FORM.DOWNLOAD_FORM)}
@@ -1839,6 +1806,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                     {submitting ? t(T.EVENT_FORM.SAVING) : t(T.EVENT_FORM.DOWNLOAD_FORM)}
                   </button>
 
+                  {!isSelectedArchived && (
                   <button
                     onClick={() => {
                       const textMsg = buildShareMessage();
@@ -1849,6 +1817,8 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                   >
                     {t(T.EVENT_FORM.SHARE_WHATSAPP)}
                   </button>
+                  )}
+                  {!isSelectedArchived && (
                   <button
                     onClick={handleSendEmail}
                     disabled={actionBusy}
@@ -1857,6 +1827,7 @@ const EventFormManager = ({ designExport }: EventFormManagerProps = {}) => {
                   >
                     {emailSending ? t(T.EVENT_FORM.SAVING) : t(T.EVENT_FORM.SHARE_EMAIL)}
                   </button>
+                  )}
                 </div>
             </div>
           </div>

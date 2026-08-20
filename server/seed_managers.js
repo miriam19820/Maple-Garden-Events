@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  const emails = ['miriamm41344@gmail.com', 'miryamilandman@gmail.com'];
+  const emails = ['miriamm41344@gmail.com', 'miryamilandman@gmail.com', 'mf0533176782@gmail.com'];
   
   // Create or get the first tenant
   let tenant = await prisma.tenant.findFirst();

@@ -78,6 +78,8 @@ import {
   syncDesyncedOptionDates,
   slotConflictMessage,
   validateHallRentalPriceInput,
+  isArchivedEvent,
+  archiveLockedResult,
 } from './helpers';
 
 export async function reissueEasyCountReceipt(req: AuthRequest | Request): Promise<HttpResult> {
@@ -89,9 +91,12 @@ export async function reissueEasyCountReceipt(req: AuthRequest | Request): Promi
 
   const booking = await prisma.booking.findFirst({ where: { id,
       tenantId
-} });
+}, include: { eventDate: true } });
   if (!booking) {
     return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה.' } };
+  }
+  if (isArchivedEvent(booking)) {
+    return archiveLockedResult();
   }
   if (booking.isOption) {
     return { status: 400, body: { success: false, message: 'לא ניתן להפיק קבלה לאופציה.' } };
@@ -159,9 +164,13 @@ export async function createBookingPayment(req: AuthRequest | Request): Promise<
   const id = String(req.params.id);
   const booking = await prisma.booking.findFirst({
     where: { id, tenantId },
+    include: { eventDate: true },
   });
   if (!booking) {
     return { status: 404, body: { success: false, message: 'ההזמנה לא נמצאה.' } };
+  }
+  if (isArchivedEvent(booking)) {
+    return archiveLockedResult();
   }
   if (booking.isOption) {
     return { status: 400, body: { success: false, message: 'לא ניתן לרשום תשלום לאופציה.' } };

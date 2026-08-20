@@ -24,6 +24,7 @@ import { computeHallBalanceBreakdown } from '../Services/easyCount/hallBalance';
 import { processPreviousDayFinancialSummaries } from '../Services/eventFinancialSummary.service';
 import { DEFAULT_LOCALE, getServerTranslation, T } from '../i18n/getServerTranslation';
 import { reportBackgroundFailure } from '../Services/criticalAlert.service';
+import { runDailyEventArchive } from '../Services/eventArchive.service';
 
 export const startCronJobs = () => {
   logger.info('Cron jobs service started');
@@ -49,6 +50,22 @@ export const startCronJobs = () => {
   // אופציות שפג תוקפן — נשארות על הלוח עד סגירת אירוע אמיתי (BOOKED)
   // שחרור ידני: POST /api/bookings/release
   // ==========================================
+
+  // ==========================================
+  // ארכיון יומי: סטטוס Archived לאירועי אתמול + מחיקה אחרי 7 שנים (00:00)
+  // ==========================================
+  const archiveSchedule = process.env.ARCHIVE_CRON || '0 0 * * *';
+  cron.schedule(archiveSchedule, async () => {
+    logger.info('--- מתחיל ארכיון יומי של אירועים ---');
+    try {
+      const result = await runDailyEventArchive();
+      logger.info('✅ ארכיון יומי הסתיים', result);
+    } catch (error) {
+      logger.error('שגיאה בארכיון יומי של אירועים:', error);
+      reportBackgroundFailure('event-archive', error);
+    }
+  });
+  logger.info(`Event archive scheduled: ${archiveSchedule}`);
 
   // ==========================================
   // טיימר 2: התראות "נודניק" חכמות (כל בוקר ב-09:00)

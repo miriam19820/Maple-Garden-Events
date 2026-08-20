@@ -1,0 +1,115 @@
+.container {
+  direction: rtl;
+  font-family: var(--brand-font);
+}
+
+.years {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
+}
+
+.yearBlock {
+  border: 1px solid var(--brand-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--brand-surface);
+  overflow: hidden;
+}
+
+.yearToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--brand-panel-header-bg, var(--brand-surface-raised));
+  color: var(--brand-panel-header-text, var(--brand-text));
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: var(--brand-text-md);
+}
+
+.yearToggle:hover {
+  filter: brightness(0.97);
+}
+
+.chevron {
+  transition: transform 160ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.monthBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--brand-radius-sm);
+  background: var(--brand-surface);
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+}
+
+.monthBtn:hover,
+.monthBtnActive {
+  border-color: var(--brand-green-muted);
+  background: var(--brand-green-light);
+}
+
+.monthName {
+  font-weight: 700;
+  color: var(--brand-green-dark);
+}
+
+.monthCount {
+  font-size: var(--brand-text-xs);
+  color: var(--brand-text-muted);
+}
+
+.events {
+  margin-top: var(--brand-space-6);
+}
+
+.backRow {
+  margin-bottom: var(--brand-space-4);
+}
+
+.tableWrap {
+  display: none;
+}
+
+.cardsWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+}
+
+.searchInput {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: var(--brand-space-4);
+}
+
+@media (min-width: 768px) {
+  .tableWrap {
+    display: block;
+  }
+
+  .cardsWrap {
+    display: none;
+  }
+}

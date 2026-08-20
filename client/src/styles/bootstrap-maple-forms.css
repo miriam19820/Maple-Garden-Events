@@ -344,7 +344,43 @@
   padding: 20px 16px 32px;
   min-height: auto;
   width: 100%;
+  max-width: none;
   box-sizing: border-box;
+}
+
+.maple-bs-form .maple-form-card {
+  container-type: inline-size;
+  container-name: maple-form;
+  width: 100%;
+  max-width: none;
+}
+
+.maple-bs-form.maple-page-wrap .form-control,
+.maple-bs-form.maple-page-wrap .form-select {
+  min-height: 2.75rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.maple-bs-form.maple-page-wrap .form-select {
+  padding-block: 0.45rem;
+  padding-inline-start: 0.85rem;
+  padding-inline-end: 2.5rem;
+}
+
+.maple-bs-form.maple-page-wrap input[type='time'] {
+  min-width: 0;
+  width: 100%;
+  min-height: 2.75rem;
+  padding-block: 0.45rem;
+  padding-inline: 0.55rem 0.4rem;
+  line-height: 1.45;
+}
+
+.maple-bs-form.maple-page-wrap input[type='time']::-webkit-datetime-edit,
+.maple-bs-form.maple-page-wrap input[type='time']::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+  min-width: 5.5ch;
 }
 
 .maple-bs-form .maple-subtitle {
@@ -424,15 +460,35 @@
   -webkit-overflow-scrolling: touch;
 }
 
-@media (min-width: 992px) {
-  .maple-bs-form .maple-form-columns {
-    display: flex;
-    gap: 1rem;
-  }
+.maple-bs-form fieldset {
+  min-inline-size: 0;
+  min-width: 0;
+  width: 100%;
+}
 
-  .maple-bs-form .maple-form-columns > .col-lg-4 {
-    flex: 1;
-    min-width: 0;
+.maple-bs-form .maple-form-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.maple-bs-form .maple-form-column {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.maple-bs-form .maple-form-column > * {
+  max-width: 100%;
+}
+
+@container maple-form (min-width: 960px) {
+  .maple-bs-form .maple-form-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
   }
 }
 

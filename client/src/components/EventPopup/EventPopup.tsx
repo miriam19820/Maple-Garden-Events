@@ -23,6 +23,7 @@ import {
   EVENT_TYPE_KEY_BY_VALUE,
   translateByValue,
 } from '@shared/i18n/bookingLookups';
+import { isClientSideComplete } from '@shared/contract';
 import {
   type CalendarBookingApi,
   type CalendarDayApi,
@@ -105,8 +106,12 @@ export const EventPopup = ({
     const items: string[] = [];
     if (!booking.paidAmount || booking.paidAmount === 0) items.push(t(T.BOOKINGS.MISSING_ADVANCE));
     if (!booking.isContractSigned) items.push(t(T.BOOKINGS.MISSING_CONTRACT));
-    if (!booking.clientAIdNumber) items.push(t(T.BOOKINGS.MISSING_ID_A));
-    if (isWedding && !booking.clientBIdNumber) items.push(t(T.BOOKINGS.MISSING_ID_B));
+    if (isClientSideComplete(booking.clientAFullName, booking.clientAPhone) && !booking.clientAIdNumber) {
+      items.push(t(T.BOOKINGS.MISSING_ID_A));
+    }
+    if (isWedding && isClientSideComplete(booking.clientBFullName, booking.clientBPhone) && !booking.clientBIdNumber) {
+      items.push(t(T.BOOKINGS.MISSING_ID_B));
+    }
     if (!booking.guestCount || booking.guestCount === 0) items.push(t(T.BOOKINGS.MISSING_GUESTS));
     return items;
   };

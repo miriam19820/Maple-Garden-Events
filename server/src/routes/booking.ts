@@ -11,6 +11,7 @@ import {
   reissueEasyCountSchema,
   listBookingPaymentsSchema,
   createBookingPaymentSchema,
+  signAndSendContractSchema,
 } from '../validators/bookingActions.validator';
 import { sendGreetingSchema } from '../validators/greeting.validator';
 import { requireAuth } from '../middlewares/auth';
@@ -88,7 +89,7 @@ router.patch('/:id/upgrades', requireRole(...MANAGEMENT), validate(addBookingUpg
 router.post('/bump', requireRole(...MANAGEMENT), validate(bumpOptionSchema), bumpOption);
 router.post('/notify-option-interest', requireRole(...MANAGEMENT), validate(notifyOptionInterestSchema), notifyOptionInterest);
 router.post('/finalize', requireRole(...MANAGEMENT), validate(finalizeBookingSchema), finalizeBooking);
-router.post('/:id/sign-and-send', requireRole(...MANAGEMENT), signAndSendContract);
+router.post('/:id/sign-and-send', requireRole(...MANAGEMENT), validate(signAndSendContractSchema), signAndSendContract);
 
 // --- ברכות ותוספות ---
 router.post(

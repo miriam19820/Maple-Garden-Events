@@ -15,12 +15,10 @@ type EmailFieldName = 'clientAEmail' | 'clientBEmail';
 
 function FieldRow({
   children,
-  single = false,
 }: {
   children: ReactNode;
-  single?: boolean;
 }) {
-  return <div className={`${styles.row} ${single ? styles.rowSingle : ''}`}>{children}</div>;
+  return <div className={styles.row}>{children}</div>;
 }
 
 function Field({
@@ -94,8 +92,9 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
     </Field>
   );
 
+  const sideARequired = isOption || !isWedding;
   const sideATitle = isWedding ? t(T.BOOKING.CLIENTS.GROOM_SIDE) : t(T.BOOKING.CLIENTS.CLIENT_SIDE);
-  const sideBTitle = isOption
+  const sideBTitle = (isOption || isWedding)
     ? t(T.BOOKING.CLIENTS.BRIDE_SIDE_OPTIONAL)
     : t(T.BOOKING.CLIENTS.BRIDE_SIDE);
 
@@ -103,6 +102,9 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
     <div className={`card mb-3 ${styles.clientsCard}`}>
       <div className="card-header maple-section-header">{t(T.BOOKING.CLIENTS.SECTION_TITLE)}</div>
       <div className="card-body">
+        {isWedding && !isOption && (
+          <p className={styles.hint}>{t(T.BOOKING.CLIENTS.WEDDING_ONE_SIDE_HINT)}</p>
+        )}
         <div className={`${styles.sides} ${isWedding ? styles.sidesSplit : ''}`}>
           <section className={styles.sidePanel}>
             <h4 className={styles.sideTitle}>{sideATitle}</h4>
@@ -139,18 +141,16 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       )}
                     </Field>
                   </FieldRow>
-                  <FieldRow single>
-                    <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)} wide>
-                      <input
-                        type="text"
-                        name="clientAIdNumber"
-                        value={formData.clientAIdNumber}
-                        onChange={handleChange}
-                        className={styles.input}
-                        title={formData.clientAIdNumber || undefined}
-                      />
-                    </Field>
-                  </FieldRow>
+                  <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)} wide>
+                    <input
+                      type="text"
+                      name="clientAIdNumber"
+                      value={formData.clientAIdNumber}
+                      onChange={handleChange}
+                      className={styles.input}
+                      title={formData.clientAIdNumber || undefined}
+                    />
+                  </Field>
                 </>
               ) : (
                 <FieldRow>
@@ -158,7 +158,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                     <input
                       type="text"
                       name="clientAFullName"
-                      required
+                      required={sideARequired}
                       value={formData.clientAFullName}
                       onChange={handleChange}
                       className={`${styles.input} ${errors?.clientAFullName ? 'is-invalid' : ''}`}
@@ -186,7 +186,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                   <input
                     type="tel"
                     name="clientAPhone"
-                    required
+                    required={sideARequired}
                     value={formData.clientAPhone}
                     onChange={handleChange}
                     className={`${styles.input} ${errors?.clientAPhone ? 'is-invalid' : ''}`}
@@ -238,8 +238,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
           </section>
 
           {isWedding && (
-            <>
-              <div className={styles.divider} aria-hidden="true" />
               <section className={styles.sidePanel}>
                 <h4 className={styles.sideTitle}>{sideBTitle}</h4>
                 <div className={styles.fieldsStack}>
@@ -248,7 +246,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientBFullName"
-                        required={!isOption}
                         value={formData.clientBFullName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientBFullName ? 'is-invalid' : ''}`}
@@ -275,7 +272,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="tel"
                         name="clientBPhone"
-                        required={!isOption}
                         value={formData.clientBPhone}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientBPhone ? 'is-invalid' : ''}`}
@@ -323,7 +319,6 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                   </FieldRow>
                 </div>
               </section>
-            </>
           )}
         </div>
       </div>

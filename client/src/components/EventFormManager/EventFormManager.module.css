@@ -715,6 +715,13 @@
   border-radius: var(--brand-radius-sm);
 }
 
+.signatureThumbs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .signatureThumb {
   height: 32px;
   width: auto;

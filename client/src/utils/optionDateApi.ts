@@ -45,6 +45,7 @@ export type CalendarBookingApi = {
   clientComments?: string | null;
   managerComments?: string | null;
   clientSignatureUrl?: string | null;
+  clientBSignatureUrl?: string | null;
 };
 
 /** Day payload from GET /api/calendar/dates */

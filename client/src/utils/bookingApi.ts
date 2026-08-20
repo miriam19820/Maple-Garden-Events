@@ -1,6 +1,7 @@
 /** Event date relation on booking records from GET /api/bookings */
 export type EventDateRef = {
   date: string;
+  status?: string | null;
   optionExpiresAt?: string | null;
 };
 
@@ -76,6 +77,7 @@ export type BookingApi = {
   clientAAddress?: string;
   clientBAddress?: string;
   eventDate?: EventDateRef;
+  eventForm?: { id?: string } | null;
   finalPricePortion?: number;
   basePrice?: number;
   totalPrice?: number;
@@ -96,6 +98,7 @@ export type BookingApi = {
   akumApprovalCode?: string | null;
   isContractSigned?: boolean;
   clientSignatureUrl?: string | null;
+  clientBSignatureUrl?: string | null;
   securityCheckStatus?: string;
   createdBy?: string;
   updatedBy?: string | null;

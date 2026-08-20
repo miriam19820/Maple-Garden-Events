@@ -35,6 +35,7 @@ export interface BookingFormData {
   paymentTerms: string;
   leadSource: string;
   clientSignatureUrl: string;
+  clientBSignatureUrl: string;
   akumApprovalCode: string;
   hasMusic: boolean;
   hallRentalPrice: string;
@@ -83,6 +84,7 @@ export interface LoadedBooking {
   vatType?: string;
   leadSource?: string;
   clientSignatureUrl?: string;
+  clientBSignatureUrl?: string;
   akumApprovalCode?: string;
   hasMusic?: boolean;
   hallRentalPrice?: number | string;
@@ -102,6 +104,7 @@ export interface LoadedBooking {
     hebrewDate?: string;
     status?: string;
   };
+  eventForm?: { id?: string } | null;
 }
 
 export interface ContractTemplateApiData {
