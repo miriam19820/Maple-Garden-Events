@@ -93,7 +93,7 @@ resource "github_actions_secret" "ec2_ssh_key" {
 resource "github_actions_secret" "domain" {
   repository      = var.github_repo
   secret_name     = "DOMAIN"
-  value = module.ec2.public_ip
+  value = "${module.ec2.public_ip}.nip.io"
 }
 
 resource "github_actions_secret" "ecr_registry" {

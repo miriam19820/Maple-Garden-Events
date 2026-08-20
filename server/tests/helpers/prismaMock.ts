@@ -2,6 +2,7 @@
 
 export const authorizedUserFindUnique = jest.fn();
 export const systemSettingsFindUnique = jest.fn();
+export const systemSettingsFindFirst = jest.fn();
 export const bookingFindUnique = jest.fn();
 export const bookingFindMany = jest.fn();
 export const bookingUpdate = jest.fn();
@@ -19,6 +20,7 @@ const prismaMock = {
   },
   systemSettings: {
     findUnique: systemSettingsFindUnique,
+    findFirst: systemSettingsFindFirst,
   },
   booking: {
     findUnique: bookingFindUnique,

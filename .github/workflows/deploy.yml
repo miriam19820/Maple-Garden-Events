@@ -15,9 +15,31 @@ env:
 
 jobs:
 
+  # ─── Run tests — block deploy on failure ────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run server tests
+        run: npm run test:server
+
+      - name: Run client tests
+        run: npm run test:client
+
   # ─── Build Docker images → push to ECR ──────────────────────────────────────
   build:
     name: Build & push images
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
