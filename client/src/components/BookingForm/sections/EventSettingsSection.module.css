@@ -75,7 +75,7 @@
 }
 
 .control :global(input[type='time']) {
-  min-width: 9.5rem;
+  min-width: 0;
   width: 100%;
   min-height: 2.75rem;
   padding-block: 0.45rem;

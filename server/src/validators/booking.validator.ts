@@ -19,8 +19,6 @@ export const createBookingSchema = z.object({
     isOption: z.boolean().optional(),
     createdBy: z.string().optional(),
     clientAFullName: z.string().optional(),
-    clientAFirstName: z.string().optional(),
-    clientALastName: z.string().optional(),
     clientAPhone: z.string().optional(),
 
     guestCount: optionalNumber,
@@ -55,42 +53,28 @@ export const createBookingSchema = z.object({
     .passthrough()
     .superRefine((data, ctx) => {
       if (data.isOption) {
+        const name = (data.clientAFullName || '').trim();
+        if (name.length < 2) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: T.SERVER.VALIDATION.FIRST_LAST_NAME_REQUIRED,
+            path: ["clientAFullName"],
+          });
+        }
+        const phone = (data.clientAPhone || '').trim();
+        if (phone.length < 9) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: T.SERVER.VALIDATION.PHONE_INVALID,
+            path: ["clientAPhone"],
+          });
+        }
         if (!(data.createdBy || '').trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: T.SERVER.VALIDATION.REPRESENTATIVE_REQUIRED,
             path: ["createdBy"],
           });
-        }
-        if (isWeddingEventType(data.eventType)) {
-          const nameA = (
-            data.clientAFullName
-            || `${data.clientAFirstName || ''} ${data.clientALastName || ''}`
-          ).trim();
-          if (!hasRequiredWeddingClientDetails({ ...data, clientAFullName: nameA })) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: T.SERVER.VALIDATION.WEDDING_ONE_SIDE_REQUIRED,
-              path: ['clientAFullName'],
-            });
-          }
-        } else {
-          const name = (data.clientAFullName || '').trim();
-          if (name.length < 2) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: T.SERVER.VALIDATION.FIRST_LAST_NAME_REQUIRED,
-              path: ["clientAFullName"],
-            });
-          }
-          const phone = (data.clientAPhone || '').trim();
-          if (phone.length < 9) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: T.SERVER.VALIDATION.PHONE_INVALID,
-              path: ["clientAPhone"],
-            });
-          }
         }
         return;
       }

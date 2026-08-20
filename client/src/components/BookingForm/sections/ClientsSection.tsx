@@ -116,7 +116,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientAFirstName"
-                        required={sideARequired}
+                        required
                         value={formData.clientAFirstName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientAFirstName ? 'is-invalid' : ''}`}
@@ -130,7 +130,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientALastName"
-                        required={sideARequired}
+                        required
                         value={formData.clientALastName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientALastName ? 'is-invalid' : ''}`}
@@ -208,8 +208,8 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
 
               {renderEmailField(
                 'clientAEmail',
-                isOption && !isWedding ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
-                isOption && !isWedding,
+                isOption ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
+                isOption,
               )}
 
               <FieldRow>
