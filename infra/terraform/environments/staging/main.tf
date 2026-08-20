@@ -104,6 +104,57 @@ resource "github_actions_secret" "ecr_registry" {
 
 data "aws_caller_identity" "current" {}
 
+# ─── IAM user for GitHub Actions to wake the EC2 before the nightly e2e run ───
+resource "aws_iam_user" "e2e_wake" {
+  name = "maple-garden-staging-e2e-wake"
+}
+
+resource "aws_iam_access_key" "e2e_wake" {
+  user = aws_iam_user.e2e_wake.name
+}
+
+resource "aws_iam_user_policy" "e2e_wake" {
+  name = "maple-garden-staging-e2e-wake-policy"
+  user = aws_iam_user.e2e_wake.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "StartStopInstance"
+        Effect   = "Allow"
+        Action   = ["ec2:StartInstances", "ec2:StopInstances"]
+        Resource = "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/${module.ec2.instance_id}"
+      },
+      {
+        # DescribeInstances does not support resource-level restriction
+        Sid      = "DescribeInstances"
+        Effect   = "Allow"
+        Action   = "ec2:DescribeInstances"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "github_actions_secret" "e2e_wake_access_key_id" {
+  repository  = var.github_repo
+  secret_name = "STAGING_EC2_WAKE_ACCESS_KEY_ID"
+  value       = aws_iam_access_key.e2e_wake.id
+}
+
+resource "github_actions_secret" "e2e_wake_secret_access_key" {
+  repository  = var.github_repo
+  secret_name = "STAGING_EC2_WAKE_SECRET_ACCESS_KEY"
+  value       = aws_iam_access_key.e2e_wake.secret
+}
+
+resource "github_actions_secret" "e2e_instance_id" {
+  repository  = var.github_repo
+  secret_name = "STAGING_EC2_INSTANCE_ID"
+  value       = module.ec2.instance_id
+}
+
 # ─── Staging EC2 sleep schedule (Israel time) ─────────────────────────────────
 # Weekdays (Sun–Thu): off 01:00–09:00
 # Weekend:            off Fri 13:00 – Sat 20:00
