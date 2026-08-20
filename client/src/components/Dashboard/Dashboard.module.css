@@ -25,6 +25,13 @@
   color: var(--brand-charcoal);
 }
 
+.credit {
+  margin-inline-start: var(--brand-space-2);
+  font-size: var(--brand-text-sm);
+  font-weight: 400;
+  color: var(--brand-text-muted);
+}
+
 .subtitle {
   margin: 0;
   font-size: var(--brand-text-sm);
