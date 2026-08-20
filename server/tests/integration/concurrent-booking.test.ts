@@ -48,7 +48,7 @@ describeIntegration('Concurrent booking — pessimistic lock / 409', () => {
 
     tenantId = await ensureIntegrationFixtures();
     app = createSecurityTestApp();
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await prisma.$disconnect();
