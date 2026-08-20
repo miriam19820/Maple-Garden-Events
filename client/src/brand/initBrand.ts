@@ -1,10 +1,13 @@
-import { getBrandConfig } from '@shared/brand/index';
+import { getBrandConfig, setBrandTenant } from '@shared/brand/index';
 
 export function initBrand() {
+  const viteTenant = import.meta.env.VITE_TENANT_NAME;
+  if (viteTenant) setBrandTenant(viteTenant);
+
   const brand = getBrandConfig();
   
-  // Set document title
-  document.title = `${brand.displayName} — מערכת ניהול`;
+  // Set document title to the brand name shown in the browser tab
+  document.title = brand.shortName;
 
   // Inject CSS variables into the root
   const root = document.documentElement;
