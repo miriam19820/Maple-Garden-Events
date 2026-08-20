@@ -125,10 +125,7 @@ const Dashboard = () => {
     <div className={styles.dashboard}>
       <header className={styles.pageHeader}>
         <div>
-          <h1 className={styles.title}>
-            {t(T.DASHBOARD.TITLE)}
-            <span className={styles.credit}>זאבי פינקל</span>
-          </h1>
+          <h1 className={styles.title}>{t(T.DASHBOARD.TITLE)}</h1>
           <p className={styles.subtitle}>{t(T.DASHBOARD.SUBTITLE)}</p>
         </div>
         <Link to="/calendar">
