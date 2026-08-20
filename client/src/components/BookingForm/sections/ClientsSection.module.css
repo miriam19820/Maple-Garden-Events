@@ -9,8 +9,8 @@
 }
 
 .sides {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   direction: rtl;
   align-items: stretch;
@@ -49,17 +49,6 @@
   padding: 0.85rem 0.9rem 1rem;
   display: flex;
   flex-direction: column;
-}
-
-.sidesSplit .sidePanel {
-  height: 100%;
-}
-
-.divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--brand-border-strong, #cbd5e1);
-  margin: 0.25rem 0.85rem;
 }
 
 .sideTitle {
