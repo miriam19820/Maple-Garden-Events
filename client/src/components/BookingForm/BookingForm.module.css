@@ -46,12 +46,12 @@
   padding: 56px 16px 24px;
 }
 
-/* תאריכי אופציה */
+/* תאריכי אופציה — stays in document flow so it never covers client fields */
 .optionDatesBar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--brand-gold-light);
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  background: var(--brand-gold-light, #f8f1e4);
   border: 1px solid rgba(184, 149, 106, 0.45);
   border-radius: var(--brand-radius);
   padding: var(--brand-space-4);
@@ -59,7 +59,8 @@
   flex-direction: column;
   gap: var(--brand-space-3);
   box-shadow: var(--brand-shadow-sm);
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  flex-shrink: 0;
 }
 
 .optionDatesBarHead {
@@ -216,8 +217,8 @@
 .optionPickerOverlay {
   position: fixed;
   inset: 0;
-  background: var(--brand-overlay);
-  z-index: var(--brand-z-modal);
+  background: var(--brand-overlay, rgba(26, 32, 44, 0.5));
+  z-index: var(--brand-z-modal-top, 1100);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -225,12 +226,13 @@
 }
 
 .optionPickerModal {
-  background: var(--brand-surface);
+  position: relative;
+  background: #fff;
   border-radius: var(--brand-radius-lg);
   width: 100%;
   max-width: min(520px, 94vw);
   padding: var(--brand-space-4);
-  box-shadow: var(--brand-shadow-lg);
+  box-shadow: var(--brand-shadow-lg, 0 8px 24px rgba(41, 68, 63, 0.12));
   border: 1px solid var(--brand-border);
   overflow: visible;
 }

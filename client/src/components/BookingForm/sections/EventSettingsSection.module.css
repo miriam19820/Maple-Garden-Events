@@ -1,5 +1,6 @@
 .settingsBody {
   direction: rtl;
+  container-type: inline-size;
 }
 
 .stack {
@@ -10,16 +11,16 @@
 
 .row2 {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
   align-items: start;
   min-width: 0;
 }
 
-/* Bottom-align controls so uneven label heights don't stagger inputs */
+/* Time of day on its own row so long slot labels are never clipped */
 .rowAlignEnd {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
   align-items: end;
   min-width: 0;
@@ -37,14 +38,14 @@
   margin: 0 0 0.35rem;
   padding: 0;
   text-align: right;
-  font-size: var(--brand-form-label-size, 0.82rem);
+  font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.25;
   color: var(--brand-text-secondary, #4a5568);
 }
 
 .rowAlignEnd .label {
-  min-height: 2.5em; /* room for 2-line labels like משעה/עד שעה מדויקת */
+  min-height: 0;
   display: flex;
   align-items: flex-end;
   justify-content: flex-start;
@@ -58,7 +59,40 @@
 .control :global(.form-control),
 .control :global(.form-select) {
   width: 100%;
-  min-height: var(--brand-form-input-height, 2.35rem);
+  min-width: 0;
+  min-height: 2.75rem;
+  height: auto;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.control :global(.form-select) {
+  padding-block: 0.5rem;
+  padding-inline-start: 0.85rem;
+  padding-inline-end: 2.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.control :global(input[type='time']) {
+  min-width: 9.5rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding-block: 0.45rem;
+  padding-inline: 0.55rem 0.4rem;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.control :global(input[type='time']::-webkit-datetime-edit),
+.control :global(input[type='time']::-webkit-datetime-edit-fields-wrapper) {
+  padding: 0;
+  min-width: 5.5ch;
+}
+
+.control :global(input[type='time']::-webkit-calendar-picker-indicator) {
+  margin-inline-start: 0.2rem;
+  cursor: pointer;
 }
 
 .hint,
@@ -69,20 +103,38 @@
 
 .note {
   margin: 0;
+  color: var(--brand-text, #1e293b);
+  font-size: 0.875rem;
 }
 
 .full {
   min-width: 0;
 }
 
-@media (max-width: 767.98px) {
-  .row2,
+@container (min-width: 420px) {
   .rowAlignEnd {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    grid-template-columns: minmax(9.5rem, 1fr) minmax(9.5rem, 1fr);
+  }
+
+  .rowAlignEnd .field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .row2 {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   }
 
   .rowAlignEnd .label {
-    min-height: 0;
+    min-height: 2.5em;
+  }
+}
+
+@container (min-width: 720px) {
+  .rowAlignEnd {
+    grid-template-columns: minmax(16rem, 1.8fr) minmax(9.5rem, 1fr) minmax(9.5rem, 1fr);
+  }
+
+  .rowAlignEnd .field:first-child {
+    grid-column: auto;
   }
 }

@@ -15,12 +15,10 @@ type EmailFieldName = 'clientAEmail' | 'clientBEmail';
 
 function FieldRow({
   children,
-  single = false,
 }: {
   children: ReactNode;
-  single?: boolean;
 }) {
-  return <div className={`${styles.row} ${single ? styles.rowSingle : ''}`}>{children}</div>;
+  return <div className={styles.row}>{children}</div>;
 }
 
 function Field({
@@ -118,7 +116,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientAFirstName"
-                        required
+                        required={sideARequired}
                         value={formData.clientAFirstName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientAFirstName ? 'is-invalid' : ''}`}
@@ -132,7 +130,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientALastName"
-                        required
+                        required={sideARequired}
                         value={formData.clientALastName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientALastName ? 'is-invalid' : ''}`}
@@ -143,18 +141,16 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       )}
                     </Field>
                   </FieldRow>
-                  <FieldRow single>
-                    <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)} wide>
-                      <input
-                        type="text"
-                        name="clientAIdNumber"
-                        value={formData.clientAIdNumber}
-                        onChange={handleChange}
-                        className={styles.input}
-                        title={formData.clientAIdNumber || undefined}
-                      />
-                    </Field>
-                  </FieldRow>
+                  <Field label={t(T.BOOKING.CLIENTS.ID_NUMBER)} wide>
+                    <input
+                      type="text"
+                      name="clientAIdNumber"
+                      value={formData.clientAIdNumber}
+                      onChange={handleChange}
+                      className={styles.input}
+                      title={formData.clientAIdNumber || undefined}
+                    />
+                  </Field>
                 </>
               ) : (
                 <FieldRow>
@@ -212,8 +208,8 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
 
               {renderEmailField(
                 'clientAEmail',
-                isOption ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
-                isOption,
+                isOption && !isWedding ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
+                isOption && !isWedding,
               )}
 
               <FieldRow>
