@@ -15,25 +15,38 @@ export function uniqueTestCalendarKey(): string {
   return `${y}-${m}-${day}`;
 }
 
-export async function ensureIntegrationFixtures(): Promise<void> {
+export async function ensureIntegrationFixtures(): Promise<string> {
+  let tenant = await prisma.tenant.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!tenant) {
+    tenant = await prisma.tenant.create({
+      data: { name: 'Integration Test Tenant', subdomain: `integration-test-${Date.now()}`, isActive: true },
+    });
+  }
+
   await prisma.authorizedUser.upsert({
     where: { email: TEST_EMAIL },
-    create: { email: TEST_EMAIL, role: 'manager' },
-    update: { role: 'manager' },
+    create: { email: TEST_EMAIL, role: 'manager', tenantId: tenant.id },
+    update: { role: 'manager', tenantId: tenant.id },
   });
 
   await prisma.systemSettings.upsert({
     where: { id: 'global' },
-    create: { id: 'global' },
+    create: { id: 'global', tenantId: tenant.id },
     update: {},
   });
+
+  return tenant.id;
 }
 
-export async function createAvailableEventDate(calendarKey: string) {
+export async function createAvailableEventDate(calendarKey: string, tenantId: string) {
   return prisma.eventDate.create({
     data: {
       date: calendarDateForStorage(calendarKey),
       status: 'AVAILABLE',
+      tenantId,
     },
   });
 }

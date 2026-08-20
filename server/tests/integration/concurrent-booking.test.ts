@@ -36,6 +36,7 @@ describeIntegration('Concurrent booking — pessimistic lock / 409', () => {
   let app: Application;
   let eventDateId: string;
   let calendarKey: string;
+  let tenantId: string;
 
   beforeAll(async () => {
     const reachable = await isDatabaseReachable();
@@ -45,7 +46,7 @@ describeIntegration('Concurrent booking — pessimistic lock / 409', () => {
       );
     }
 
-    await ensureIntegrationFixtures();
+    tenantId = await ensureIntegrationFixtures();
     app = createSecurityTestApp();
   });
 
@@ -55,7 +56,7 @@ describeIntegration('Concurrent booking — pessimistic lock / 409', () => {
 
   beforeEach(async () => {
     calendarKey = uniqueTestCalendarKey();
-    const eventDate = await createAvailableEventDate(calendarKey);
+    const eventDate = await createAvailableEventDate(calendarKey, tenantId);
     eventDateId = eventDate.id;
   });
 
