@@ -460,20 +460,34 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.maple-bs-form fieldset {
+  min-inline-size: 0;
+  min-width: 0;
+  width: 100%;
+}
+
 .maple-bs-form .maple-form-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   min-width: 0;
+  width: 100%;
 }
 
 .maple-bs-form .maple-form-column {
   min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-@container maple-form (min-width: 1100px) {
+.maple-bs-form .maple-form-column > * {
+  max-width: 100%;
+}
+
+@container maple-form (min-width: 960px) {
   .maple-bs-form .maple-form-columns {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
 }

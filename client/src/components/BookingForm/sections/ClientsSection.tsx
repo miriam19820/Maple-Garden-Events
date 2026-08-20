@@ -92,7 +92,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
     </Field>
   );
 
-  const sideARequired = !isWedding;
+  const sideARequired = isOption || !isWedding;
   const sideATitle = isWedding ? t(T.BOOKING.CLIENTS.GROOM_SIDE) : t(T.BOOKING.CLIENTS.CLIENT_SIDE);
   const sideBTitle = (isOption || isWedding)
     ? t(T.BOOKING.CLIENTS.BRIDE_SIDE_OPTIONAL)
@@ -102,7 +102,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
     <div className={`card mb-3 ${styles.clientsCard}`}>
       <div className="card-header maple-section-header">{t(T.BOOKING.CLIENTS.SECTION_TITLE)}</div>
       <div className="card-body">
-        {isWedding && (
+        {isWedding && !isOption && (
           <p className={styles.hint}>{t(T.BOOKING.CLIENTS.WEDDING_ONE_SIDE_HINT)}</p>
         )}
         <div className={`${styles.sides} ${isWedding ? styles.sidesSplit : ''}`}>
@@ -116,7 +116,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientAFirstName"
-                        required={sideARequired}
+                        required
                         value={formData.clientAFirstName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientAFirstName ? 'is-invalid' : ''}`}
@@ -130,7 +130,7 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
                       <input
                         type="text"
                         name="clientALastName"
-                        required={sideARequired}
+                        required
                         value={formData.clientALastName}
                         onChange={handleChange}
                         className={`${styles.input} ${errors?.clientALastName ? 'is-invalid' : ''}`}
@@ -208,8 +208,8 @@ const ClientsSection = ({ formData, handleChange, errors, isWedding, isOption }:
 
               {renderEmailField(
                 'clientAEmail',
-                isOption && !isWedding ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
-                isOption && !isWedding,
+                isOption ? T.BOOKING.CLIENTS.EMAIL_REQUIRED : T.BOOKING.CLIENTS.EMAIL,
+                isOption,
               )}
 
               <FieldRow>
