@@ -12,7 +12,7 @@ import {
   TIME_SLOT_KEYS,
 } from '@shared/i18n/bookingLookups';
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
-import { apiFetch, getAuthUser } from '../../services/api';
+import { apiFetch } from '../../services/api';
 import { reportClientError } from '../../utils/reportError';
 import { useGlobalSettingsQuery } from '../../hooks/queries';
 import {
@@ -48,13 +48,6 @@ import { NotesList } from '../NotesList/NotesList';
 import { PageLoader } from '../PageLoader/PageLoader';
 
 const MenuDisplay = React.lazy(() => import('../MenuDisplay/MenuDisplay'));
-import {
-  clearBookingDraft,
-  loadBookingDraft,
-  saveBookingDraft,
-  type BookingDraftSnapshot,
-} from '../../utils/bookingDraft';
-
 import {
   DEFAULT_KOSHER_TYPE,
   DEFAULT_VAT_TYPE,
@@ -203,8 +196,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const [relatedOptions, setRelatedOptions] = useState<RelatedBookingOption[]>([]);
   const [activeBookingId, setActiveBookingId] = useState(activeEditId || '');
   const [bookingUpdatedAt, setBookingUpdatedAt] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [draftRestored, setDraftRestored] = useState(false);
 
   let datesToProcess: BookingInitialDate[] = [];
   if (initialDates && initialDates.length > 0) datesToProcess = initialDates;
@@ -214,7 +205,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
 
   const initialCalendarDateId = datesToProcess.length > 0
     ? normalizeOptionDate(datesToProcess[0]).date
-    : ((location.state?.date as string) || '');
+    : (primaryDateStr || (location.state?.date as string) || '');
   const [selectedDatesDisplay, setSelectedDatesDisplay] = useState<OptionDateItem[]>(
     datesToProcess.map(normalizeOptionDate)
   );
@@ -280,50 +271,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     [globalSettings],
   );
 
-  useEffect(() => {
-    getAuthUser().then((user) => {
-      if (user?.email) setUserEmail(user.email);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (isEditMode || !userEmail || draftRestored) return;
-    void Promise.resolve().then(() => {
-      const draft = loadBookingDraft(userEmail, isOptionMode);
-      if (!draft) {
-        setDraftRestored(true);
-        return;
-      }
-      const restore = window.confirm(t(T.BOOKING.FORM.DRAFT_RESTORE_CONFIRM));
-      if (restore) {
-        const draftEventType = String((draft.formData as { eventType?: string }).eventType || '').trim();
-        setFormData((prev) => ({
-          ...prev,
-          ...(draft.formData as typeof prev),
-          // Keep Wedding default on option drafts that were saved without an event type.
-          eventType:
-            draftEventType ||
-            (isOptionMode ? DEFAULT_EVENT_TYPE : prev.eventType),
-        }));
-        setMenuNotesList(draft.menuNotesList);
-        setInternalNotesList(draft.internalNotesList);
-        setServingStyle(draft.servingStyle);
-        setKosherType(draft.kosherType);
-        setUpgrades(draft.upgrades);
-        setDepositMethod(draft.depositMethod);
-        setContractSigned(draft.contractSigned);
-        setSelectedDatesDisplay(draft.selectedDatesDisplay as OptionDateItem[]);
-        setOptionDurationHours(draft.optionDurationHours);
-        setPaymentTemplateId(draft.paymentTemplateId);
-        setPaymentTermsCustom(draft.paymentTermsCustom);
-        setPaymentTermsText(draft.paymentTermsText);
-      } else {
-        clearBookingDraft(isOptionMode);
-      }
-      setDraftRestored(true);
-    });
-  }, [isEditMode, userEmail, draftRestored, isOptionMode, t, T]);
-
   const updateSelectedDatesDisplay = (dates: OptionDateItem[]) => {
     const firstDate = dates.length > 0 ? dates[0].date : '';
     setSelectedDatesDisplay(dates);
@@ -336,31 +283,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     : !effectiveSlotForWarning
       ? t(T.BOOKING.FORM.SELECT_TIME_BEFORE_DATES)
       : asyncOptionDatesWarning;
-
-  const draftSnapshot = useMemo<BookingDraftSnapshot>(() => ({
-    formData: { ...formData },
-    menuNotesList,
-    internalNotesList,
-    servingStyle,
-    kosherType,
-    upgrades,
-    depositMethod,
-    contractSigned,
-    selectedDatesDisplay,
-    isOption,
-    optionDurationHours,
-    paymentTemplateId,
-    paymentTermsCustom,
-    paymentTermsText,
-  }), [formData, menuNotesList, internalNotesList, servingStyle, kosherType, upgrades, depositMethod, contractSigned, selectedDatesDisplay, isOption, optionDurationHours, paymentTemplateId, paymentTermsCustom, paymentTermsText]);
-
-  useEffect(() => {
-    if (isEditMode || !userEmail || !draftRestored) return;
-    const timer = setTimeout(() => {
-      saveBookingDraft(userEmail, isOptionMode, draftSnapshot);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [isEditMode, userEmail, draftRestored, isOptionMode, draftSnapshot]);
 
   useEffect(() => {
     apiFetch(`${API_URL}/bookings/contract-template`)
@@ -698,9 +620,31 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     }
   };
 
-  const handleUpgradeChange = (key: keyof typeof upgrades) => {
+  const handleUpgradeChange = async (key: keyof typeof upgrades) => {
     if (key === 'baseDesign') return;
-    setUpgrades((prev) => ({ ...prev, [key]: !prev[key] }));
+    const newValue = !upgrades[key];
+
+    if (editId && newValue) {
+      try {
+        const res = await apiFetch(`${API_URL}/bookings/${editId}/upgrades`, {
+          method: 'PATCH',
+          body: JSON.stringify({ upgradeKey: key }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          alert(json.message || t(T.BOOKING.ALERTS.UPGRADE_ADD_FAILED));
+          return;
+        }
+        setUpgrades((prev) => ({ ...prev, [key]: true }));
+        if (json.data?.contractText) setContractText(json.data.contractText);
+        if (json.data?.paymentTermsText) setPaymentTermsText(json.data.paymentTermsText);
+      } catch {
+        alert(t(T.BOOKING.ALERTS.UPGRADE_ADD_FAILED));
+      }
+      return;
+    }
+
+    setUpgrades((prev) => ({ ...prev, [key]: newValue }));
   };
 
   const processCheckImage = async (imageSrc: string) => {
@@ -1113,7 +1057,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
       const resData = await response.json();
 
       if (response.ok) {
-        clearBookingDraft(isOption);
         const savedBooking = Array.isArray(resData.data) ? resData.data[0] : resData.data;
         const savedCode = savedBooking?.eventCode;
         const savedId = savedBooking?.id || submitId;
@@ -1211,6 +1154,24 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                 upgradeDisplayOrder={visibleUpgradeKeys}
                 isHallOnly={isHallOnly}
               />
+            </div>
+
+            <div className="col-lg-4">
+              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
+              {isFoodRelevant && (
+                <div className="card mb-3">
+                  <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.MENU_TITLE)}</div>
+                  <div className="card-body py-2">
+                    <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder={t(T.BOOKING.NOTES.MENU_PLACEHOLDER)} />
+                  </div>
+                </div>
+              )}
+              <div className="card mb-3">
+                <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.INTERNAL_TITLE)}</div>
+                <div className="card-body py-2">
+                  <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder={t(T.BOOKING.NOTES.INTERNAL_PLACEHOLDER)} />
+                </div>
+              </div>
               {!isOption && (
                 <div className="card border-info mb-3">
                   <div className="card-body">
@@ -1260,24 +1221,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="col-lg-4">
-              <EventSettingsSection formData={formData} handleChange={handleChange} isOption={isOption} availableSlots={availableSlots} takenSlots={takenSlots} isEditMode={isEditMode} servingStyle={servingStyle} setServingStyle={setServingStyle} kosherType={kosherType} setKosherType={setKosherType} isFoodRelevant={isFoodRelevant} selectedDatesDisplay={selectedDatesDisplay} setIsMenuViewOpen={setIsMenuViewOpen} />
-              {isFoodRelevant && (
-                <div className="card mb-3">
-                  <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.MENU_TITLE)}</div>
-                  <div className="card-body py-2">
-                    <NotesList notes={menuNotesList} onChange={setMenuNotesList} placeholder={t(T.BOOKING.NOTES.MENU_PLACEHOLDER)} />
-                  </div>
-                </div>
-              )}
-              <div className="card mb-3">
-                <div className="card-header maple-section-header">{t(T.BOOKING.NOTES.INTERNAL_TITLE)}</div>
-                <div className="card-body py-2">
-                  <NotesList notes={internalNotesList} onChange={setInternalNotesList} placeholder={t(T.BOOKING.NOTES.INTERNAL_PLACEHOLDER)} />
-                </div>
-              </div>
             </div>
 
             <div className="col-lg-4">
