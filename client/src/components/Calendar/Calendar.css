@@ -406,18 +406,31 @@
   gap: var(--event-pill-gap);
   flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
   position: relative;
   z-index: 1;
 }
 
+.cell-events-container::-webkit-scrollbar {
+  display: none;
+}
+
 .cell-events-container.has-events {
-  flex: 0 0 auto;
-  min-height: calc((var(--event-pill-height) * 2) + var(--event-pill-gap));
-  overflow: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
   justify-content: flex-end;
   margin-top: auto;
+}
+
+.cell-events-container.has-events::-webkit-scrollbar {
+  display: none;
 }
 
 .cell-events-container:empty {
@@ -426,23 +439,23 @@
 }
 
 .small-event-pill {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  line-height: 1.2;
-  font-size: calc(var(--calendar-font-size) * 0.93);
-  padding: 0 clamp(6px, 0.6vw, 10px);
-  border-radius: 8px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-shrink: 0;
   height: var(--event-pill-height);
   min-height: var(--event-pill-height);
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
+  line-height: var(--event-pill-height);
+  padding: 0 4px;
+  border-radius: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: calc(var(--calendar-font-size) * 0.8);
+  font-weight: 700;
   position: relative;
   z-index: 1;
 }
@@ -1022,7 +1035,8 @@
   }
 
   .app-layout-viewport-fill .small-event-pill {
-    font-size: calc(var(--calendar-font-size) * 0.93);
+    font-size: calc(var(--calendar-font-size) * 0.8);
+    padding: 0 4px;
   }
 
   .app-layout-viewport-fill .week-day-label {
@@ -1200,8 +1214,8 @@
   }
 
   .small-event-pill {
-    font-size: calc(var(--calendar-font-size) * 0.93);
-    padding: 0 clamp(3px, 0.4vw, 6px);
+    font-size: calc(var(--calendar-font-size) * 0.8);
+    padding: 0 3px;
   }
 
   .inline-date-label {
