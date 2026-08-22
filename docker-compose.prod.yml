@@ -1,0 +1,61 @@
+# Deployed to /app/docker-compose.yml on the EC2 host by deploy.yml on every push.
+# Uses pre-built images from ECR (no build: blocks) — unlike the root docker-compose.yml,
+# which is for local dev and builds from source.
+# Placeholders (__LIKE_THIS__) are substituted by deploy.yml before `docker compose up -d`.
+
+networks:
+  maple-net:
+    driver: bridge
+
+services:
+  proxy:
+    container_name: maple-proxy
+    image: __REGISTRY__/__ECR_REPO_PROXY__:__IMAGE_TAG__
+    depends_on:
+      - server
+      - client
+    environment:
+      DOMAIN: __DOMAIN__
+    networks:
+      - maple-net
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+
+  client:
+    container_name: maple-client
+    image: __REGISTRY__/__ECR_REPO_CLIENT__:__IMAGE_TAG__
+    networks:
+      - maple-net
+    restart: unless-stopped
+
+  server:
+    container_name: maple-server
+    image: __REGISTRY__/__ECR_REPO_SERVER__:__IMAGE_TAG__
+    depends_on:
+      - redis
+    env_file: /app/server.env
+    environment:
+      CLIENT_URL: https://__DOMAIN__
+      PORT: "5000"
+      REDIS_URL: redis://redis:6379
+    networks:
+      - maple-net
+    restart: unless-stopped
+
+  redis:
+    container_name: maple-redis
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    networks:
+      - maple-net
+    restart: unless-stopped
+    volumes:
+      - maple-redis-data:/data
+
+volumes:
+  maple-redis-data:

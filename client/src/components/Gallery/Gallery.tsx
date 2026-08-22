@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../../i18n/useTranslation';
 import { useNavigationOverride } from '../../context/navigationContext';
 import { DesignGalleryPicker } from '../DesignGallery/DesignGalleryPicker';
-import { getAuthUser } from '../../services/api';
 import { recordDesignSelection, readPendingDesignSelections } from '../../utils/designGallerySelection';
 import {
   DESIGN_CATEGORY_TO_FORM_FIELD,
@@ -47,15 +46,13 @@ const Gallery = () => {
   useNavigationOverride(navigationOverride);
 
   const handleSelect = useCallback(
-    async (field: DesignFormField, value: string) => {
+    (field: DesignFormField, value: string) => {
       setSelectedValues((prev) => ({ ...prev, [field]: value }));
       if (!fromEventForm || !bookingId) return;
-      const user = await getAuthUser();
       recordDesignSelection({
         bookingId,
         field,
         value,
-        userEmail: user?.email,
       });
     },
     [bookingId, fromEventForm],
