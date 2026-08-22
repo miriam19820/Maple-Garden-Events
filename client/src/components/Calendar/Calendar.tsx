@@ -403,7 +403,9 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             </div>
           </div>
 
-          <CalendarLegendBar showWeddingRestrictions={eventTypeFilter === DEFAULT_EVENT_TYPE} />
+          <div className="calendar-legend-slot">
+            <CalendarLegendBar showWeddingRestrictions={eventTypeFilter === DEFAULT_EVENT_TYPE} />
+          </div>
         </div>
       </div>
 
