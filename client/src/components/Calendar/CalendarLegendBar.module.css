@@ -1,5 +1,11 @@
 .root {
-  display: contents;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 16px;
+  width: 100%;
+  min-width: 0;
 }
 
 .toggle {
