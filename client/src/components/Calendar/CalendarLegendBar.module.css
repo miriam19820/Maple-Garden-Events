@@ -4,7 +4,6 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px 16px;
-  flex: 1 1 100%;
   width: 100%;
   min-width: 0;
 }
