@@ -1516,7 +1516,11 @@
     "EVENT_DETAILS_TITLE": "פרטי אירועים",
     "CONVERT_OPTION_TO_BOOKING": "סגירת אירוע במקום אופציה",
     "GRID_ARIA": "לוח שנה {month} {year}",
-    "CELL_ARIA": "{day} {month}, {bookingCount} אירועים"
+    "CELL_ARIA": "{day} {month}, {bookingCount} אירועים",
+    "AGENDA_TITLE": "יומן אירועים",
+    "AGENDA_DATE_HEADING": "יום {weekday} - {hebrewDate}",
+    "NEW_EVENT": "אירוע חדש",
+    "MORE_EVENTS": "+{count} נוספים"
   },
   "PRICING": {
     "VAT": "מע\"מ",
