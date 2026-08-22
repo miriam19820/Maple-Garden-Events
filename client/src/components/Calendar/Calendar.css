@@ -172,7 +172,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .calendar-weekdays-bar {
@@ -186,11 +187,20 @@
 
 .calendar-grid {
   --calendar-max-events: 3;
-  --event-pill-height: 24px;
-  --event-pill-gap: clamp(3px, 0.5vh, 6px);
+  --event-pill-height: 22px;
+  --event-pill-gap: 4px;
+  --calendar-cell-min-height: calc(
+    28px
+    + (var(--event-pill-height) * 2)
+    + var(--event-pill-gap)
+    + 28px
+  );
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-template-rows: repeat(var(--calendar-week-rows, 5), minmax(0, 1fr));
+  grid-template-rows: repeat(
+    var(--calendar-week-rows, 5),
+    minmax(var(--calendar-cell-min-height), 1fr)
+  );
   gap: var(--calendar-grid-gap);
   direction: ltr;
   width: 100%;
@@ -203,7 +213,7 @@
 
 .calendar-grid-uniform .calendar-cell {
   height: 100%;
-  min-height: 0;
+  min-height: var(--calendar-cell-min-height);
 }
 
 .week-day-label {
@@ -236,7 +246,7 @@
   text-align: inherit;
   width: 100%;
   min-width: 0;
-  min-height: 0;
+  min-height: var(--calendar-cell-min-height, 96px);
   position: relative;
   isolation: isolate;
 }
@@ -398,16 +408,33 @@
   gap: var(--event-pill-gap);
   flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
   position: relative;
   z-index: 1;
 }
 
+.cell-events-container::-webkit-scrollbar {
+  display: none;
+}
+
 .cell-events-container.has-events {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  min-height: calc((var(--event-pill-height) * 2) + var(--event-pill-gap));
+  padding-top: 1px;
+  padding-bottom: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
   justify-content: flex-end;
   margin-top: auto;
+}
+
+.cell-events-container.has-events::-webkit-scrollbar {
+  display: none;
 }
 
 .cell-events-container:empty {
@@ -416,21 +443,25 @@
 }
 
 .small-event-pill {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   display: flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  line-height: 1.2;
-  font-size: calc(var(--calendar-font-size) * 0.93);
-  padding: 0 clamp(6px, 0.6vw, 10px);
-  border-radius: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-shrink: 0;
   height: var(--event-pill-height);
   min-height: var(--event-pill-height);
-  box-sizing: border-box;
+  line-height: 1.2;
+  padding: 0 4px;
+  border-radius: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: calc(var(--calendar-font-size) * 0.8);
+  font-weight: 700;
   position: relative;
   z-index: 1;
 }
@@ -659,7 +690,8 @@
   .app-layout-viewport-fill .calendar-grid-wrapper {
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: clamp(12px, 1.8vh, 20px);
     --calendar-grid-gap: clamp(4px, 0.7vh, 8px);
   }
@@ -668,14 +700,17 @@
     height: 100%;
     min-height: 0;
     gap: clamp(4px, 0.7vh, 8px);
-    grid-template-rows: repeat(var(--calendar-week-rows, 5), minmax(0, 1fr));
-    --event-pill-height: 24px;
-    --event-pill-gap: clamp(2px, 0.4vh, 4px);
+    grid-template-rows: repeat(
+      var(--calendar-week-rows, 5),
+      minmax(var(--calendar-cell-min-height), 1fr)
+    );
+    --event-pill-height: 22px;
+    --event-pill-gap: 4px;
   }
 
   .app-layout-viewport-fill .calendar-cell {
-    min-height: 0;
     height: 100%;
+    min-height: var(--calendar-cell-min-height);
   }
 
   .app-layout-viewport-fill .cell-header-row {
@@ -697,7 +732,8 @@
   }
 
   .app-layout-viewport-fill .small-event-pill {
-    font-size: calc(var(--calendar-font-size) * 0.93);
+    font-size: calc(var(--calendar-font-size) * 0.8);
+    padding: 0 4px;
   }
 
   .app-layout-viewport-fill .week-day-label {
@@ -865,8 +901,8 @@
   }
 
   .small-event-pill {
-    font-size: calc(var(--calendar-font-size) * 0.93);
-    padding: 0 clamp(3px, 0.4vw, 6px);
+    font-size: calc(var(--calendar-font-size) * 0.8);
+    padding: 0 3px;
   }
 
   .inline-date-label {
