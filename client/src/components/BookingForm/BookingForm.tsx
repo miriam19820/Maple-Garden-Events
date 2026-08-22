@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import '../../styles/bootstrap-maple-forms.css';
 import styles from './BookingForm.module.css';
-import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot } from '../../utils/timeSlot';
+import { type TimeSlot, TIME_SLOTS, normalizeTimeSlot, getBlockedSlotsForDate, SLOT_HOURS, getSlotHours, getDefaultTimeSlot, getTakenSlots } from '../../utils/timeSlot';
 import { useTranslation } from '../../i18n/useTranslation';
 import {
   HALL_ONLY_EVENT_TYPE,
@@ -15,7 +15,8 @@ import { hasRequiredWeddingClientDetails, isContractFullySigned } from '@shared/
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
 import { reportClientError } from '../../utils/reportError';
-import { useGlobalSettingsQuery } from '../../hooks/queries';
+import { useGlobalSettingsQuery, useCalendarDatesQuery } from '../../hooks/queries';
+import { queryClient } from '../../lib/queryClient';
 import {
   DEFAULT_PAYMENT_TEMPLATES,
   findPaymentTemplate,
@@ -165,9 +166,6 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
   const overrideOptionClientName = overrideCtx.clientName;
   const overrideOptionSlots = overrideCtx.optionSlots;
   const rawTakenSlots = overrideCtx.rawTakenSlots;
-  const takenSlots: TimeSlot[] = overrideOptionDateId
-    ? rawTakenSlots.filter((slot) => !overrideOptionSlots.includes(slot))
-    : rawTakenSlots;
   const stateBlockedSlots: TimeSlot[] = (location.state?.blockedSlots as TimeSlot[]) || [];
   const primaryDateStr = (() => {
     if (initialDates?.length) {
@@ -177,6 +175,20 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
     if (location.state?.date) return location.state.date as string;
     return '';
   })();
+  const calendarEventTypeForQuery =
+    (location.state?.eventTypeFilter as string) || DEFAULT_EVENT_TYPE;
+  const { data: liveDays } = useCalendarDatesQuery(
+    primaryDateStr,
+    primaryDateStr,
+    calendarEventTypeForQuery,
+  );
+  const liveDay = (liveDays ?? []).find((d) => d.date === primaryDateStr);
+  const liveTakenSlots: TimeSlot[] = liveDay
+    ? [...getTakenSlots(liveDay.bookings ?? [])]
+    : rawTakenSlots;
+  const takenSlots: TimeSlot[] = overrideOptionDateId
+    ? liveTakenSlots.filter((slot) => !overrideOptionSlots.includes(slot))
+    : liveTakenSlots;
   const blockedSlots: TimeSlot[] = primaryDateStr
     ? getBlockedSlotsForDate(primaryDateStr)
     : stateBlockedSlots;
@@ -1097,6 +1109,8 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         if ((!isOption || convertFromOption) && contractSigned && savedId) {
           await promptPrintAfterClose(savedId, t);
         }
+        await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+        await queryClient.invalidateQueries({ queryKey: ['bookings'] });
         navigate('/calendar');
       } else if (response.status === 409 && resData.conflict) {
         alert(t(T.BOOKING.ALERTS.CONFLICT_UPDATED, {

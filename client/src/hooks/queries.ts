@@ -142,7 +142,7 @@ export function prefetchCalendarDates(start: string, end: string, eventType: str
       if (Array.isArray(json?.data)) return json.data as CalendarDayApi[];
       return [];
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 0,
   });
 }
 
@@ -167,6 +167,8 @@ export function useCalendarDatesQuery(start: string, end: string, eventType: str
       return [];
     },
     enabled: Boolean(start && end),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
 
