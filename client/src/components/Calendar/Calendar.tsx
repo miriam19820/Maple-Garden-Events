@@ -7,14 +7,12 @@ import {
   getSlotColor,
   getTakenSlots,
   getBookableSlotsForDate,
-  canAddMoreEventsForDate,
   hasOptionOnDay,
   normalizeTimeSlot,
   type TimeSlot,
 } from '../../utils/timeSlot';
 import { CalendarLegendBar } from './CalendarLegendBar';
 import { CalendarDaySidePanel } from './CalendarDaySidePanel';
-import { CalendarAgenda } from './CalendarAgenda';
 import { OptionFormModal } from './OptionFormModal';
 import { isEventLive } from '../../utils/eventStart';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -46,8 +44,6 @@ interface CalendarProps {
 
 const DOW_TO_COL: Record<number, number> = { 0:7, 1:6, 2:5, 3:4, 4:3, 5:2, 6:1 };
 const COL_HEADER_INDEX_KEYS = [0, 1, 2, 3, 4, 5, 6] as const;
-const MINI_WEEKDAY_INDEX_KEYS = [6, 5, 4, 3, 2, 1, 0] as const;
-const MAX_CELL_EVENTS = 3;
 
 /** DOM order top→bottom so flex-end stacks: evening on top, morning at bottom */
 const CALENDAR_SLOT_STACK_ORDER: TimeSlot[] = ['evening', 'noon', 'morning'];
@@ -143,7 +139,7 @@ const CalendarCell = memo(({
         <div className="cell-status-text">{day.reason}</div>
       )}
       <div className={`cell-events-container${bookingCount > 0 ? ' has-events' : ''}`}>
-        {sortBookingsForCalendarCell(day.bookings ?? []).slice(0, MAX_CELL_EVENTS).map((b) => {
+        {sortBookingsForCalendarCell(day.bookings).map((b, idx) => {
           const baseColor = getSlotColor(b.timeOfDay);
           const isOptionBooking = b.isOption === true;
           const isLive =
@@ -168,10 +164,9 @@ const CalendarCell = memo(({
 
           return (
             <div 
-              key={b.id || `${day.date}-${b.timeOfDay}-${b.eventCode || ''}`} 
+              key={idx} 
               className="small-event-pill"
               style={eventStyle}
-              title={getEventTitle(b)}
               onClick={(e) => {
                 e.stopPropagation();
                 openDayPanel(day);
@@ -182,30 +177,14 @@ const CalendarCell = memo(({
             </div>
           );
         })}
-        {bookingCount > MAX_CELL_EVENTS && (
-          <button
-            type="button"
-            className="calendar-more-events"
-            onClick={(e) => {
-              e.stopPropagation();
-              openDayPanel(day);
-            }}
-          >
-            {t(T.CALENDAR.MORE_EVENTS, { count: bookingCount - MAX_CELL_EVENTS })}
-          </button>
-        )}
       </div>
     </button>
   );
 }, (prevProps, nextProps) => {
-  const prevIds = (prevProps.day.bookings ?? []).map((b) => b.id).join(',');
-  const nextIds = (nextProps.day.bookings ?? []).map((b) => b.id).join(',');
-  return (
-    prevProps.day.date === nextProps.day.date &&
-    prevIds === nextIds &&
-    prevProps.todayStr === nextProps.todayStr &&
-    prevProps.eventTypeFilter === nextProps.eventTypeFilter
-  );
+  return prevProps.day === nextProps.day && 
+         prevProps.todayStr === nextProps.todayStr &&
+         prevProps.month === nextProps.month &&
+         prevProps.eventTypeFilter === nextProps.eventTypeFilter;
 });
 
 export const Calendar = ({ onDateSelect }: CalendarProps) => {
@@ -247,7 +226,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const [eventPopupDay, setEventPopupDay] = useState<DayData | null>(null);
   const [optionModalDay, setOptionModalDay] = useState<DayData | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState(DEFAULT_EVENT_TYPE);
-  const [selectedDate, setSelectedDate] = useState(() => formatDateLocal(new Date()));
   const [, setLiveTick] = useState(0);
 
   useEffect(() => {
@@ -302,43 +280,10 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   const grid = buildGrid();
   const weekRowCount = grid.length > 0 ? Math.max(...grid.map((d) => d.row)) : 5;
 
-  useEffect(() => {
-    if (!sidePanelDay && !eventPopupDay && !optionModalDay) return;
-    if (sidePanelDay) {
-      const fresh = grid.find((d) => d.date === sidePanelDay.date);
-      if (fresh) setSidePanelDay(fresh);
-    }
-    if (eventPopupDay) {
-      const fresh = grid.find((d) => d.date === eventPopupDay.date);
-      if (fresh) setEventPopupDay(fresh);
-    }
-    if (optionModalDay) {
-      const fresh = grid.find((d) => d.date === optionModalDay.date);
-      if (fresh) setOptionModalDay(fresh);
-    }
-    // Refresh open panels from the latest calendar query, not the click-time snapshot.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- grid is rebuilt from datesData
-  }, [datesData]);
-  const selectedDay =
-    grid.find((day) => day.isCurrentMonth && day.date === selectedDate) ??
-    grid.find((day) => day.isCurrentMonth && day.date === todayStr) ??
-    grid.find((day) => day.isCurrentMonth) ??
-    null;
-
-  const goToMonth = (y: number, m: number) => {
-    setCurrentDate(new Date(y, m, 1));
-    const today = new Date();
-    if (today.getFullYear() === y && today.getMonth() === m) {
-      setSelectedDate(formatDateLocal(today));
-    } else {
-      setSelectedDate(formatDateLocal(new Date(y, m, 1)));
-    }
-  };
-
-  const prevMonth = () => goToMonth(year, month - 1);
-  const nextMonth = () => goToMonth(year, month + 1);
-  const prevYear  = () => goToMonth(year - 1, month);
-  const nextYear  = () => goToMonth(year + 1, month);
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const prevYear  = () => setCurrentDate(new Date(year - 1, month, 1));
+  const nextYear  = () => setCurrentDate(new Date(year + 1, month, 1));
 
   const prefetchForDate = (y: number, m: number) => {
     const pFirst = new Date(y, m, 1);
@@ -361,21 +306,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
   };
 
   const openDayPanel = (day: DayData) => {
-    setSelectedDate(day.date);
     setSidePanelDay(day);
-  };
-
-  const handleHybridNewEvent = () => {
-    if (!selectedDay) return;
-    const bookingCount = selectedDay.bookings?.length ?? 0;
-    const isPast = selectedDay.date < todayStr;
-    const isHardBlocked = selectedDay.status === 'BLOCKED' && bookingCount === 0;
-    const canCreate =
-      !isPast &&
-      selectedDay.status !== 'FORBIDDEN' &&
-      !isHardBlocked &&
-      canAddMoreEventsForDate(selectedDay.date, selectedDay.bookings || []);
-    if (canCreate) openDayPanel(selectedDay);
   };
 
   const handleOverrideOptionBook = (day: DayData) => {
@@ -472,101 +403,13 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             </div>
           </div>
 
-          <div className="calendar-legend-slot">
-            <CalendarLegendBar showWeddingRestrictions={eventTypeFilter === DEFAULT_EVENT_TYPE} />
-          </div>
+          <CalendarLegendBar showWeddingRestrictions={eventTypeFilter === DEFAULT_EVENT_TYPE} />
         </div>
       </div>
 
       {loading ? <div className="calendar-loading">{t(T.UI.LOADING_DATA)}</div> : isError ? (
         <div className="calendar-loading">{error instanceof Error ? error.message : t(T.CALENDAR.LOAD_ERROR)}</div>
       ) : (
-        <>
-        <div className="calendar-hybrid">
-          <div className="calendar-mini">
-            <div className="calendar-mini-weekdays">
-              {MINI_WEEKDAY_INDEX_KEYS.map((idx) => (
-                <div key={idx} className="calendar-mini-weekday">
-                  {t(T.CALENDAR.WEEKDAYS_SHORT[idx])}
-                </div>
-              ))}
-            </div>
-            <div
-              className="calendar-mini-grid"
-              style={{ ['--calendar-week-rows' as string]: weekRowCount } as React.CSSProperties}
-            >
-              {grid.map((day) => {
-                const dayNum = new Date(`${day.date}T12:00:00`).getDate();
-                const bookingCount = day.bookings?.length ?? 0;
-                const isSelected = selectedDay?.date === day.date;
-                const isToday = day.date === todayStr;
-                const dots = sortBookingsForCalendarCell(day.bookings).slice(0, 3);
-                const isWeddingFilter = eventTypeFilter === DEFAULT_EVENT_TYPE;
-                const restrictionDot =
-                  day.isCurrentMonth && isWeddingFilter && bookingCount === 0
-                    ? day.status === 'FORBIDDEN'
-                      ? 'is-forbidden'
-                      : day.status === 'PROBLEMATIC'
-                        ? 'is-partial'
-                        : ''
-                    : '';
-                const className = [
-                  'calendar-mini-day',
-                  !day.isCurrentMonth ? 'is-outside' : '',
-                  isToday ? 'is-today' : '',
-                  isSelected ? 'is-selected' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ');
-
-                return (
-                  <button
-                    key={day.date}
-                    type="button"
-                    className={className}
-                    style={{ gridColumn: day.col, gridRow: day.row }}
-                    disabled={!day.isCurrentMonth}
-                    aria-pressed={isSelected}
-                    aria-label={String(dayNum)}
-                    onClick={() => {
-                      if (!day.isCurrentMonth) return;
-                      setSelectedDate(day.date);
-                    }}
-                  >
-                    <span className="calendar-mini-num">{dayNum}</span>
-                    <span className="calendar-mini-dots" aria-hidden="true">
-                      {day.isCurrentMonth &&
-                        dots.map((booking, idx) => (
-                          <span
-                            key={booking.id || idx}
-                            className="calendar-mini-dot"
-                            style={{ background: getSlotColor(booking.timeOfDay) }}
-                          />
-                        ))}
-                      {restrictionDot && (
-                        <span className={`calendar-mini-dot ${restrictionDot}`} />
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <CalendarAgenda
-            day={selectedDay}
-            todayStr={todayStr}
-            getEventTitle={getEventTitle}
-            onOpenDay={openDayPanel}
-            onNewEvent={handleHybridNewEvent}
-            canCreateEvent={Boolean(
-              selectedDay &&
-              selectedDay.date >= todayStr &&
-              selectedDay.status !== 'FORBIDDEN' &&
-              !(selectedDay.status === 'BLOCKED' && (selectedDay.bookings?.length ?? 0) === 0) &&
-              canAddMoreEventsForDate(selectedDay.date, selectedDay.bookings || []),
-            )}
-          />
-        </div>
         <div className="calendar-grid-wrapper">
           <div className="calendar-weekdays-bar">
             {COL_HEADER_INDEX_KEYS.map((idx) => (
@@ -592,7 +435,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             ))}
           </div>
         </div>
-        </>
       )}
       {sidePanelDay && (
         <CalendarDaySidePanel
