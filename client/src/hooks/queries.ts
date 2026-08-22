@@ -130,7 +130,13 @@ export function prefetchCalendarDates(start: string, end: string, eventType: str
       const res = await apiFetch(`${API_URL}/calendar/dates?${qs}`);
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(typeof json?.error === 'string' ? json.error : tClient(T.CALENDAR.LOAD_ERROR));
+        const msg =
+          typeof json?.message === 'string'
+            ? json.message
+            : typeof json?.error === 'string'
+              ? json.error
+              : tClient(T.CALENDAR.LOAD_ERROR);
+        throw new Error(msg);
       }
       if (Array.isArray(json)) return json as CalendarDayApi[];
       if (Array.isArray(json?.data)) return json.data as CalendarDayApi[];
@@ -148,7 +154,13 @@ export function useCalendarDatesQuery(start: string, end: string, eventType: str
       const res = await apiFetch(`${API_URL}/calendar/dates?${qs}`);
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(typeof json?.error === 'string' ? json.error : tClient(T.CALENDAR.LOAD_ERROR));
+        const msg =
+          typeof json?.message === 'string'
+            ? json.message
+            : typeof json?.error === 'string'
+              ? json.error
+              : tClient(T.CALENDAR.LOAD_ERROR);
+        throw new Error(msg);
       }
       if (Array.isArray(json)) return json as CalendarDayApi[];
       if (Array.isArray(json?.data)) return json.data as CalendarDayApi[];

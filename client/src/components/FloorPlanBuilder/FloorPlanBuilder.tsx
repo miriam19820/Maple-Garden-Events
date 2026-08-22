@@ -327,8 +327,14 @@ const FloorPlanBuilderEditor: React.FC<EditorProps> = ({
             {saving ? t(T.FLOOR_PLAN.SAVING) : t(T.FLOOR_PLAN.SAVE_LAYOUT)}
           </button>
           {onClose && (
-            <button type="button" className="btn-close" onClick={onClose}>
-              {t(T.FLOOR_PLAN.CLOSE)}
+            <button
+              type="button"
+              className="btn-floor-close"
+              onClick={onClose}
+              title={t(T.FLOOR_PLAN.CLOSE)}
+              aria-label={t(T.FLOOR_PLAN.CLOSE)}
+            >
+              ✕ {t(T.FLOOR_PLAN.CLOSE)}
             </button>
           )}
         </div>

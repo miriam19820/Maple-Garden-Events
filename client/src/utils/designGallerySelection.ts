@@ -1,9 +1,4 @@
 import type { DesignFormField } from '@shared/gallery';
-import {
-  loadEventFormDraft,
-  saveEventFormDraft,
-  type EventFormDraftSnapshot,
-} from './eventFormDraft';
 
 const PENDING_DESIGN_KEY = 'eventFormPendingDesignSelections';
 
@@ -30,12 +25,11 @@ export function clearPendingDesignSelections(): void {
   sessionStorage.removeItem(PENDING_DESIGN_KEY);
 }
 
-/** Persist a gallery pick so EventFormManager can merge it after restore. */
+/** Persist a gallery pick so EventFormManager can merge it after return. */
 export function recordDesignSelection(params: {
   bookingId: string;
   field: DesignFormField;
   value: string;
-  userEmail?: string | null;
 }): void {
   const existing = readPendingDesignSelections();
   const next: PendingDesignSelections = {
@@ -46,16 +40,6 @@ export function recordDesignSelection(params: {
     },
   };
   sessionStorage.setItem(PENDING_DESIGN_KEY, JSON.stringify(next));
-
-  if (!params.userEmail) return;
-  const draft = loadEventFormDraft(params.bookingId, params.userEmail);
-  if (!draft) return;
-  const formData = {
-    ...(draft.formData as Record<string, unknown>),
-    [params.field]: params.value,
-  };
-  const snapshot: EventFormDraftSnapshot = { ...draft, formData };
-  saveEventFormDraft(params.bookingId, params.userEmail, snapshot);
 }
 
 export function consumePendingDesignSelections(
