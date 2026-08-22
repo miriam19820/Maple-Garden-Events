@@ -1,0 +1,5 @@
+aws_region        = "il-central-1"
+ssh_allowed_cidrs = ["YOUR_IP/32"]   # Never use 0.0.0.0/0 in production
+domain            = "maple-garden.co.il"
+github_org        = "miriam19820"
+github_repo       = "Maple-Garden-Events"
