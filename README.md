@@ -1,1 +1,1 @@
-![CI/CD Pipeline](./architacture/CICD.png)
+![CI/CD Pipeline](architacture/CICD.png)
