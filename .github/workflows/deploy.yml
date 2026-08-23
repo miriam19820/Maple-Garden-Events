@@ -6,7 +6,9 @@ on:
 
 concurrency:
   group: deploy-${{ github.ref_name }}
-  cancel-in-progress: true
+  # Never cancel an in-flight EC2 deploy — a cancelled SSH step can leave
+  # maple-client on an old image while the workflow still looks "green" later.
+  cancel-in-progress: false
 
 env:
   EC2_USER:                       ubuntu
@@ -71,12 +73,13 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           TAG:      ${{ github.sha }}
         run: |
-          docker build -f client/Dockerfile \
+          docker build --no-cache -f client/Dockerfile \
             --build-arg VITE_GOOGLE_CLIENT_ID="${{ secrets.VITE_GOOGLE_CLIENT_ID }}" \
             --build-arg VITE_API_URL="" \
             --build-arg VITE_SENTRY_DSN="${{ secrets.VITE_SENTRY_DSN }}" \
             --build-arg VITE_SENTRY_TRACES_SAMPLE_RATE="$VITE_SENTRY_TRACES_SAMPLE_RATE" \
             --build-arg VITE_TENANT_NAME="$VITE_TENANT_NAME" \
+            --build-arg GIT_SHA="$TAG" \
             -t "$REGISTRY/$ECR_REPO_CLIENT:$TAG" \
             -t "$REGISTRY/$ECR_REPO_CLIENT:latest" .
           docker push "$REGISTRY/$ECR_REPO_CLIENT:$TAG"
@@ -131,17 +134,16 @@ jobs:
           host:     ${{ env.EC2_HOST }}
           username: ${{ env.EC2_USER }}
           key:      ${{ env.EC2_SSH_KEY }}
+          script_stop: true
           script: |
+            set -euo pipefail
             ECR_PASS=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }})
             echo "$ECR_PASS" | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
-            # Pull the exact commit image
             docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_SERVER }}:${{ env.IMAGE_TAG }}
             docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_PROXY }}:${{ env.IMAGE_TAG }}
             docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_CLIENT }}:${{ env.IMAGE_TAG }}
 
-            # Replace the tracked compose file with this deploy's real values
-            # (scp lands it in the home dir — /app itself is root-owned)
             sudo mv ~/docker-compose.prod.yml /app/docker-compose.yml
             cd /app
             sudo sed -i \
@@ -153,19 +155,62 @@ jobs:
               -e "s|__DOMAIN__|${{ env.DOMAIN }}|g" \
               docker-compose.yml
 
-            docker compose up -d --remove-orphans
+            grep -F "${{ env.IMAGE_TAG }}" docker-compose.yml >/dev/null
+
+            # Recreate every service against the SHA we just pulled.
+            # `up -d` without --force-recreate can keep maple-client on yesterday's image
+            # while this job still reports success (API health is a different container).
+            docker compose up -d --force-recreate --remove-orphans
             docker image prune -f
 
-            # ─── Health check: fail the deploy if the app never comes up healthy ──
             echo "Waiting for app to become healthy..."
+            healthy=0
             for i in $(seq 1 15); do
               if curl -sf http://localhost/api/health > /dev/null; then
-                echo "✅ Health check passed"
-                exit 0
+                echo "✅ API health check passed"
+                healthy=1
+                break
               fi
               echo "  attempt $i/15 — not ready yet, waiting 5s..."
               sleep 5
             done
-            echo "❌ Health check failed after 75s — deployment is broken!"
-            docker logs maple-server --tail 50
-            exit 1
+            if [ "$healthy" != "1" ]; then
+              echo "❌ Health check failed after 75s — deployment is broken!"
+              docker logs maple-server --tail 50
+              exit 1
+            fi
+
+            EXPECTED="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_CLIENT }}:${{ env.IMAGE_TAG }}"
+            RUNNING=$(docker inspect maple-client --format '{{.Config.Image}}')
+            echo "maple-client image: $RUNNING"
+            if [ "$RUNNING" != "$EXPECTED" ]; then
+              echo "❌ maple-client is not the image from this commit"
+              echo "   expected: $EXPECTED"
+              docker compose ps
+              exit 1
+            fi
+
+            HEADERS=$(curl -sI http://localhost/)
+            echo "$HEADERS"
+            if ! echo "$HEADERS" | grep -qi 'cache-control:.*no-store'; then
+              echo "❌ HTML is missing Cache-Control: no-store"
+              exit 1
+            fi
+
+            HTML=$(curl -s http://localhost/)
+            if ! echo "$HTML" | grep -q "build:${{ env.IMAGE_TAG }}"; then
+              echo "❌ HTML build stamp does not match this commit (${{ env.IMAGE_TAG }})"
+              echo "$HTML" | tail -n 8
+              exit 1
+            fi
+
+            CSS_PATH=$(echo "$HTML" | sed -n 's/.*href="\([^"]*index-[^"]*\.css\)".*/\1/p' | head -n 1)
+            echo "bundled CSS: $CSS_PATH"
+            CSS=$(curl -s "http://localhost${CSS_PATH}")
+            if ! echo "$CSS" | grep -q 'calendar-hybrid{display:flex'; then
+              echo "❌ Deployed CSS is missing mobile hybrid display:flex"
+              echo "$CSS" | tr '{' '\n' | grep -F 'calendar-hybrid' || true
+              exit 1
+            fi
+
+            echo "✅ Client image, HTML stamp, cache headers, and mobile CSS verified"

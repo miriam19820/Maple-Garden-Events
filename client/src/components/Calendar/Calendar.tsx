@@ -135,15 +135,16 @@ const CalendarCell = memo(({
           {dayNum}
           {isToday && <span className="today-badge">{t(T.CALENDAR.TODAY)}</span>}
         </span>
-        {day.candleTime && <span className="candle-time">{day.candleTime}</span>}
-        <span className="hebrew-text">{day.hebrewDate}</span>
+        {day.isCurrentMonth && day.candleTime && <span className="candle-time">{day.candleTime}</span>}
+        <span className="hebrew-text">{day.isCurrentMonth ? day.hebrewDate : ''}</span>
       </div>
 
-      {bookingCount === 0 && day.reason && (
+      {/* When events exist, prefer showing them over the period label (e.g. בין הזמנים). */}
+      {day.isCurrentMonth && bookingCount === 0 && day.reason && (
         <div className="cell-status-text">{day.reason}</div>
       )}
       <div className={`cell-events-container${bookingCount > 0 ? ' has-events' : ''}`}>
-        {sortBookingsForCalendarCell(day.bookings ?? []).slice(0, MAX_CELL_EVENTS).map((b) => {
+        {sortBookingsForCalendarCell(day.bookings).slice(0, MAX_CELL_EVENTS).map((b, idx) => {
           const baseColor = getSlotColor(b.timeOfDay);
           const isOptionBooking = b.isOption === true;
           const isLive =
@@ -168,7 +169,7 @@ const CalendarCell = memo(({
 
           return (
             <div 
-              key={b.id || `${day.date}-${b.timeOfDay}-${b.eventCode || ''}`} 
+              key={idx} 
               className="small-event-pill"
               style={eventStyle}
               title={getEventTitle(b)}
@@ -198,14 +199,10 @@ const CalendarCell = memo(({
     </button>
   );
 }, (prevProps, nextProps) => {
-  const prevIds = (prevProps.day.bookings ?? []).map((b) => b.id).join(',');
-  const nextIds = (nextProps.day.bookings ?? []).map((b) => b.id).join(',');
-  return (
-    prevProps.day.date === nextProps.day.date &&
-    prevIds === nextIds &&
-    prevProps.todayStr === nextProps.todayStr &&
-    prevProps.eventTypeFilter === nextProps.eventTypeFilter
-  );
+  return prevProps.day === nextProps.day && 
+         prevProps.todayStr === nextProps.todayStr &&
+         prevProps.month === nextProps.month &&
+         prevProps.eventTypeFilter === nextProps.eventTypeFilter;
 });
 
 export const Calendar = ({ onDateSelect }: CalendarProps) => {
@@ -267,7 +264,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
 
   const todayStr = formatDateLocal(new Date());
 
-  const { data: datesData = [], isLoading: loading, isError, error } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
+  const { data: datesData = [], isLoading: loading, isError } = useCalendarDatesQuery(startStr, endStr, eventTypeFilter);
   const datesList = Array.isArray(datesData) ? datesData : [];
 
   const buildGrid = () => {
@@ -301,24 +298,6 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
 
   const grid = buildGrid();
   const weekRowCount = grid.length > 0 ? Math.max(...grid.map((d) => d.row)) : 5;
-
-  useEffect(() => {
-    if (!sidePanelDay && !eventPopupDay && !optionModalDay) return;
-    if (sidePanelDay) {
-      const fresh = grid.find((d) => d.date === sidePanelDay.date);
-      if (fresh) setSidePanelDay(fresh);
-    }
-    if (eventPopupDay) {
-      const fresh = grid.find((d) => d.date === eventPopupDay.date);
-      if (fresh) setEventPopupDay(fresh);
-    }
-    if (optionModalDay) {
-      const fresh = grid.find((d) => d.date === optionModalDay.date);
-      if (fresh) setOptionModalDay(fresh);
-    }
-    // Refresh open panels from the latest calendar query, not the click-time snapshot.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- grid is rebuilt from datesData
-  }, [datesData]);
   const selectedDay =
     grid.find((day) => day.isCurrentMonth && day.date === selectedDate) ??
     grid.find((day) => day.isCurrentMonth && day.date === todayStr) ??
@@ -479,7 +458,7 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
       </div>
 
       {loading ? <div className="calendar-loading">{t(T.UI.LOADING_DATA)}</div> : isError ? (
-        <div className="calendar-loading">{error instanceof Error ? error.message : t(T.CALENDAR.LOAD_ERROR)}</div>
+        <div className="calendar-loading">{t(T.CALENDAR.LOAD_ERROR)}</div>
       ) : (
         <>
         <div className="calendar-hybrid">
@@ -577,19 +556,21 @@ export const Calendar = ({ onDateSelect }: CalendarProps) => {
             className="calendar-grid calendar-grid-uniform"
             style={{ ['--calendar-week-rows' as string]: weekRowCount } as React.CSSProperties}
           >
-            {grid.map((day) => (
-              <CalendarCell
-                key={day.date}
-                day={day}
-                todayStr={todayStr}
-                month={month}
-                eventTypeFilter={eventTypeFilter}
-                openDayPanel={openDayPanel}
-                t={t}
-                T={T}
-                getEventTitle={getEventTitle}
-              />
-            ))}
+            {grid.map(day => {
+              return (
+                <CalendarCell
+                  key={day.date}
+                  day={day}
+                  todayStr={todayStr}
+                  month={month}
+                  eventTypeFilter={eventTypeFilter}
+                  openDayPanel={openDayPanel}
+                  t={t}
+                  T={T}
+                  getEventTitle={getEventTitle}
+                />
+              );
+            })}
           </div>
         </div>
         </>

@@ -1,5 +1,11 @@
 .root {
-  display: contents;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 16px;
+  width: 100%;
+  min-width: 0;
 }
 
 .toggle {
@@ -7,9 +13,7 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
+  order: 1;
   padding: 6px 10px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
@@ -49,8 +53,8 @@
 .panel {
   display: grid;
   grid-template-rows: 0fr;
-  grid-column: 1 / -1;
-  grid-row: 2;
+  flex: 1 1 100%;
+  order: 2;
   min-width: 0;
   width: 100%;
   opacity: 0;
@@ -121,4 +125,3 @@
     white-space: normal;
   }
 }
-

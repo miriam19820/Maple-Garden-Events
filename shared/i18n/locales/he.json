@@ -97,6 +97,7 @@
       "SUBTITLE_ARCHIVE": "אירוע בארכיון — תצוגה לקריאה בלבד",
       "OVERRIDE_ALERT": "האופציה תשוחרר ותוחלף באירוע החדש בעת השמירה.",
       "OVERRIDE_ALERT_WITH_CLIENT": "האופציה של {clientName} תשוחרר ותוחלף באירוע החדש בעת השמירה.",
+      "DRAFT_RESTORE_CONFIRM": "נמצאה טיוטת הזמנה שלא נשמרה. לשחזר אותה?",
       "SELECT_TIME_BEFORE_DATES": "יש לבחור זמן ביום לפני הוספת תאריכים.",
       "CONTRACT_READ_AND_SIGN": "קראתי את החוזה, מאשר את התנאים וחותם",
       "CONTRACT_OPEN_MODAL": "לחץ לקריאת החוזה ולחתימה דיגיטלית",

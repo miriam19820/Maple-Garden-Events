@@ -97,6 +97,7 @@
       "SUBTITLE_ARCHIVE": "Archived event — read-only view",
       "OVERRIDE_ALERT": "The option will be released and replaced by the new event when saved.",
       "OVERRIDE_ALERT_WITH_CLIENT": "The option for {clientName} will be released and replaced by the new event when saved.",
+      "DRAFT_RESTORE_CONFIRM": "An unsaved booking draft was found. Restore it?",
       "SELECT_TIME_BEFORE_DATES": "Select a time of day before adding dates.",
       "CONTRACT_READ_AND_SIGN": "I have read the contract, accept the terms, and sign",
       "CONTRACT_OPEN_MODAL": "Click to read the contract and sign digitally",
