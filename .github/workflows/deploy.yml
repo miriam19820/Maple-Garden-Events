@@ -17,9 +17,42 @@ env:
 
 jobs:
 
+  # ─── Run tests — block deploy on failure ────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/maple_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run server tests
+        run: npm run test:server
+
+      - name: Run server unit tests (contract-lineItems)
+        run: npm run test:unit -w server
+
+      - name: Run integration tests (staging DB)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          RUN_INTEGRATION_TESTS: 'true'
+        run: npm run test:integration -w server
+
+      - name: Run client tests
+        run: npm run test:client
+
   # ─── Build Docker images → push to ECR ──────────────────────────────────────
   build:
     name: Build & push images
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -155,13 +188,11 @@ jobs:
               -e "s|__DOMAIN__|${{ env.DOMAIN }}|g" \
               docker-compose.yml
 
-            grep -F "${{ env.IMAGE_TAG }}" docker-compose.yml >/dev/null
-
-            # Recreate every service against the SHA we just pulled.
-            # `up -d` without --force-recreate can keep maple-client on yesterday's image
-            # while this job still reports success (API health is a different container).
-            docker compose up -d --force-recreate --remove-orphans
-            docker image prune -f
+            docker compose up -d --remove-orphans
+            # -a removes ALL unused images (not just dangling ones) — every
+            # deploy pulls a uniquely SHA-tagged image, so old tagged versions
+            # from previous deploys pile up forever unless we prune them here.
+            docker image prune -af
 
             echo "Waiting for app to become healthy..."
             healthy=0
