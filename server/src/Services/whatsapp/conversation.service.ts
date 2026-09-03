@@ -24,8 +24,13 @@ export type MatchedBooking = {
 /**
  * Resolve an inbound phone number to a booking.
  *
- * Two stages on purpose: a cheap indexed `contains` shortlist, then an exact
- * comparison of normalized numbers. The suffix alone is never treated as a match.
+ * The shortlist MUST compare digits only. Phone numbers are stored in this ERP
+ * however staff typed them — "0501234567", "050-1234567", "+972-50-123-4567",
+ * "050-1234567 | 052-9998888" — so a LIKE against the raw column misses real
+ * customers whenever a separator lands inside the matched span. The SQL therefore
+ * strips non-digits before comparing, and the result is still verified by exact
+ * normalized comparison in code: a suffix is never on its own treated as a match.
+ *
  * Returns null rather than inventing a customer (§22).
  */
 export async function findBookingForPhone(
@@ -35,14 +40,28 @@ export async function findBookingForPhone(
   const suffix = phoneMatchSuffix(normalizedPhone);
   if (suffix.length < 9) return null;
 
+  const pattern = `%${suffix}`;
+
+  // Digits-only suffix match, bounded. Postgres-specific by design — this repo's
+  // datasource is postgresql.
+  const shortlist = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT "id"
+    FROM "Booking"
+    WHERE (${tenantId}::text IS NULL OR "tenantId" = ${tenantId}::text)
+      AND (
+        regexp_replace(COALESCE("clientAPhone", ''), '\D', '', 'g') LIKE ${pattern}
+        OR regexp_replace(COALESCE("clientBPhone", ''), '\D', '', 'g') LIKE ${pattern}
+      )
+    ORDER BY "updatedAt" DESC
+    LIMIT 50
+  `;
+
+  if (shortlist.length === 0) return null;
+
   const candidates = (await prisma.booking.findMany({
-    where: {
-      ...(tenantId ? { tenantId } : {}),
-      OR: [{ clientAPhone: { contains: suffix } }, { clientBPhone: { contains: suffix } }],
-    },
+    where: { id: { in: shortlist.map((row) => row.id) } },
     include: { eventDate: true },
     orderBy: { updatedAt: 'desc' },
-    take: 50,
   })) as unknown as MatchedBooking[];
 
   for (const booking of candidates) {
@@ -152,7 +171,14 @@ export async function markConversationRead(params: {
  * Meta only allows free-form (non-template) messages within 24h of the customer's
  * last inbound message. Callers use this to choose text vs. template (§42).
  */
-export function isWithinCustomerCareWindow(lastInboundAt: Date | null | undefined): boolean {
+export function isWithinCustomerCareWindow(
+  lastInboundAt: Date | string | null | undefined,
+): boolean {
   if (!lastInboundAt) return false;
-  return Date.now() - lastInboundAt.getTime() < 24 * 60 * 60 * 1000;
+  // Accepts a string too: the value can arrive from a JSON round-trip or a cache,
+  // and silently returning "window closed" there would block legitimate replies.
+  const at = lastInboundAt instanceof Date ? lastInboundAt : new Date(lastInboundAt);
+  const time = at.getTime();
+  if (Number.isNaN(time)) return false;
+  return Date.now() - time < 24 * 60 * 60 * 1000;
 }
