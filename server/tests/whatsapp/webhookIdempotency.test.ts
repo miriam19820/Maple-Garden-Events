@@ -131,7 +131,9 @@ describe('parseWebhookEnvelope', () => {
     expect(item).toMatchObject({ kind: 'template_status', templateName: 'contract_signed', event: 'APPROVED' });
   });
 
-  it.each([
+  // Explicit tuple type: the rows are heterogeneous, so inference would otherwise
+  // produce a union of tuples that does not match a one-parameter callback.
+  it.each<[unknown, string]>([
     [{}, 'empty object'],
     [{ object: 'page' }, 'a different Meta product'],
     [{ object: 'whatsapp_business_account' }, 'no entry array'],
