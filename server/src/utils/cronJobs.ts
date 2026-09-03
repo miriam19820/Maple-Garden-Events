@@ -25,9 +25,14 @@ import { processPreviousDayFinancialSummaries } from '../Services/eventFinancial
 import { DEFAULT_LOCALE, getServerTranslation, T } from '../i18n/getServerTranslation';
 import { reportBackgroundFailure } from '../Services/criticalAlert.service';
 import { runDailyEventArchive } from '../Services/eventArchive.service';
+import { startWhatsAppCronJobs } from './whatsappCronJobs';
 
 export const startCronJobs = () => {
   logger.info('Cron jobs service started');
+
+  // WhatsApp outbox / webhook / automation workers (§26). No-ops while
+  // WHATSAPP_ENABLED is false, so this is safe to register unconditionally.
+  startWhatsAppCronJobs();
 
   if (process.env.BACKUP_ENABLED === 'true') {
     const schedule = process.env.BACKUP_CRON || '0 3 * * *';
