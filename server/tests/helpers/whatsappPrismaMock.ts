@@ -8,7 +8,8 @@
 
 type Row = Record<string, any>;
 
-const clone = <T>(value: T): T => (value === undefined ? value : JSON.parse(JSON.stringify(value)));
+// structuredClone (not JSON) so Date columns stay Dates, exactly as Prisma returns them.
+const clone = <T>(value: T): T => (value === undefined ? value : (structuredClone(value) as T));
 
 let sequence = 0;
 const nextId = (): string => `id-${(sequence += 1)}`;
@@ -94,7 +95,12 @@ function expandUniqueWhere(where: Row): Row {
   return expanded;
 }
 
-export function createModel(name: string, uniqueKeys: string[][] = []) {
+export function createModel(
+  name: string,
+  uniqueKeys: string[][] = [],
+  /** Mirrors the schema's @default(...) values, which Prisma applies server-side. */
+  defaults: Row = {},
+) {
   let rows: Row[] = [];
 
   const assertUnique = (candidate: Row, ignoreId?: string): void => {
@@ -127,7 +133,13 @@ export function createModel(name: string, uniqueKeys: string[][] = []) {
     /** Test helpers */
     __rows: () => rows.map(clone),
     __seed: (seed: Row[]) => {
-      rows = seed.map((row) => ({ id: row.id ?? nextId(), createdAt: new Date(), updatedAt: new Date(), ...row }));
+      rows = seed.map((row) => ({
+        id: row.id ?? nextId(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...defaults,
+        ...row,
+      }));
     },
     __reset: () => {
       rows = [];
@@ -138,6 +150,7 @@ export function createModel(name: string, uniqueKeys: string[][] = []) {
         id: data.id ?? nextId(),
         createdAt: new Date(),
         updatedAt: new Date(),
+        ...defaults,
         ...data,
       };
       assertUnique(row);
@@ -197,7 +210,7 @@ export function createModel(name: string, uniqueKeys: string[][] = []) {
       const expanded = expandUniqueWhere(where);
       const index = rows.findIndex((r) => matchesWhere(r, expanded));
       if (index === -1) {
-        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), ...create };
+        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), ...defaults, ...create };
         rows.push(row);
         return clone(row);
       }
@@ -230,15 +243,35 @@ function pick(row: Row, select: Row): Row {
   return out;
 }
 
-export const whatsAppConversation = createModel('WhatsAppConversation', [['tenantId', 'phoneNumber']]);
-export const whatsAppMessage = createModel('WhatsAppMessage', [['tenantId', 'externalMessageId']]);
-export const whatsAppOutboxMessage = createModel('WhatsAppOutboxMessage', [
-  ['tenantId', 'dedupeKey'],
-  ['messageId'],
-]);
-export const whatsAppWebhookEvent = createModel('WhatsAppWebhookEvent', [['externalEventId']]);
-export const whatsAppTemplate = createModel('WhatsAppTemplate', [['tenantId', 'name', 'language']]);
-export const whatsAppAutomationRule = createModel('WhatsAppAutomationRule', [['tenantId', 'name']]);
+export const whatsAppConversation = createModel(
+  'WhatsAppConversation',
+  [['tenantId', 'phoneNumber']],
+  { status: 'Unassigned', unreadCount: 0 },
+);
+export const whatsAppMessage = createModel(
+  'WhatsAppMessage',
+  [['tenantId', 'externalMessageId']],
+  { status: 'Pending' },
+);
+export const whatsAppOutboxMessage = createModel(
+  'WhatsAppOutboxMessage',
+  [['tenantId', 'dedupeKey'], ['messageId']],
+  { status: 'Pending', attempts: 0, maxAttempts: 5 },
+);
+export const whatsAppWebhookEvent = createModel('WhatsAppWebhookEvent', [['externalEventId']], {
+  status: 'Pending',
+  retryCount: 0,
+});
+export const whatsAppTemplate = createModel('WhatsAppTemplate', [['tenantId', 'name', 'language']], {
+  language: 'he',
+  category: 'UTILITY',
+  metaStatus: 'Draft',
+  version: 1,
+});
+export const whatsAppAutomationRule = createModel('WhatsAppAutomationRule', [['tenantId', 'name']], {
+  actionType: 'SendWhatsAppToCustomer',
+  isEnabled: false,
+});
 export const booking = createModel('Booking');
 export const tenant = createModel('Tenant');
 export const authorizedUser = createModel('AuthorizedUser');
@@ -258,6 +291,35 @@ const prismaMock: Record<string, unknown> = {
   systemSettings,
   whatsAppInboundMessage,
 };
+
+/**
+ * Stand-in for the digits-only booking shortlist in findBookingForPhone.
+ *
+ * It reproduces the SQL's SEMANTICS (strip non-digits, suffix match) rather than
+ * executing SQL. The SQL text itself is only exercised against a real Postgres by
+ * the integration tests.
+ */
+prismaMock.$queryRaw = jest.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+  const sql = Array.isArray(strings) ? strings.join(' ') : String(strings);
+  if (!/FROM\s+"Booking"/i.test(sql)) return [];
+
+  const tenantId = values.find((v) => typeof v === 'string' && !String(v).startsWith('%')) as
+    | string
+    | undefined;
+  const pattern = values.find((v) => typeof v === 'string' && String(v).startsWith('%')) as
+    | string
+    | undefined;
+  const suffix = pattern ? pattern.slice(1) : '';
+  if (!suffix) return [];
+
+  const digits = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
+
+  return (booking.__rows() as Row[])
+    .filter((row) => (tenantId ? row.tenantId === tenantId : true))
+    .filter((row) => digits(row.clientAPhone).endsWith(suffix) || digits(row.clientBPhone).endsWith(suffix))
+    .slice(0, 50)
+    .map((row) => ({ id: row.id }));
+});
 
 // The outbox enlists in the caller's transaction; here the "transaction" is the store.
 prismaMock.$transaction = jest.fn(async (arg: unknown) =>
