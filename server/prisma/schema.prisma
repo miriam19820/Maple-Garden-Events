@@ -34,6 +34,12 @@ model Tenant {
   authorizedUsers          AuthorizedUser[]
   scheduledGreetings       ScheduledGreeting[]
   whatsappInboundMessages  WhatsAppInboundMessage[]
+  whatsappConversations    WhatsAppConversation[]
+  whatsappMessages         WhatsAppMessage[]
+  whatsappOutboxMessages   WhatsAppOutboxMessage[]
+  whatsappWebhookEvents    WhatsAppWebhookEvent[]
+  whatsappTemplates        WhatsAppTemplate[]
+  whatsappAutomationRules  WhatsAppAutomationRule[]
   designGalleryItems       DesignGalleryItem[]
 }
 
@@ -110,6 +116,9 @@ model Booking {
   hallInvoices             HallInvoice[]
   payments                 BookingPayment[]
   whatsappInboundMessages  WhatsAppInboundMessage[]
+  whatsappConversations    WhatsAppConversation[]
+  whatsappMessages         WhatsAppMessage[]
+  whatsappOutboxMessages   WhatsAppOutboxMessage[]
   /** Set after the post-event financial summary WhatsApp is sent to the manager. */
   financialSummarySentAt   DateTime?
 
@@ -456,6 +465,8 @@ model AuthorizedUser {
   role      String   @default("manager")
   createdAt DateTime @default(now())
 
+  whatsappConversations WhatsAppConversation[] @relation("WhatsAppConversationAssignee")
+
   @@index([tenantId])
 }
 
@@ -495,4 +506,197 @@ model WhatsAppInboundMessage {
   @@index([tenantId])
   @@index([fromPhone])
   @@index([bookingId])
+}
+
+// =====================================================================
+// WhatsApp Business Platform integration
+// Statuses/enums are stored as String to match this schema's convention;
+// the allowed values live in server/src/Services/whatsapp/types.ts.
+// =====================================================================
+
+/// One thread per (tenant, phone). Enables a future manager inbox.
+model WhatsAppConversation {
+  id             String    @id @default(uuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+  bookingId      String?
+  booking        Booking?  @relation(fields: [bookingId], references: [id])
+  /// E.164 digits, no leading '+' (Meta Cloud `to` format).
+  phoneNumber    String
+  /// Unassigned | Assigned | WaitingForCustomer | WaitingForManager | Closed
+  status         String    @default("Unassigned")
+  assignedUserId String?
+  assignedUser   AuthorizedUser? @relation("WhatsAppConversationAssignee", fields: [assignedUserId], references: [id])
+  lastMessageAt  DateTime?
+  /// Last inbound message time — drives Meta's 24h customer-care window.
+  lastInboundAt  DateTime?
+  unreadCount    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  messages       WhatsAppMessage[]
+  outboxMessages WhatsAppOutboxMessage[]
+
+  @@unique([tenantId, phoneNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, lastMessageAt])
+  @@index([bookingId])
+  @@index([assignedUserId])
+}
+
+/// Unified ledger of every inbound and outbound WhatsApp message.
+model WhatsAppMessage {
+  id                String    @id @default(uuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  conversationId    String
+  conversation      WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  bookingId         String?
+  booking           Booking?  @relation(fields: [bookingId], references: [id])
+  /// Inbound | Outbound
+  direction         String
+  /// text | template | document | image | audio | video | interactive | location | unknown
+  messageType       String
+  content           String?   @db.Text
+  templateName      String?
+  /// Provider payload kept for auditing/troubleshooting (see retention config).
+  payload           Json?
+  /// Meta `wamid.*`. Unique per tenant — the only key used for status matching.
+  externalMessageId String?
+  /// Pending | Processing | Sent | Delivered | Read | Failed | Cancelled | Received
+  status            String    @default("Pending")
+  errorCode         String?
+  errorMessage      String?   @db.Text
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  outboxMessage     WhatsAppOutboxMessage?
+
+  @@unique([tenantId, externalMessageId])
+  @@index([tenantId, conversationId, createdAt])
+  @@index([tenantId, status])
+  @@index([externalMessageId])
+  @@index([bookingId])
+}
+
+/// Transactional outbox — business code enqueues here, the worker sends.
+model WhatsAppOutboxMessage {
+  id                String    @id @default(uuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  conversationId    String?
+  conversation      WhatsAppConversation? @relation(fields: [conversationId], references: [id])
+  messageId         String?   @unique
+  message           WhatsAppMessage? @relation(fields: [messageId], references: [id])
+  bookingId         String?
+  booking           Booking?  @relation(fields: [bookingId], references: [id])
+  toPhone           String
+  /// text | template | document | media | interactive
+  messageType       String
+  templateName      String?
+  templateLanguage  String?
+  /// Provider-agnostic request body (see SendRequest in types.ts).
+  payload           Json
+  /// Pending | Processing | Sent | Failed | Cancelled
+  status            String    @default("Pending")
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(5)
+  nextAttemptAt     DateTime  @default(now())
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  externalMessageId String?
+  lastError         String?   @db.Text
+  lastErrorCode     String?
+  /// Worker instance holding the claim; cleared on release.
+  claimedBy         String?
+  claimedAt         DateTime?
+  /// Caller-supplied key that makes enqueue idempotent (e.g. "contract-signed:<bookingId>").
+  dedupeKey         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([tenantId, dedupeKey])
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, status])
+  @@index([claimedBy])
+  @@index([bookingId])
+}
+
+/// Raw webhook envelope — the idempotency gate for Meta redeliveries.
+model WhatsAppWebhookEvent {
+  id              String    @id @default(uuid())
+  tenantId        String?
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
+  /// Stable key derived from the Meta payload (wamid / status id + status value).
+  externalEventId String    @unique
+  /// message | status | template_status | unknown
+  eventType       String
+  payload         Json
+  /// Pending | Processing | Processed | Failed | Ignored
+  status          String    @default("Pending")
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  retryCount      Int       @default(0)
+  claimedBy       String?
+  claimedAt       DateTime?
+  error           String?   @db.Text
+
+  @@index([status, receivedAt])
+  @@index([tenantId, eventType])
+}
+
+/// Local template registry. Meta owns approval — `metaStatus` is never assumed.
+model WhatsAppTemplate {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  name         String
+  language     String   @default("he")
+  /// MARKETING | UTILITY | AUTHENTICATION (Meta categories)
+  category     String   @default("UTILITY")
+  /// Draft | Pending | Approved | Rejected | Disabled — mirrored from Meta, never inferred.
+  metaStatus   String   @default("Draft")
+  metaTemplateId String?
+  /// Ordered parameter descriptors used to build `components` at send time.
+  parameters   Json?
+  /// Body preview for the UI. NOT the source of truth — Meta stores the real body.
+  bodyPreview  String?  @db.Text
+  version      Int      @default(1)
+  metadata     Json?
+  lastSyncedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  automationRules WhatsAppAutomationRule[]
+
+  @@unique([tenantId, name, language])
+  @@index([tenantId, metaStatus])
+}
+
+/// Declarative automation: trigger + conditions + action. No hard-coded workers.
+model WhatsAppAutomationRule {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  tenant               Tenant   @relation(fields: [tenantId], references: [id])
+  name                 String
+  /// ContractSigned | PaymentOverdue | EventApproaching | IncomingMessage | ProductionFormReady
+  triggerType          String
+  /// Handler-specific JSON (e.g. { "daysBefore": 30, "requirements": ["tablecloth"] }).
+  triggerConfiguration Json?
+  templateId           String?
+  template             WhatsAppTemplate? @relation(fields: [templateId], references: [id])
+  /// SendWhatsAppToCustomer | SendWhatsAppToManager | NotifyManagerInApp
+  actionType           String   @default("SendWhatsAppToCustomer")
+  actionConfiguration  Json?
+  isEnabled            Boolean  @default(false)
+  lastRunAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId, triggerType, isEnabled])
 }
