@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import type { AuthRequest } from '../middlewares/auth';
+import { FEEDBACK_ELIGIBLE_EVENT_STATUSES } from '../utils/feedbackSchedule';
 import {
   buildFeedbackSides,
   computeCombinedAverage,
@@ -17,6 +19,15 @@ import {
 import { sendManagerFinancialAlertEmail } from '../utils/mailer';
 import { sendManagerFinancialAlert } from '../utils/whatsapp';
 import { getBrandConfig } from '@maple/shared/brand';
+import {
+  aggregateFeedbackScores,
+  avgNumbers,
+  computeDeliveryTotals,
+  groupByMonth,
+  groupByYear,
+  percentage,
+  type StatsFeedbackRow,
+} from '../utils/feedbackStats';
 import { paginationMeta, parsePagination } from '../utils/pagination';
 import { logger } from '../utils/logger';
 import { calendarKeyFromDbDate } from '../utils/dateLocal';
@@ -32,6 +43,13 @@ import { AppError } from '../utils/AppError';
 import { NotFoundError } from '../utils/httpErrors';
 
 const FEEDBACK_ALREADY_SUBMITTED_CODE = 'ALREADY_SUBMITTED';
+
+/**
+ * Events stay part of the feedback flow after the nightly archive job flips them
+ * to ARCHIVED. Filtering on BOOKED alone used to hide every completed event — and
+ * every response given to it — from the admin list and from all statistics.
+ */
+const ELIGIBLE_EVENT_STATUS_FILTER = { status: { in: [...FEEDBACK_ELIGIBLE_EVENT_STATUSES] } };
 const MANAGER_PHONE = process.env.MANAGER_PHONE || '0501234567';
 
 type AdminSide = {
@@ -64,17 +82,6 @@ type AdminGroup = {
   allCompleted: boolean;
   feedbackStatus: 'not_sent' | 'pending' | 'completed';
 };
-
-const MONTH_LABELS = [
-  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
-];
-
-function avgNumbers(values: (number | null | undefined)[]): number | null {
-  const valid = values.filter((v): v is number => typeof v === 'number' && !Number.isNaN(v));
-  if (valid.length === 0) return null;
-  return Number((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(2));
-}
 
 function buildEventDateRange(year: number, month: number | null): { gte: Date; lt: Date } {
   if (month) {
@@ -114,11 +121,12 @@ function eventMonthMatches(date: Date, month: number | null): boolean {
   return new Date(date).getMonth() + 1 === month;
 }
 
-async function getAvailableFeedbackYears(): Promise<number[]> {
+async function getAvailableFeedbackYears(tenantId: string): Promise<number[]> {
   const feedbacks = await prisma.feedback.findMany({
     where: {
+      tenantId,
       isCompleted: true,
-      booking: { isOption: false, eventDate: { status: 'BOOKED' } },
+      booking: { tenantId, isOption: false, eventDate: ELIGIBLE_EVENT_STATUS_FILTER },
     },
     select: { booking: { select: { eventDate: { select: { date: true } } } } },
   });
@@ -396,15 +404,18 @@ export const feedbackController = {
   }),
 
   /** יצירת משובים ו/או שליחת קישורים ידנית */
-  sendAdmin: catchAsync(async (req: Request, res: Response) => {
+  sendAdmin: catchAsync(async (req: AuthRequest, res: Response) => {
+    const { tenantId } = req.user!;
     const { bookingId, clientSide, sendNotifications = true } = req.body as {
       bookingId: string;
       clientSide?: 'A' | 'B';
       sendNotifications?: boolean;
     };
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
+    // Tenant-scoped lookup: a booking belonging to another tenant must be
+    // indistinguishable from one that does not exist (no token/link disclosure).
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
       include: { eventDate: true },
     });
 
@@ -416,8 +427,15 @@ export const feedbackController = {
       throw AppError.badRequest('לא ניתן לשלוח משוב לאופציה — רק לאירוע סגור.');
     }
 
-    if (booking.eventDate?.status !== 'BOOKED') {
-      throw AppError.badRequest('האירוע אינו בסטטוס סגור (BOOKED).');
+    // ARCHIVED is accepted: yesterday's events are archived at midnight and manual
+    // re-send must keep working for them.
+    if (
+      !booking.eventDate
+      || !FEEDBACK_ELIGIBLE_EVENT_STATUSES.includes(
+        booking.eventDate.status as (typeof FEEDBACK_ELIGIBLE_EVENT_STATUSES)[number],
+      )
+    ) {
+      throw AppError.badRequest('האירוע אינו בסטטוס סגור (BOOKED/ARCHIVED).');
     }
 
     const records = await ensureFeedbackRecordsForBooking(booking);
@@ -486,7 +504,8 @@ export const feedbackController = {
   }),
 
   /** רשימת משובים למנהל — כולל אירועים שהסתיימו ללא משוב */
-  listAdmin: catchAsync(async (req: Request, res: Response) => {
+  listAdmin: catchAsync(async (req: AuthRequest, res: Response) => {
+    const { tenantId } = req.user!;
     const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
     const now = new Date();
 
@@ -495,9 +514,10 @@ export const feedbackController = {
 
     const candidates = await prisma.booking.findMany({
       where: {
+        tenantId,
         isOption: false,
         eventDate: {
-          status: 'BOOKED',
+          ...ELIGIBLE_EVENT_STATUS_FILTER,
           date: { lte: endOfToday },
         },
       },
@@ -525,19 +545,22 @@ export const feedbackController = {
   }),
 
   /** סטטיסטיקות וחישובים על משובי לקוחות */
-  statsAdmin: catchAsync(async (req: Request, res: Response) => {
+  statsAdmin: catchAsync(async (req: AuthRequest, res: Response) => {
+    const { tenantId } = req.user!;
     const period = parseStatsPeriod(req.query as Record<string, unknown>);
     const dateRange = eventDateFilter(period);
     const now = new Date();
-    const availableYears = await getAvailableFeedbackYears();
+    const availableYears = await getAvailableFeedbackYears(tenantId);
 
     const completedFeedbacksRaw = await prisma.feedback.findMany({
       where: {
+        tenantId,
         isCompleted: true,
         booking: {
+          tenantId,
           isOption: false,
           eventDate: {
-            status: 'BOOKED',
+            ...ELIGIBLE_EVENT_STATUS_FILTER,
             ...(dateRange ? { date: dateRange } : {}),
           },
         },
@@ -556,81 +579,27 @@ export const feedbackController = {
         )
       : completedFeedbacksRaw;
 
-    const averages = {
-      combined: avgNumbers(completedFeedbacks.map((f) => f.averageScore)),
-      food: avgNumbers(completedFeedbacks.map((f) => f.foodRating)),
-      service: avgNumbers(completedFeedbacks.map((f) => f.serviceRating)),
-      venue: avgNumbers(completedFeedbacks.map((f) => f.venueRating)),
-    };
-
-    const lowScore = completedFeedbacks.filter(
-      (f) => f.averageScore != null && f.averageScore <= 3,
-    ).length;
-    const excellent = completedFeedbacks.filter(
-      (f) => f.averageScore != null && f.averageScore >= 4.5,
-    ).length;
-
-    const byTypeMap = new Map<string, number[]>();
-    for (const fb of completedFeedbacks) {
-      const eventType = fb.booking.eventType;
-      if (!byTypeMap.has(eventType)) byTypeMap.set(eventType, []);
-      if (fb.averageScore != null) byTypeMap.get(eventType)!.push(fb.averageScore);
-    }
-    const byEventType = [...byTypeMap.entries()]
-      .map(([eventType, scores]) => ({
-        eventType,
-        average: avgNumbers(scores),
-        count: scores.length,
-      }))
-      .sort((a, b) => (b.average ?? 0) - (a.average ?? 0));
+    // All numbers below are derived from the persisted responses on every call —
+    // no maintained counters — by the shared, unit-tested aggregation module.
+    const aggregate = aggregateFeedbackScores(completedFeedbacks as unknown as StatsFeedbackRow[]);
+    const { averages, categoryComparison, byEventType } = aggregate;
+    const { lowScore, excellent } = aggregate.counts;
 
     let byMonth: { month: number; label: string; average: number | null; count: number }[] = [];
     let byYear: { year: number; average: number | null; count: number }[] = [];
 
     if (!period.month && period.allYears) {
-      const byYearMap = new Map<number, number[]>();
-      for (const fb of completedFeedbacks) {
-        if (fb.averageScore == null || !fb.booking.eventDate) continue;
-        const y = new Date(fb.booking.eventDate.date).getFullYear();
-        if (!byYearMap.has(y)) byYearMap.set(y, []);
-        byYearMap.get(y)!.push(fb.averageScore);
-      }
-      byYear = [...byYearMap.entries()]
-        .sort(([a], [b]) => a - b)
-        .map(([y, scores]) => ({
-          year: y,
-          average: avgNumbers(scores),
-          count: scores.length,
-        }));
+      byYear = groupByYear(completedFeedbacks as unknown as StatsFeedbackRow[]);
     } else if (!period.month && period.year != null) {
-      const byMonthMap = new Map<number, number[]>();
-      for (const fb of completedFeedbacks) {
-        if (fb.averageScore == null || !fb.booking.eventDate) continue;
-        const m = new Date(fb.booking.eventDate.date).getMonth() + 1;
-        if (!byMonthMap.has(m)) byMonthMap.set(m, []);
-        byMonthMap.get(m)!.push(fb.averageScore);
-      }
-      byMonth = [...byMonthMap.entries()]
-        .sort(([a], [b]) => a - b)
-        .map(([m, scores]) => ({
-          month: m,
-          label: MONTH_LABELS[m - 1],
-          average: avgNumbers(scores),
-          count: scores.length,
-        }));
+      byMonth = groupByMonth(completedFeedbacks as unknown as StatsFeedbackRow[]);
     }
-
-    const categoryComparison = [
-      { category: 'אוכל', average: averages.food },
-      { category: 'שירות', average: averages.service },
-      { category: 'אולם', average: averages.venue },
-    ].filter((c) => c.average != null);
 
     const candidatesRaw = await prisma.booking.findMany({
       where: {
+        tenantId,
         isOption: false,
         eventDate: {
-          status: 'BOOKED',
+          ...ELIGIBLE_EVENT_STATUS_FILTER,
           ...(dateRange ? { date: dateRange } : {}),
         },
       },
@@ -651,31 +620,19 @@ export const feedbackController = {
       (b) => b.eventDate && hasEventEnded(b, b.eventDate.date, b.eventForm, now),
     );
 
-    let expectedSides = 0;
-    let pendingFeedbacks = 0;
-    let notSentEvents = 0;
+    const totals = computeDeliveryTotals(finishedBookings, (booking) =>
+      buildFeedbackSides(booking),
+    );
+    const { expectedSides, sentSides, pendingFeedbacks, notSentEvents } = totals;
 
-    for (const booking of finishedBookings) {
-      const sides = buildFeedbackSides(booking);
-      expectedSides += sides.length;
-      if (sides.length === 0) continue;
-
-      const hasAnySent = booking.feedbacks.some((f) => f.lastNotifiedAt);
-
-      if (booking.feedbacks.length === 0 || !hasAnySent) {
-        notSentEvents++;
-      }
-
-      for (const side of sides) {
-        const fb = booking.feedbacks.find((f) => f.clientSide === side.side);
-        if (fb && !fb.isCompleted && fb.lastNotifiedAt) pendingFeedbacks++;
-      }
-    }
-
-    const responseRate =
-      expectedSides > 0
-        ? Number(((completedFeedbacks.length / expectedSides) * 100).toFixed(1))
-        : null;
+    /**
+     * COUNTING RULE (docs/FEEDBACK-FLOW.md): the unit is a RESPONSE (one recipient
+     * / one clientSide), not an event — a wedding contributes two.
+     *   responseRate = responses / surveys actually SENT
+     *   coverageRate = responses / every recipient a finished event has
+     */
+    const responseRate = percentage(completedFeedbacks.length, sentSides);
+    const coverageRate = percentage(completedFeedbacks.length, expectedSides);
 
     const recentLow = completedFeedbacks
       .filter((f) => f.averageScore != null && f.averageScore <= 3)
@@ -723,8 +680,10 @@ export const feedbackController = {
           lowScore,
           excellent,
           expectedSides,
+          sentSides,
         },
         responseRate,
+        coverageRate,
         byEventType,
         byMonth,
         byYear,

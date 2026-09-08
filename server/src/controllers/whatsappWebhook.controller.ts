@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import { getWhatsAppConfig } from '../config/whatsapp.config';
 import { logger } from '../utils/logger';
 import { catchAsync } from '../middlewares/errorHandler';
 import { reportUnexpectedError } from '../utils/reportUnexpectedError';
@@ -8,6 +9,15 @@ import {
   resolveManagerWhatsAppPhone,
   sendWhatsAppCloudText,
 } from '../Services/whatsappCloud.service';
+import {
+  markWebhookEventFailed,
+  markWebhookEventProcessed,
+  parseWebhookEnvelope,
+  persistWebhookEvent,
+  processWebhookItem,
+  resolveTenantForWebhook,
+  type ParsedWebhookItem,
+} from '../Services/whatsapp';
 
 export type IncomingWhatsAppMessage = {
   from: string;
@@ -27,7 +37,7 @@ export const verifyWhatsAppWebhook = (req: Request, res: Response): void => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN?.trim();
+  const verifyToken = getWhatsAppConfig().webhookVerifyToken;
 
   if (mode === 'subscribe' && verifyToken && token === verifyToken && typeof challenge === 'string') {
     logger.info('WhatsApp webhook verified');
@@ -35,12 +45,19 @@ export const verifyWhatsAppWebhook = (req: Request, res: Response): void => {
     return;
   }
 
+  // Never echo the expected token — only whether it matched.
   logger.warn('WhatsApp webhook verification failed', {
     mode,
     tokenMatch: Boolean(verifyToken && token === verifyToken),
   });
   res.sendStatus(403);
 };
+
+// ---------------------------------------------------------------------------
+// Legacy inbound handling (kept intact — see docs/whatsapp/webhooks.md).
+// The WhatsAppInboundMessage table and the manager-forward behaviour predate the
+// module below and remain the source of truth for the existing manager workflow.
+// ---------------------------------------------------------------------------
 
 function extractIncomingMessages(payload: unknown): IncomingWhatsAppMessage[] {
   const messages: IncomingWhatsAppMessage[] = [];
@@ -159,14 +176,7 @@ async function appendManagerCommentNote(
   });
 }
 
-/**
- * POST /api/webhooks/whatsapp
- * Incoming Meta webhook events: match booking, persist, forward to manager.
- */
-export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Response) => {
-  // Acknowledge immediately-safe: process after response if needed; keep sync for reliability in this app size.
-  const incoming = extractIncomingMessages(req.body);
-
+async function runLegacyInboundFlow(incoming: IncomingWhatsAppMessage[]): Promise<void> {
   for (const msg of incoming) {
     const from = formatPhoneForWhatsAppCloud(msg.from);
     const booking = await findBookingForInboundPhone(from);
@@ -188,8 +198,10 @@ export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Respon
         const note = msg.text?.trim() || `[${msg.type}]`;
         await appendManagerCommentNote(booking.id, booking.managerComments, note);
       } else {
-        // Persist orphan inbound against first active tenant if possible
-        const tenant = await prisma.tenant.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } });
+        const tenant = await prisma.tenant.findFirst({
+          where: { isActive: true },
+          orderBy: { createdAt: 'asc' },
+        });
         if (tenant) {
           await prisma.whatsAppInboundMessage.create({
             data: {
@@ -214,7 +226,7 @@ export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Respon
 
     const managerPhone = resolveManagerWhatsAppPhone();
     let forwarded = false;
-    if (managerPhone) {
+    if (managerPhone && getWhatsAppConfig().features.forwardInboundToManager) {
       const forward = await sendWhatsAppCloudText(
         managerPhone,
         buildManagerForwardText({ from, text: msg.text, booking }),
@@ -246,12 +258,85 @@ export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Respon
       forwardedToManager: forwarded,
     });
   }
+}
 
-  if (incoming.length === 0) {
-    logger.debug('WhatsApp webhook event with no inbound messages', {
-      object: (req.body as { object?: string })?.object,
+// ---------------------------------------------------------------------------
+// Webhook entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Persist every parsed item first (the idempotency gate), then either process it
+ * inline or leave it for the background worker.
+ */
+async function ingest(items: ParsedWebhookItem[]): Promise<{ stored: number; duplicates: number }> {
+  const config = getWhatsAppConfig();
+  let stored = 0;
+  let duplicates = 0;
+
+  for (const item of items) {
+    const tenantId = await resolveTenantForWebhook(
+      item.kind === 'message' ? item.phoneNumberId : null,
+    );
+
+    const { id, duplicate } = await persistWebhookEvent({ item, tenantId });
+    if (duplicate) {
+      duplicates += 1;
+      continue;
+    }
+    stored += 1;
+
+    // Async mode: return now, let runWhatsAppWebhookWorker do the work (§14).
+    if (config.features.asyncWebhookProcessing) continue;
+
+    try {
+      const handled = await processWebhookItem(item, tenantId);
+      await markWebhookEventProcessed(id, !handled);
+    } catch (error) {
+      // The event row survives, so the worker will retry it — the HTTP response
+      // still succeeds so Meta does not redeliver the whole batch.
+      await markWebhookEventFailed(id, error);
+    }
+  }
+
+  return { stored, duplicates };
+}
+
+/**
+ * POST /api/webhooks/whatsapp
+ *
+ * Always answers 200 once the payload is persisted. Returning 5xx would make Meta
+ * redeliver the entire batch, and the idempotency gate makes that unnecessary.
+ */
+export const handleWhatsAppWebhook = catchAsync(async (req: Request, res: Response) => {
+  const items = parseWebhookEnvelope(req.body);
+
+  let summary = { stored: 0, duplicates: 0 };
+  try {
+    summary = await ingest(items);
+  } catch (error) {
+    reportUnexpectedError(error, {
+      source: 'whatsapp.webhook.ingest',
+      title: 'WhatsApp webhook ingestion failed',
+      alert: false,
     });
   }
+
+  // Legacy path: unchanged behaviour for the manager-forward workflow.
+  const incoming = extractIncomingMessages(req.body);
+  if (incoming.length > 0) {
+    await runLegacyInboundFlow(incoming);
+  } else {
+    logger.debug('WhatsApp webhook event with no inbound messages', {
+      object: (req.body as { object?: string })?.object,
+      items: items.length,
+    });
+  }
+
+  logger.info('WhatsApp webhook accepted', {
+    items: items.length,
+    stored: summary.stored,
+    duplicates: summary.duplicates,
+  });
 
   res.sendStatus(200);
 });

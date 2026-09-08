@@ -2,6 +2,23 @@ import prisma from '../../src/config/prisma';
 import { calendarDateForStorage } from '../../src/utils/dateLocal';
 import { TEST_EMAIL } from './authTestHelpers';
 
+/**
+ * Every row in this schema belongs to a tenant, so the integration fixtures need
+ * one. These helpers previously created AuthorizedUser / SystemSettings /
+ * EventDate without it, which did not type-check — the whole integration suite
+ * failed to compile.
+ */
+export const TEST_TENANT_ID = 'integration-test-tenant';
+
+export async function ensureTestTenant(): Promise<string> {
+  await prisma.tenant.upsert({
+    where: { id: TEST_TENANT_ID },
+    create: { id: TEST_TENANT_ID, name: 'Integration Test Tenant', subdomain: TEST_TENANT_ID },
+    update: {},
+  });
+  return TEST_TENANT_ID;
+}
+
 /** מפתח תאריך ייחודי (2031, יום שלישי) — ערב מותר; לא שישי/שבת בעייתיים */
 let testTuesdayOffset = 0;
 
@@ -16,20 +33,12 @@ export function uniqueTestCalendarKey(): string {
 }
 
 export async function ensureIntegrationFixtures(): Promise<string> {
-  let tenant = await prisma.tenant.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!tenant) {
-    tenant = await prisma.tenant.create({
-      data: { name: 'Integration Test Tenant', subdomain: `integration-test-${Date.now()}`, isActive: true },
-    });
-  }
+  const tenantId = await ensureTestTenant();
 
   await prisma.authorizedUser.upsert({
     where: { email: TEST_EMAIL },
-    create: { email: TEST_EMAIL, role: 'manager', tenantId: tenant.id },
-    update: { role: 'manager', tenantId: tenant.id },
+    create: { email: TEST_EMAIL, role: 'manager', tenantId },
+    update: { role: 'manager', tenantId },
   });
 
   await prisma.systemSettings.upsert({
@@ -44,6 +53,7 @@ export async function ensureIntegrationFixtures(): Promise<string> {
 export async function createAvailableEventDate(calendarKey: string, tenantId: string) {
   return prisma.eventDate.create({
     data: {
+      tenantId,
       date: calendarDateForStorage(calendarKey),
       status: 'AVAILABLE',
       tenantId,

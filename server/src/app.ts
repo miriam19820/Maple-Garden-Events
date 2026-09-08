@@ -25,6 +25,7 @@ import checkInRoutes from './routes/checkIn.routes';
 import easyCountRoutes from './routes/easyCount.routes';
 import easyCountWebhookRoutes from './routes/easyCountWebhook.routes';
 import whatsappWebhookRoutes from './routes/whatsappWebhook.routes';
+import whatsappRoutes from './routes/whatsapp.routes';
 import filesRoutes from './routes/files.routes';
 import checkScanRoutes from './routes/checkScan.routes';
 import designGalleryRoutes from './routes/designGallery.routes';
@@ -158,6 +159,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/scan-check', checkScanRoutes);
 app.use('/api/design-gallery', designGalleryRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 const shouldServeClient =
   process.env.SERVE_CLIENT === 'true' || process.env.NODE_ENV === 'production';

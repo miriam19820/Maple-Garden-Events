@@ -20,6 +20,11 @@ export const eventCheckInUpdate = jest.fn();
 export const whatsappInboundCreate = jest.fn();
 export const whatsappInboundUpdateMany = jest.fn();
 export const tenantFindFirst = jest.fn();
+/** The new WhatsApp module resolves the tenant via findMany; default to none. */
+export const tenantFindMany = jest.fn(async () => []);
+export const whatsappWebhookEventCreate = jest.fn(async () => ({ id: 'evt-1' }));
+export const whatsappWebhookEventFindUnique = jest.fn(async () => null);
+export const whatsappWebhookEventUpdate = jest.fn(async () => ({ id: 'evt-1' }));
 
 const prismaMock: Record<string, unknown> = {
   authorizedUser: {
@@ -61,6 +66,12 @@ const prismaMock: Record<string, unknown> = {
   },
   tenant: {
     findFirst: tenantFindFirst,
+    findMany: tenantFindMany,
+  },
+  whatsAppWebhookEvent: {
+    create: whatsappWebhookEventCreate,
+    findUnique: whatsappWebhookEventFindUnique,
+    update: whatsappWebhookEventUpdate,
   },
 };
 
