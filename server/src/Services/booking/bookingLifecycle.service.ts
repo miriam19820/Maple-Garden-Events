@@ -229,7 +229,7 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
       }
 
       let eventDate = await tx.eventDate.findFirst({
-        where: prismaCalendarDayWhere(calendarKey),
+        where: { tenantId, ...prismaCalendarDayWhere(calendarKey) },
         include: { bookings: true },
       });
 

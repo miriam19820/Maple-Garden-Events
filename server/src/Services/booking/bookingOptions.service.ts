@@ -127,7 +127,7 @@ export async function releaseOptions(req: AuthRequest | Request): Promise<HttpRe
   if (!dateIds || dateIds.length === 0) return { status: 400, body: { success: false, message: 'לא נבחרו תאריכים לשחרור.' } };
 
   await prisma.$transaction(async (tx) => {
-    await tx.eventDate.updateMany({ where: { id: { in: dateIds } }, data: { status: 'AVAILABLE', optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null }
+    await tx.eventDate.updateMany({ where: { id: { in: dateIds }, tenantId }, data: { status: 'AVAILABLE', optionExpiresAt: null, clientName: null, clientPhone: null, clientEmail: null }
     });
 
     await tx.booking.deleteMany({ 

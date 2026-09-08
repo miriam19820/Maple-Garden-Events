@@ -280,6 +280,27 @@ export const sendPaymentOverdueReminderWhatsApp = async (
   );
 };
 
+/**
+ * Build the post-event feedback WhatsApp message. Exported so tests can assert on
+ * the exact text a customer receives — `server/tests/feedbackMessages.test.ts`
+ * fails if any template placeholder such as `{shortName}` survives.
+ */
+export function buildFeedbackRequestWhatsAppMessage(
+  clientName: string | null,
+  link: string,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const { t } = getServerTranslation(locale);
+  const name = clientName ? clientName.split(' ')[0] : t(T.SERVER.COMMON.DEAR_GUEST);
+  return (
+    `${t(T.SERVER.WHATSAPP.FEEDBACK.GREETING, { name })}\n\n` +
+    `${t(T.SERVER.WHATSAPP.FEEDBACK.BODY, { link })}\n` +
+    `${t(T.SERVER.WHATSAPP.FEEDBACK.SECURITY_NOTE)}\n\n` +
+    `${t(T.SERVER.WHATSAPP.FEEDBACK.CLOSING)}\n` +
+    `\n--------------------------\n🤖 _${t(T.SERVER.COMMON.AUTO_FOOTER)}_`
+  );
+}
+
 export const sendFeedbackRequestWhatsApp = async (
   clientPhone: string,
   clientName: string | null,
@@ -287,17 +308,9 @@ export const sendFeedbackRequestWhatsApp = async (
   locale: Locale = DEFAULT_LOCALE,
 ): Promise<WhatsAppSendResult> => {
   const { t } = getServerTranslation(locale);
-  const name = clientName ? clientName.split(' ')[0] : t(T.SERVER.COMMON.DEAR_GUEST);
-  const message =
-    `${t(T.SERVER.WHATSAPP.FEEDBACK.GREETING, { name })}\n\n` +
-    `${t(T.SERVER.WHATSAPP.FEEDBACK.BODY, { link })}\n` +
-    `${t(T.SERVER.WHATSAPP.FEEDBACK.SECURITY_NOTE)}\n\n` +
-    `${t(T.SERVER.WHATSAPP.FEEDBACK.CLOSING)}\n` +
-    `\n--------------------------\n🤖 _${t(T.SERVER.COMMON.AUTO_FOOTER)}_`;
-
   return deliverWhatsApp(
     clientPhone,
-    message,
+    buildFeedbackRequestWhatsAppMessage(clientName, link, locale),
     t(T.SERVER.WHATSAPP.FEEDBACK.LOG_TYPE),
     locale,
   );

@@ -34,6 +34,11 @@ const ARCHIVE_BOOKING_INCLUDE = {
   eventForm: { select: { id: true } },
 } as const;
 
+/**
+ * Hard-delete a set of bookings and everything hanging off them. The ids are
+ * always produced by a query in this module, so tenancy is already decided by the
+ * caller; the deletes are keyed by those ids.
+ */
 async function hardDeleteBookingsByIds(bookingIds: string[]): Promise<void> {
   if (bookingIds.length === 0) return;
 
@@ -87,12 +92,21 @@ export async function deleteExpiredArchivedEvents(now: Date = new Date()): Promi
 
 /**
  * Mark confirmed events whose date is yesterday or earlier as ARCHIVED.
+ *
+ * Pass `tenantId` to archive a single tenant's calendar; omit it for the nightly
+ * job, which archives every tenant. Archiving never affects the post-event
+ * feedback flow — feedback eligibility is derived from the event end datetime,
+ * not from `EventDate.status` (see docs/FEEDBACK-FLOW.md).
  */
-export async function archivePastEvents(now: Date = new Date()): Promise<number> {
+export async function archivePastEvents(
+  now: Date = new Date(),
+  tenantId?: string,
+): Promise<number> {
   const cutoff = getArchiveCutoff(now);
 
   const dates = await prisma.eventDate.findMany({
     where: {
+      ...(tenantId ? { tenantId } : {}),
       status: EventStatus.BOOKED,
       date: { lt: cutoff },
       bookings: { some: { isOption: false } },
@@ -104,7 +118,7 @@ export async function archivePastEvents(now: Date = new Date()): Promise<number>
 
   const ids = dates.map((d) => d.id);
   await prisma.eventDate.updateMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, ...(tenantId ? { tenantId } : {}) },
     data: { status: EventStatus.ARCHIVED },
   });
 

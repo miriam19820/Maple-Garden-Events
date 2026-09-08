@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
+import type { AuthRequest } from '../middlewares/auth';
 import { calendarService } from '../Services/calendar.service';
 import { invalidateCache } from '../middlewares/cacheMiddleware';
 import { catchAsync } from '../middlewares/errorHandler';
 import { AppError } from '../utils/AppError';
 
 export const calendarController = {
-  getAllDates: catchAsync(async (req: Request, res: Response) => {
+  getAllDates: catchAsync(async (req: AuthRequest, res: Response) => {
     const { start, end, eventType } = req.query;
     const parseLocalDateStart = (s: string) => {
       const [y, m, d] = s.split('-').map(Number);
@@ -24,6 +25,7 @@ export const calendarController = {
       parseLocalDateStart(start),
       parseLocalDateEnd(end),
       eventType as string,
+      req.user?.tenantId,
     );
     res.json(dates);
   }),
@@ -37,25 +39,25 @@ export const calendarController = {
     res.json(result);
   }),
 
-  releaseDate: catchAsync(async (req: Request, res: Response) => {
+  releaseDate: catchAsync(async (req: AuthRequest, res: Response) => {
     const dateStr = req.params.dateStr as string;
-    const result = await calendarService.releaseDate(dateStr);
+    const result = await calendarService.releaseDate(dateStr, req.user?.tenantId);
     await invalidateCache('calendar');
     res.json(result);
   }),
 
-  createOption: catchAsync(async (req: Request, res: Response) => {
+  createOption: catchAsync(async (req: AuthRequest, res: Response) => {
     const dateId = req.params.dateId as string;
     const bookingDetails = req.body;
-    const result = await calendarService.createOption(dateId, bookingDetails);
+    const result = await calendarService.createOption(dateId, bookingDetails, req.user?.tenantId);
     await invalidateCache('calendar');
     res.json(result);
   }),
 
-  bookFinal: catchAsync(async (req: Request, res: Response) => {
+  bookFinal: catchAsync(async (req: AuthRequest, res: Response) => {
     const dateId = req.params.dateId as string;
     const bookingDetails = req.body;
-    const result = await calendarService.bookEventFinal(dateId, bookingDetails);
+    const result = await calendarService.bookEventFinal(dateId, bookingDetails, req.user?.tenantId);
     await invalidateCache('calendar');
     res.json(result);
   }),

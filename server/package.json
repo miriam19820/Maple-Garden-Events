@@ -14,6 +14,7 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:migrate:deploy": "bash scripts/db-migrate-deploy.sh",
+    "db:migrate:apply": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:migrate:status": "prisma migrate status --schema prisma/schema.prisma",
     "data:backfill-event-codes": "ts-node scripts/migrate-legacy-event-codes.ts",
     "fix:contract-sync": "ts-node scripts/fix-contract-sync.ts",

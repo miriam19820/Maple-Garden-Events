@@ -35,6 +35,14 @@ describe('health aggregation', () => {
     expect(aggregateHealthStatus(checks({ s3: check('degraded') }))).toBe('degraded');
   });
 
+  it('returns degraded when a non-DB dependency is down, not ok', () => {
+    // Regression: only 'degraded' used to be counted, so a hard-down dependency —
+    // e.g. a production server with no email credentials — reported overall 'ok'.
+    expect(aggregateHealthStatus(checks({ email: check('down', 'not configured') }))).toBe('degraded');
+    expect(aggregateHealthStatus(checks({ s3: check('down') }))).toBe('degraded');
+    expect(readinessHttpStatus(aggregateHealthStatus(checks({ email: check('down') })))).toBe(200);
+  });
+
   it('maps readiness HTTP status from overall status', () => {
     expect(readinessHttpStatus('ok')).toBe(200);
     expect(readinessHttpStatus('degraded')).toBe(200);

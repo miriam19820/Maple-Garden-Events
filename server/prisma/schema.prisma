@@ -225,7 +225,13 @@ model EventDate {
   id              String    @id @default(uuid())
   tenantId        String
   tenant          Tenant    @relation(fields: [tenantId], references: [id])
-  date            DateTime  @unique
+  /**
+   * One calendar date row per tenant. This used to be `@unique` on `date` alone,
+   * which made a date global across tenants: tenant B could not hold a date
+   * tenant A already had, and an untenanted lookup could return another tenant's
+   * row. See docs/EVENTDATE-TENANCY.md.
+   */
+  date            DateTime
   status          String
   lockedBy        String?
   clientName      String?
@@ -234,7 +240,9 @@ model EventDate {
   optionExpiresAt DateTime?
   bookings        Booking[]
 
+  @@unique([tenantId, date])
   @@index([tenantId])
+  @@index([date])
 }
 
 model EventForm {
@@ -416,15 +424,24 @@ model Feedback {
   token             String    @unique
   isCompleted       Boolean   @default(false)
   completedAt       DateTime?
+  /** Set once delivery succeeded — terminal state, the row is never notified again. */
   lastNotifiedAt    DateTime?
   lastEmailSent     Boolean   @default(false)
   lastWhatsappSent  Boolean   @default(false)
+  /** Delivery attempts made so far (bounded by FEEDBACK_MAX_NOTIFY_ATTEMPTS). */
+  notifyAttempts    Int       @default(0)
+  /** Timestamp of the last attempt — doubles as the concurrency claim marker. */
+  lastNotifyAttemptAt DateTime?
+  /** Why the last attempt delivered nothing (diagnostics; never contains secrets). */
+  lastNotifyError   String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   booking           Booking   @relation(fields: [bookingId], references: [id])
 
   @@unique([bookingId, clientSide])
   @@index([tenantId])
+  /** Supports the worker's pending-delivery scan. */
+  @@index([tenantId, isCompleted, lastNotifiedAt])
 }
 
 model KashrutCertificate {

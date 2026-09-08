@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { logger } from '../utils/logger';
+import { describeEmailConfig, isEmailRequired } from './emailConfig';
 
 dotenv.config();
 
@@ -50,6 +51,48 @@ const validateWhatsAppEnv = (): void => {
   }
 };
 
+/**
+ * Email follows the same principle as WhatsApp above, with two differences: it is
+ * not opt-in (post-event feedback is a core product feature, so there is deliberately
+ * no `EMAIL_ENABLED` switch), and a missing credential does NOT stop the server.
+ *
+ * Without credentials the mailer falls back to simulation (mailer.ts `deliverMail`).
+ * That fallback is correct and stays: a simulated send is never counted as delivered,
+ * so rows stay retryable. The danger was only that it was *silent* — every customer
+ * survey evaporating while every dashboard read "0 sent", indistinguishable from
+ * "no events happened".
+ *
+ * Deliberate trade-off: refusing to boot would take down bookings, contracts and
+ * payments over a mail credential, so the failure is made LOUD instead of fatal —
+ *   1. a critical, unmissable error in the boot log, and
+ *   2. `/health/ready` → `checks.email: down` → aggregate `degraded`
+ *      (Services/health.service.ts, via config/emailConfig.emailHealthCheck).
+ * The second one is what monitoring must alert on; the log alone can be scrolled past.
+ *
+ * Outside production the same state is an ordinary warning — simulation is the
+ * intended developer experience there.
+ */
+const validateEmailEnv = (): void => {
+  const { configured, missing } = describeEmailConfig();
+  if (configured) return;
+
+  if (!isEmailRequired()) {
+    logger.warn(
+      `Email is not configured (${missing.join(', ')}) — outgoing mail will be SIMULATED, not sent. `
+        + 'Expected outside production.',
+    );
+    return;
+  }
+
+  logger.error(
+    `CRITICAL: NODE_ENV=production but email is NOT configured — ${missing.join(', ')} missing. `
+      + 'Every customer email (post-event feedback surveys included) will be SIMULATED and NOT delivered. '
+      + 'The server is starting anyway so the rest of the system stays available, and '
+      + '/health/ready reports email as "down" (overall status "degraded") until this is fixed. '
+      + 'Set them in the server env file (EMAIL_PASSWORD is accepted as a legacy alias for EMAIL_PASS).',
+  );
+};
+
 export const validateEnv = () => {
   const missing = requiredEnvVars.filter((envVar) => !process.env[envVar]);
   if (missing.length > 0) {
@@ -57,5 +100,6 @@ export const validateEnv = () => {
     process.exit(1);
   }
   validateWhatsAppEnv();
+  validateEmailEnv();
   logger.info('Environment variables loaded successfully');
 };

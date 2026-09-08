@@ -68,14 +68,31 @@ export function getEventEndTimeString(
   return getSlotEndTimeString(booking);
 }
 
-function buildDateTime(eventDateStr: string, timeStr: string, isEnd = false): Date {
+function toMinutes(timeStr: string): number {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+}
+
+function buildDateTime(eventDateStr: string, timeStr: string, addDays = 0): Date {
   const [year, month, day] = eventDateStr.split('-').map(Number);
   const [hours, minutes] = timeStr.split(':').map(Number);
-  const dt = new Date(year, month - 1, day, hours || 0, minutes || 0, 0, 0);
-  if (isEnd && hours === 0 && minutes === 0 && timeStr === '00:00') {
-    dt.setDate(dt.getDate() + 1);
-  }
-  return dt;
+  return new Date(year, month - 1, day + addDays, hours || 0, minutes || 0, 0, 0);
+}
+
+/**
+ * Overnight rule: an event whose end clock-time is at or before its start clock-time
+ * ends on the FOLLOWING civil day.
+ *
+ *   18:00 → 00:00  ends next day 00:00   (default evening slot)
+ *   19:00 → 01:00  ends next day 01:00   (was previously resolved to the SAME day 01:00)
+ *   23:30 → 02:00  ends next day 02:00
+ *   22:00 → 23:00  ends same day 23:00
+ *   08:00 → 12:00  ends same day 12:00
+ *
+ * `endsNextDay` is exported so callers can reason about the span explicitly.
+ */
+export function endsNextDay(startTime: string, endTime: string): boolean {
+  return toMinutes(endTime) <= toMinutes(startTime);
 }
 
 export function getSlotStartDateTime(eventDateStr: string, booking: BookingTime): Date {
@@ -83,7 +100,9 @@ export function getSlotStartDateTime(eventDateStr: string, booking: BookingTime)
 }
 
 export function getSlotEndDateTime(eventDateStr: string, booking: BookingTime): Date {
-  return buildDateTime(eventDateStr, getSlotEndTimeString(booking), true);
+  const start = getSlotStartTimeString(booking);
+  const end = getSlotEndTimeString(booking);
+  return buildDateTime(eventDateStr, end, endsNextDay(start, end) ? 1 : 0);
 }
 
 export function getEventStartDateTime(
@@ -94,12 +113,17 @@ export function getEventStartDateTime(
   return buildDateTime(eventDateStr, getEventStartTimeString(booking, eventForm));
 }
 
+/**
+ * End instant of the event. The end clock-time always comes from the booking slot
+ * (`timeOfDay`), so the overnight comparison uses the slot start — not
+ * `eventForm.eventTime`, which only refines the *start* shown to staff.
+ */
 export function getEventEndDateTime(
   eventDateStr: string,
   booking: BookingTime,
-  eventForm?: EventFormTime | null
+  _eventForm?: EventFormTime | null
 ): Date {
-  return buildDateTime(eventDateStr, getEventEndTimeString(booking, eventForm), true);
+  return getSlotEndDateTime(eventDateStr, booking);
 }
 
 export function isEventDay(eventDateStr: string, now: Date = new Date()): boolean {
