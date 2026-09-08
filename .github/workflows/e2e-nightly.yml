@@ -1,0 +1,69 @@
+name: E2E Nightly (staging)
+
+# Runs nightly against staging. The staging EC2 sleeps 01:00-09:00 Israel
+# time (infra/terraform/environments/staging/main.tf), so this workflow
+# wakes it up first and waits for it to respond before running tests.
+
+on:
+  schedule:
+    - cron: '30 22 * * *'   # 22:30 UTC ≈ 01:30 Israel time (shifts ±1h with DST)
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: Run Playwright e2e against staging
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BASE_URL: https://${{ secrets.DOMAIN }}
+      PLAYWRIGHT_SKIP_WEBSERVER: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.STAGING_EC2_WAKE_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.STAGING_EC2_WAKE_SECRET_ACCESS_KEY }}
+          aws-region: il-central-1
+
+      - name: Wake staging EC2
+        run: aws ec2 start-instances --instance-ids "${{ secrets.STAGING_EC2_INSTANCE_ID }}"
+
+      - name: Wait for staging to respond
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null "https://${{ secrets.DOMAIN }}"; then
+              echo "Staging is up"
+              exit 0
+            fi
+            echo "Waiting for staging... ($i/30)"
+            sleep 10
+          done
+          echo "Staging did not come up in time" >&2
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        run: npm run test:e2e
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Put staging EC2 back to sleep
+        if: always()
+        run: aws ec2 stop-instances --instance-ids "${{ secrets.STAGING_EC2_INSTANCE_ID }}"
