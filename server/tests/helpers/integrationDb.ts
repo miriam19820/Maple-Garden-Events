@@ -11,12 +11,26 @@ import { TEST_EMAIL } from './authTestHelpers';
 export const TEST_TENANT_ID = 'integration-test-tenant';
 
 export async function ensureTestTenant(): Promise<string> {
-  await prisma.tenant.upsert({
-    where: { id: TEST_TENANT_ID },
-    create: { id: TEST_TENANT_ID, name: 'Integration Test Tenant', subdomain: TEST_TENANT_ID },
-    update: {},
+  // SystemSettings.id is a global singleton (`global`). The booking path reads
+  // that row, so fixtures must use the same tenant it already belongs to —
+  // usually the first active staging/prod tenant. A dedicated test tenant
+  // leaves settings on tenant A and the test user on tenant B, and CI 500s.
+  const existingSettings = await prisma.systemSettings.findUnique({ where: { id: 'global' } });
+  if (existingSettings?.tenantId) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: existingSettings.tenantId } });
+    if (tenant) return tenant.id;
+  }
+
+  let tenant = await prisma.tenant.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'asc' },
   });
-  return TEST_TENANT_ID;
+  if (!tenant) {
+    tenant = await prisma.tenant.create({
+      data: { name: 'Integration Test Tenant', subdomain: `integration-test-${Date.now()}`, isActive: true },
+    });
+  }
+  return tenant.id;
 }
 
 /** מפתח תאריך ייחודי (2031, יום שלישי) — ערב מותר; לא שישי/שבת בעייתיים */

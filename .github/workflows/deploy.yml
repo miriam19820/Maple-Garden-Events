@@ -40,6 +40,11 @@ jobs:
       - name: Run server unit tests (contract-lineItems)
         run: npm run test:unit -w server
 
+      - name: Apply pending Prisma migrations (staging DB)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: npm run db:migrate:apply -w server
+
       - name: Run integration tests (staging DB)
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
