@@ -4,6 +4,7 @@ import prisma from '../config/prisma';
 import { deliverMail, getFromAddress, mailFailureMessage, type MailDeliveryResult } from '../utils/mailer';
 import { logger } from '../utils/logger';
 import { sendGreetingWhatsApp } from '../utils/whatsapp';
+import { getBrandConfig } from '@maple/shared/brand';
 
 const GREETING_UPLOAD_DIR = path.resolve(__dirname, '../../uploads/greetings');
 
@@ -53,13 +54,13 @@ async function sendGreetingEmail(
       html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #1e293b; padding: 20px; text-align: center;">
-          <h2 style="color: #fff; margin: 0;">גן אירועים מייפל 🍁</h2>
+          <h2 style="color: #fff; margin: 0;">${getBrandConfig().publicVenueName}</h2>
         </div>
         <div style="padding: 25px;">
           <p style="font-size: 1.05rem;">שלום <strong>${name}</strong>,</p>
           <div style="font-size: 1rem; line-height: 1.7; white-space: pre-line;">${message}</div>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #64748b; font-size: 0.85rem;">בברכה,<br/><strong>צוות מייפל - גן אירועים</strong></p>
+          <p style="color: #64748b; font-size: 0.85rem;">בברכה,<br/><strong>צוות ${getBrandConfig().shortName}</strong></p>
         </div>
       </div>
     `,

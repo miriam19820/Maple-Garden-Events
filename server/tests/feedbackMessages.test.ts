@@ -51,7 +51,7 @@ describe('feedback email', () => {
     it(`[${locale}] names the venue instead of a placeholder`, () => {
       const brand = getBrandConfig();
       const mail = buildFeedbackRequestMail('client@example.test', null, LINK, locale);
-      const expectedName = locale === 'en' ? 'Maple' : brand.shortName;
+      const expectedName = locale === 'en' ? brand.publicVenueNameEn : brand.shortName;
       expect(String(mail.html)).toContain(expectedName);
       expect(String(mail.html)).not.toContain('{shortName}');
     });

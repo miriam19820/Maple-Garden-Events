@@ -8,5 +8,5 @@ export function buildDefaultOptionInterestMessage(
     ? eventDateStr.split('-').reverse().join('/')
     : new Date(eventDateStr).toLocaleDateString('he-IL');
   const brand = getBrandConfig();
-  return `שלום ${clientName}, מתענינים בתאריך שלך (${dateDisplay}) בגן האירועים ${brand.shortName}. נשמח לשמוע ממך בהקדם.`;
+  return `שלום ${clientName}, מתענינים בתאריך שלך (${dateDisplay}) ב${brand.publicVenueName}. נשמח לשמוע ממך בהקדם.`;
 }

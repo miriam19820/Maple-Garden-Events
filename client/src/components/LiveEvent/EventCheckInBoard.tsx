@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getBrandConfig } from '@shared/brand/index';
 import styles from './LiveEvent.module.css';
 
 export interface ReserveTableRow {
@@ -82,7 +83,7 @@ const EventCheckInBoardInner: React.FC<EventCheckInBoardProps> = ({
       <p className={styles.checkInBsd}>{t(T.LIVE_EVENT.BSD)}</p>
 
       <div className={styles.checkInHeader}>
-        <img src="/logo.png" alt={t(T.UI.BRAND_ALT)} className={styles.checkInLogo} />
+        <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.checkInLogo} />
         <p className={styles.checkInBrand}>{t(T.UI.BRAND_NAME)}</p>
         <p className={styles.checkInSubtitle}>{t(T.UI.VENUE_TAGLINE)}</p>
       </div>

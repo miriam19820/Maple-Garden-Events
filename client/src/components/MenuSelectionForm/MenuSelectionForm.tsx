@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getBrandConfig } from '@shared/brand/index';
 import styles from '../MenuDisplay/MenuDisplay.module.css';
 import { menuData, CATEGORY_LIMITS } from '../MenuDisplay/menuData';
 
@@ -50,7 +51,7 @@ const MenuSelectionForm: React.FC<MenuSelectionFormProps> = ({ initialSelections
     <div className={styles.menuWrapper}>
       <div className={styles.header}>
         <div className={styles.logoContainer}>
-          <img src="/logo.png" alt="Maple Logo" className={styles.menuLogo} />
+          <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.menuLogo} />
         </div>
         <h2 className={styles.mainTitle}>{t(T.MENU.SELECTION_TITLE)}</h2>
         <div className={styles.accentLine}></div>

@@ -11,7 +11,7 @@ import prisma from '../src/config/prisma';
 dotenv.config();
 
 const DEFAULT_TENANT = {
-  name: 'Maple HQ',
+  name: 'האולם / גן אירועים',
   subdomain: 'maple',
 } as const;
 

@@ -1,5 +1,5 @@
 /**
- * Hall-only billing — amounts billable to Maple Garden (Easy Count).
+ * Hall-only billing — amounts billable to the hall (Easy Count).
  * External supplier upgrades and ACUM are stored separately and excluded from totalPrice.
  */
 

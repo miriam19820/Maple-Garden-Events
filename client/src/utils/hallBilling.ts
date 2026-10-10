@@ -16,7 +16,7 @@ export interface BookingTotals {
   baseTotal: number;
   hallExtrasTotal: number;
   externalExtrasTotal: number;
-  /** baseTotal + hallExtrasTotal — billable to Maple Garden / Easy Count. */
+  /** baseTotal + hallExtrasTotal — billable to the hall / Easy Count. */
   hallTotal: number;
   /** Same as hallTotal — sent to server as the hall billable amount. */
   finalTotal: number;
