@@ -221,14 +221,14 @@ jobs:
               exit 1
             fi
 
-            HEADERS=$(curl -sI http://localhost/)
+            HEADERS=$(curl -skI https://localhost/)
             echo "$HEADERS"
             if ! echo "$HEADERS" | grep -qi 'cache-control:.*no-store'; then
               echo "❌ HTML is missing Cache-Control: no-store"
               exit 1
             fi
 
-            HTML=$(curl -s http://localhost/)
+            HTML=$(curl -sk https://localhost/)
             if ! echo "$HTML" | grep -q "build:${{ env.IMAGE_TAG }}"; then
               echo "❌ HTML build stamp does not match this commit (${{ env.IMAGE_TAG }})"
               echo "$HTML" | tail -n 8
@@ -237,7 +237,7 @@ jobs:
 
             CSS_PATH=$(echo "$HTML" | sed -n 's/.*href="\([^"]*index-[^"]*\.css\)".*/\1/p' | head -n 1)
             echo "bundled CSS: $CSS_PATH"
-            CSS=$(curl -s "http://localhost${CSS_PATH}")
+            CSS=$(curl -sk "https://localhost${CSS_PATH}")
             if ! echo "$CSS" | grep -q 'calendar-hybrid{display:flex'; then
               echo "❌ Deployed CSS is missing mobile hybrid display:flex"
               echo "$CSS" | tr '{' '\n' | grep -F 'calendar-hybrid' || true
