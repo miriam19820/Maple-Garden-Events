@@ -11,8 +11,9 @@ body {
 
 #root {
   height: 100dvh;
-  width: 100vw;
-  overflow: hidden;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 /* Safe area — iPhone notch / home indicator */

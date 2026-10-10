@@ -9,7 +9,7 @@ async function main() {
   if (!tenant) {
     tenant = await prisma.tenant.create({
       data: {
-        name: 'Maple Garden Events',
+        name: 'האולם / גן אירועים',
         subdomain: 'maple',
         isActive: true,
       }

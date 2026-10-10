@@ -41,10 +41,14 @@ RUN npx vite build
 # ─── Stage 2: serve static files via nginx ────────────────────────────────────
 FROM nginx:stable-alpine AS production
 
+ARG GIT_SHA=unknown
+
 RUN rm -rf /usr/share/nginx/html/*
 
 COPY --from=build /app/client/dist /usr/share/nginx/html
 COPY client/nginx.conf /etc/nginx/conf.d/default.conf
+# Unique per deploy so we can verify the running HTML matches this commit.
+RUN printf '\n<!-- build:%s -->\n' "$GIT_SHA" >> /usr/share/nginx/html/index.html
 
 EXPOSE 80
 

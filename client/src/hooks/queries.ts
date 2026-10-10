@@ -122,6 +122,13 @@ export function useArchiveEventsQuery(
 
 import { queryClient } from '../lib/queryClient';
 
+export async function invalidateCalendarData() {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+  ]);
+}
+
 export function prefetchCalendarDates(start: string, end: string, eventType: string) {
   queryClient.prefetchQuery({
     queryKey: ['calendar', start, end, eventType],
@@ -142,7 +149,7 @@ export function prefetchCalendarDates(start: string, end: string, eventType: str
       if (Array.isArray(json?.data)) return json.data as CalendarDayApi[];
       return [];
     },
-    staleTime: 0,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
 
@@ -168,7 +175,6 @@ export function useCalendarDatesQuery(start: string, end: string, eventType: str
     },
     enabled: Boolean(start && end),
     staleTime: 0,
-    refetchOnMount: 'always',
   });
 }
 

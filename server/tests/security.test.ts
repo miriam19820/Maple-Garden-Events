@@ -45,6 +45,7 @@ import {
   bookingFindUnique,
   eventCheckInFindUnique,
   systemSettingsFindUnique,
+  systemSettingsFindFirst,
 } from './helpers/prismaMock';
 import {
   TEST_EMAIL,
@@ -66,7 +67,7 @@ beforeAll(() => {
 });
 
 function mockDbUser(role: string, email = TEST_EMAIL, id = 'auth-user-1') {
-  authorizedUserFindUnique.mockResolvedValue({ id, email, role });
+  authorizedUserFindUnique.mockResolvedValue({ id, email, role, tenantId: 'tenant-1' });
 }
 
 function mockDbUserMissing() {
@@ -74,7 +75,12 @@ function mockDbUserMissing() {
 }
 
 function mockDbUserDowngraded(email = TEST_EMAIL) {
-  authorizedUserFindUnique.mockResolvedValue({ id: 'auth-user-1', email, role: 'floor_staff' });
+  authorizedUserFindUnique.mockResolvedValue({
+    id: 'auth-user-1',
+    email,
+    role: 'floor_staff',
+    tenantId: 'tenant-1',
+  });
 }
 
 function signWebhookBody(rawBody: string, secret = WEBHOOK_SECRET): string {
@@ -130,6 +136,7 @@ describe('שכבת אבטחה — SEC-01 עד SEC-05', () => {
     jest.clearAllMocks();
     process.env.EASY_COUNT_WEBHOOK_SECRET = WEBHOOK_SECRET;
     systemSettingsFindUnique.mockResolvedValue(defaultSystemSettings());
+    systemSettingsFindFirst.mockResolvedValue(defaultSystemSettings());
   });
 
   describe('SEC-01: RBAC — floor_staff לא יכול לגשת להגדרות', () => {
@@ -290,7 +297,7 @@ describe('SEC-07: Check-in access gate — floor_staff', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/יום האירוע|קבלה/);
+    expect(res.body.message).toMatch(/יום האירוע|קבלה/);
   });
 
   it('returns 200 on event day and strips PII/pricing fields', async () => {

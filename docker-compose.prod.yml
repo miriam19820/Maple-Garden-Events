@@ -40,6 +40,9 @@ services:
       - redis
     env_file: /app/server.env
     environment:
+      # All post-event feedback scheduling is done in local civil time
+      # (docs/FEEDBACK-FLOW.md §3). This MUST be the venue's timezone.
+      TZ: ${TZ:-Asia/Jerusalem}
       CLIENT_URL: https://__DOMAIN__
       PORT: "5000"
       REDIS_URL: redis://redis:6379

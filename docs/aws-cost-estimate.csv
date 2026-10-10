@@ -1,0 +1,11 @@
+Item,Staging ($/mo),Production ($/mo),Notes
+EC2 compute,~$8.70,~$30.70,t3.small ~416h/mo (auto-schedule) vs t3.medium 730h/mo (24/7)
+EBS disk,~$1.60,~$3.20,"gp3, $0.08/GB-mo x 20GB / 40GB"
+Elastic IP,~$3.65,~$3.65,$0.005/hr x 730h - billed 24/7 regardless of instance state
+S3 (files + backups),<$1,"<$1, growing","usage-based, $0.023/GB-mo - small at current scale"
+ECR (3 repos, capped),~$0.50-2,~$0.50-2,"$0.10/GB-mo, capped by lifecycle policy (max 5 images/repo)"
+Secrets Manager,shared secret - see note,shared secret - see note,"1 secret (github-token) shared by both envs, ~$0.40-0.45/mo total, not doubled"
+VPC / Subnet / IGW / SG / IAM / EventBridge,$0,$0,fully free
+,,,
+Estimated total - Staging,~$15-16/mo,,reference pricing (us-east-1) - il-central-1 is typically ~10-15% higher
+Estimated total - Production,,~$39-41/mo,reference pricing (us-east-1) - il-central-1 is typically ~10-15% higher

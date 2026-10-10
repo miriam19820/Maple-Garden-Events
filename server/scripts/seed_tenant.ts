@@ -9,7 +9,7 @@ async function main() {
   // 1. Create Default Tenant
   const tenant = await prisma.tenant.create({
     data: {
-      name: 'Maple HQ',
+      name: 'האולם / גן אירועים',
       subdomain: 'maple',
       isActive: true,
     },

@@ -54,7 +54,7 @@
       "PAGE_INFO": "עמוד {page} מתוך {totalPages} ({total} רשומות)"
     },
     "A11Y": {
-      "BRAND_ALT": "מיפל - גן אירועים בעיר",
+      "BRAND_ALT": "{venueName}",
       "LOADING": "טוען",
       "ITEMS": "{count} פריטים"
     }
@@ -252,7 +252,7 @@
     "REASON_EVENT_CANCELLED": "ביטול האירוע לחלוטין",
     "REASON_TERMS": "חוסר הסכמה על תנאים",
     "REASON_OTHER": "אחר",
-    "NOTIFY_DEFAULT": "שלום {clientName}, מתענינים בתאריך שלך ({date}) בגן האירועים מייפל. נשמח לשמוע ממך בהקדם.",
+    "NOTIFY_DEFAULT": "שלום {clientName}, מתענינים בתאריך שלך ({date}) ב{venueName}. נשמח לשמוע ממך בהקדם.",
     "NOTIFY_TITLE": "התראה ללקוח על אופציה",
     "NOTIFY_CLIENT": "לקוח:",
     "NOTIFY_MESSAGE": "הודעה:",

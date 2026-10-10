@@ -18,6 +18,7 @@ import {
   shouldSendAdvanceReceiptEmail,
   type EasyCountMode,
 } from './config';
+import { getBrandConfig } from '@maple/shared/brand';
 
 export type EasyCountIssueResult = {
   status: 'SKIPPED' | 'SIMULATED' | 'ISSUED' | 'FAILED';
@@ -209,7 +210,7 @@ export async function issueAdvanceReceipt(input: EasyCountReceiptInput): Promise
       },
     ],
     vat: String(vatRate),
-    comment: `מקדמה להזמנה ${input.eventCode} — גן אירועים מייפל`,
+    comment: `מקדמה להזמנה ${input.eventCode} — ${getBrandConfig().publicVenueName}`,
     dont_send_email: sendEmail ? 0 : 1,
     send_copy: 0,
     print_type: 'PDF',

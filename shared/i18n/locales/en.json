@@ -25,7 +25,7 @@
     "A11Y": {
       "SKIP_TO_CONTENT": "Skip to main content",
       "OPEN_MENU": "Open menu",
-      "BRAND_ALT": "Maple — Event Garden",
+      "BRAND_ALT": "{venueName}",
       "LOADING": "Loading",
       "ITEMS": "{count} items"
     },
@@ -73,8 +73,8 @@
   "AUTH": {
     "LOGIN": {
       "TITLE": "Admin sign in",
-      "SUBTITLE": "Maple Events Garden — management system",
-      "BRAND_ALT": "Maple Events",
+      "SUBTITLE": "{venueName} — management system",
+      "BRAND_ALT": "{venueName}",
       "ERROR_NO_GOOGLE_TOKEN": "No token received from Google",
       "ERROR_ACCESS_DENIED": "You do not have access to this system",
       "ERROR_NETWORK": "Server communication error — make sure it is running",
@@ -97,6 +97,7 @@
       "SUBTITLE_ARCHIVE": "Archived event — read-only view",
       "OVERRIDE_ALERT": "The option will be released and replaced by the new event when saved.",
       "OVERRIDE_ALERT_WITH_CLIENT": "The option for {clientName} will be released and replaced by the new event when saved.",
+      "DRAFT_RESTORE_CONFIRM": "An unsaved booking draft was found. Restore it?",
       "SELECT_TIME_BEFORE_DATES": "Select a time of day before adding dates.",
       "CONTRACT_READ_AND_SIGN": "I have read the contract, accept the terms, and sign",
       "CONTRACT_OPEN_MODAL": "Click to read the contract and sign digitally",
@@ -290,7 +291,7 @@
       "SAVE": "Save",
       "CANCEL": "Cancel",
       "EMPTY": "Could not load contract text — make sure the server is running (port 5000)",
-      "DISCLAIMER": "By signing, I confirm the accuracy of the details in this event form. I also declare that I have read and understood the terms and regulations of Maple Events Garden, and I fully agree to them.",
+      "DISCLAIMER": "By signing, I confirm the accuracy of the details in this event form. I also declare that I have read and understood the terms and regulations of {venueName}, and I fully agree to them.",
       "SIGNATURE_TITLE": "Client signature:",
       "SIGNATURE_SIDE_A": "Side A signature",
       "SIGNATURE_SIDE_B": "Side B signature",
@@ -415,7 +416,7 @@
     "MENU": "Menu",
     "GALLERY": "Gallery",
     "FEEDBACK_PAGE": "Customer feedback",
-    "SIDEBAR_VENUE": "Maple — Event Garden",
+    "SIDEBAR_VENUE": "{venueName}",
     "SIDEBAR_BACK_DASHBOARD": "Back to dashboard",
     "SIDEBAR_CLOSE": "Close menu",
     "SIDEBAR_MAIN_NAV": "Main navigation",
@@ -424,16 +425,16 @@
   },
   "SERVER": {
     "COMMON": {
-      "FROM_NAME": "Maple Events Garden",
-      "ALERTS_FROM_NAME": "Maple Alerts System",
+      "FROM_NAME": "{venueName}",
+      "ALERTS_FROM_NAME": "{shortName} alerts",
       "NOT_SPECIFIED": "Not specified",
       "DEAR_CUSTOMERS": "Dear customers",
       "DEAR_GUEST": "Dear guest",
-      "AUTO_FOOTER": "This message was sent automatically by the Maple system.",
+      "AUTO_FOOTER": "This message was sent automatically by the {shortName} system.",
       "AUTO_FOOTER_REPLY": "You may reply to this email with any question and a representative will get back to you soon.",
-      "TEAM": "Maple Team 🍁",
-      "TEAM_CITY": "Maple Team — Event Garden in the City",
-      "PHONE": "Phone: 03-6777772"
+      "TEAM": "{shortName} team",
+      "TEAM_CITY": "{shortName} team",
+      "PHONE": "Phone: {phone}"
     },
     "ERROR": {
       "INTERNAL": "Internal server error",
@@ -476,28 +477,28 @@
         "UNKNOWN": "Email delivery failed — check the server log"
       },
       "BUMP": {
-        "SUBJECT": "Important update about your Maple date ({date}) ⏳",
+        "SUBJECT": "Important update about your {venueName} date ({date}) ⏳",
         "HEADING": "Urgent decision required",
         "GREETING": "Hello <strong>{clientName}</strong>,",
-        "BODY": "Thank you for considering Maple Events Garden for your event.<br/>The date you saved as an option (<strong>{date}</strong>) is in high demand, and another client is interested in booking it.",
+        "BODY": "Thank you for considering {venueName} for your event.<br/>The date you saved as an option (<strong>{date}</strong>) is in high demand, and another client is interested in booking it.",
         "DEADLINE": "To secure your date, please contact us by {deadline}.",
         "RELEASE_NOTE": "After that time, the option will be released automatically and the date will be available to the next client.",
         "CLOSING": "We would love to celebrate with you!<br/><strong>{team}</strong><br/>{phone}",
         "LOG_LABEL": "Option bump email to {email}"
       },
       "SELECTION_REMINDER": {
-        "SUBJECT": "Reminder: complete details for your upcoming Maple event 🍁",
+        "SUBJECT": "Reminder: complete details for your upcoming {venueName} event",
         "HEADING": "Getting ready for your event!",
         "GREETING": "Hello <strong>{clientName}</strong>,",
-        "BODY": "Your event at <strong>Maple</strong> is approaching and we are excited with you! 🎉<br/>We noticed you have not finished selecting the following details:",
+        "BODY": "Your event at <strong>{venueName}</strong> is approaching and we are excited with you! 🎉<br/>We noticed you have not finished selecting the following details:",
         "CLOSING": "Please log in to the system or contact us soon so we can prepare in advance and deliver a perfect event.<br/><br/><strong>{team}</strong><br/>{phone}",
         "LOG_LABEL": "Selection reminder to {email}"
       },
       "SECURITY_CHECK": {
-        "SUBJECT": "Reminder: security check for your Maple event 🍁",
+        "SUBJECT": "Reminder: security check for your {venueName} event",
         "HEADING": "Booking status update",
         "GREETING": "Hello <strong>{clientName}</strong>,",
-        "BODY": "Congratulations on closing your event at <strong>Maple</strong>!<br/>It has been 24 hours since signing the contract and we have not yet received or uploaded a security check.",
+        "BODY": "Congratulations on closing your event at <strong>{venueName}</strong>!<br/>It has been 24 hours since signing the contract and we have not yet received or uploaded a security check.",
         "ACTION": "Please send it as soon as possible to fully secure your date.",
         "CLOSING": "Thank you,<br/><strong>{team}</strong>",
         "LOG_LABEL": "Security check reminder to {email}"
@@ -512,7 +513,7 @@
         "LOG_LABEL": "Manager alert to {email}"
       },
       "PAYMENT_OVERDUE": {
-        "SUBJECT": "Friendly reminder: complete payment for your Maple event 🍁",
+        "SUBJECT": "Friendly reminder: complete payment for your {venueName} event",
         "HEADING": "Event payment reminder",
         "GREETING": "Hello <strong>{clientName}</strong>,",
         "DEADLINE": "Payment due:",
@@ -524,23 +525,23 @@
         "SUBJECT": "How was your event? We would love to hear! 🌟",
         "HEADING": "Thank you for celebrating with us! 🎉",
         "GREETING": "Hello <strong>{name}</strong>,",
-        "BODY": "It was our pleasure to host you and your guests at <strong>Maple</strong>.<br/>To keep improving, we would appreciate a minute to rate your experience:",
+        "BODY": "It was our pleasure to host you and your guests at <strong>{venueName}</strong>.<br/>To keep improving, we would appreciate a minute to rate your experience:",
         "CTA": "Go to feedback form (quick)",
         "SECURITY_NOTE": "(For security, this link is personal and can be filled once only)",
         "CLOSING": "Thank you in advance,<br/><strong>{team}</strong>",
         "LOG_LABEL": "Feedback email to {email}"
       },
       "OPTION_INTEREST": {
-        "SUBJECT": "Interest in your Maple date ({date}) 🍁",
+        "SUBJECT": "Interest in your {venueName} date ({date})",
         "HEADING": "Interest in your date",
-        "DEFAULT_BODY": "Hello {clientName}, we are interested in your date ({date}) at Maple Events Garden. Please contact us soon.",
+        "DEFAULT_BODY": "Hello {clientName}, we are interested in your date ({date}) at {venueName}. Please contact us soon.",
         "LOG_LABEL": "Option interest email to {email}"
       }
     },
     "WHATSAPP": {
       "BUMP": {
         "GREETING": "Hello *{clientName}*,",
-        "BODY": "Thank you for considering *Maple Events Garden* 🍁.\nThe date you saved as an option (*{date}*) is in high demand, and another client wants to book it.",
+        "BODY": "Thank you for considering *{venueName}*.\nThe date you saved as an option (*{date}*) is in high demand, and another client wants to book it.",
         "URGENT": "⏳ *Urgent decision required:*",
         "DEADLINE": "To secure your date, please contact us by *{deadline}*.",
         "RELEASE": "After that time, the option will be released automatically.",
@@ -549,13 +550,13 @@
       },
       "SELECTION_REMINDER": {
         "GREETING": "Hello *{clientName}*,",
-        "BODY": "Your event at *Maple* is approaching! 🎉\nPlease complete the following selections:\n*{items}*",
+        "BODY": "Your event at *{venueName}* is approaching! 🎉\nPlease complete the following selections:\n*{items}*",
         "CLOSING": "{team}",
         "LOG_TYPE": "Missing selections"
       },
       "SECURITY_CHECK": {
         "GREETING": "Hello *{clientName}*,",
-        "BODY": "Congratulations on closing your event at *Maple*! 🍁\nIt has been 24 hours since signing and we have not received the required security check.",
+        "BODY": "Congratulations on closing your event at *{venueName}*!\nIt has been 24 hours since signing and we have not received the required security check.",
         "ACTION": "Please send it soon to fully secure your date.",
         "CLOSING": "Thank you,\n{team}",
         "LOG_TYPE": "Security check"
@@ -575,7 +576,7 @@
       },
       "FEEDBACK": {
         "GREETING": "Hi *{name}*, thank you for celebrating with us! 🎉",
-        "BODY": "We enjoyed hosting you at *Maple* 🍁.\nPlease share how it went:\n\n{link}",
+        "BODY": "We enjoyed hosting you at *{venueName}*.\nPlease share how it went:\n\n{link}",
         "SECURITY_NOTE": "_(This link is personal and can be filled once only)_",
         "CLOSING": "Venue team ❤️",
         "LOG_TYPE": "Feedback request"
@@ -586,7 +587,7 @@
         "LOG_TYPE": "Client greeting"
       },
       "OPTION_INTEREST": {
-        "DEFAULT_BODY": "Hello {clientName}, we are interested in your date ({date}) at Maple Events Garden. Please contact us soon.",
+        "DEFAULT_BODY": "Hello {clientName}, we are interested in your date ({date}) at {venueName}. Please contact us soon.",
         "CLOSING": "*{team}*\n{phone}",
         "LOG_TYPE": "Option interest"
       },
@@ -644,7 +645,7 @@
       "MANAGER_ALERT_TYPE": "Payment overdue",
       "MANAGER_ALERT_DETAILS": "Alert: client {clientName} (event {eventCode}) missed payment deadline ({deadline}). Required by now: ₪{required}, paid/in progress: ₪{committed}{pendingNote}, open balance: ₪{remaining}. Event date: {eventDate}.",
       "PENDING_NOTE": " (₪{amount} pending collection in Easy Count)",
-      "CLIENT_REMINDER": "This is a friendly reminder that your payment deadline ({deadline}) has passed.\n\nRemaining hall balance: ₪{remaining}.\nEvent: {eventCode} · {eventDate}.\n\nPlease arrange payment soon or contact Maple to coordinate payment / invoice.\n\nThank you for your cooperation 🍁"
+      "CLIENT_REMINDER": "This is a friendly reminder that your payment deadline ({deadline}) has passed.\n\nRemaining hall balance: ₪{remaining}.\nEvent: {eventCode} · {eventDate}.\n\nPlease arrange payment soon or contact {venueName} to coordinate payment / invoice.\n\nThank you for your cooperation."
     },
     "HALL_BALANCE": {
       "BOOKING_NOT_FOUND": "Booking not found.",
@@ -1277,10 +1278,10 @@
     "BACK": "Back",
     "BACK_WITH_TITLE": "Back — {title}",
     "BACK_TO_DASHBOARD": "Back to dashboard",
-    "BRAND_ALT": "Maple — Event Garden in the City",
-    "BRAND_NAME": "Maple",
-    "VENUE_NAME": "Maple — Event Garden",
-    "VENUE_TAGLINE": "Event Garden in the City",
+    "BRAND_ALT": "{venueName}",
+    "BRAND_NAME": "{shortName}",
+    "VENUE_NAME": "{venueName}",
+    "VENUE_TAGLINE": "{venueName}",
     "CLOSE_MENU": "Close menu",
     "MAIN_NAV": "Main navigation",
     "CLOSE": "Close",
@@ -1357,7 +1358,7 @@
     "REASON_EVENT_CANCELLED": "Event cancelled entirely",
     "REASON_TERMS": "Disagreement on terms",
     "REASON_OTHER": "Other",
-    "NOTIFY_DEFAULT": "Hello {clientName}, we are interested in your date ({date}) at Maple Events Garden. Please get back to us soon.",
+    "NOTIFY_DEFAULT": "Hello {clientName}, we are interested in your date ({date}) at {venueName}. Please get back to us soon.",
     "NOTIFY_TITLE": "Notify about option interest",
     "NOTIFY_CLIENT": "Client",
     "NOTIFY_MESSAGE": "Message:",
@@ -1416,7 +1417,7 @@
     "MODAL_TITLE_ACTION": "Choose next action:",
     "CONVERT_TO_BOOKING": "Convert to closed booking",
     "CANCEL_AND_RELEASE": "Cancel and release dates",
-    "INTEREST_MESSAGE_DEFAULT": "Hello {clientName}, we are interested in your date ({dateStr}) at Maple Events Garden. Please contact us soon.",
+    "INTEREST_MESSAGE_DEFAULT": "Hello {clientName}, we are interested in your date ({dateStr}) at {venueName}. Please contact us soon.",
     "NOTIFY_DATE": "Date",
     "NOTIFY_EMAIL": "Email",
     "NOTIFY_PHONE": "Phone",
@@ -1587,7 +1588,7 @@
     "THANK_YOU_TITLE": "Thank you!",
     "THANK_YOU_MESSAGE": "Your feedback helps us improve.",
     "PAGE_GREETING": "Hello!",
-    "PAGE_INTRO": "We would love to hear about your experience at Maple.",
+    "PAGE_INTRO": "We would love to hear about your experience at {venueName}.",
     "RATE_FOOD": "Rate the food",
     "RATE_SERVICE": "Rate the service",
     "RATE_VENUE": "Rate the venue",
@@ -1878,7 +1879,7 @@
     "SELECTION_INSTRUCTIONS": "Select dishes for each category according to the limits shown",
     "SELECTION_COUNT": " (selected {selected}/{limit})",
     "CONFIRM_SAVE": "Confirm and save menu for client",
-    "FOOTER_ADDRESS": "Maple Events Garden — City",
+    "FOOTER_ADDRESS": "{venueName}",
     "FOOTER_KASHRUT_NOTE": "Kashrut according to event selection",
     "CATEGORIES": {
       "APPETIZER_STATIONS": "Appetizer stations",

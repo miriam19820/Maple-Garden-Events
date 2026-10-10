@@ -19,29 +19,30 @@ export type MailDeliveryResult =
   | { ok: true; simulated?: boolean }
   | { ok: false; reason: MailFailureReason };
 
-function getEmailUser(): string | undefined {
-  return process.env.EMAIL_USER?.trim() || undefined;
-}
-
-function getEmailPass(): string | undefined {
-  const pass = process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD;
-  return pass?.replace(/\s+/g, '') || undefined;
-}
+// Credential resolution lives in config/emailConfig so that boot validation and the
+// readiness check judge "is email configured?" by exactly the same rule as the
+// transport does. Behaviour here is unchanged.
+import { describeEmailConfig, getEmailPass, getEmailUser } from '../config/emailConfig';
 
 export function canSendRealMail(): boolean {
-  return !!(getEmailUser() && getEmailPass());
+  return describeEmailConfig().configured;
 }
 
-import { getBrandConfig } from '@maple/shared/brand';
+import { getBrandConfig, resolveBrandText } from '@maple/shared/brand';
 
+// Brand messaging strings carry their own placeholders (e.g. 'גן אירועים {shortName}')
+// and never pass through the i18n interpolator, so they must be resolved here —
+// otherwise the literal placeholder becomes the visible sender name.
 export function getFromAddress(locale: Locale = DEFAULT_LOCALE): string {
   const brand = getBrandConfig();
-  return `"${brand.messaging.emailFromName}" <${getEmailUser() || brand.supportEmail}>`;
+  const fromName = resolveBrandText(brand.messaging.emailFromName, locale);
+  return `"${fromName}" <${getEmailUser() || brand.supportEmail}>`;
 }
 
 function getAlertsFromAddress(locale: Locale = DEFAULT_LOCALE): string {
   const brand = getBrandConfig();
-  return `"${brand.messaging.emailAlertsFromName}" <${getEmailUser() || brand.supportEmail}>`;
+  const fromName = resolveBrandText(brand.messaging.emailAlertsFromName, locale);
+  return `"${fromName}" <${getEmailUser() || brand.supportEmail}>`;
 }
 
 let transporter: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | null = null;
@@ -381,20 +382,42 @@ export const sendPaymentOverdueReminderEmail = async (
   return result.ok;
 };
 
-export const sendFeedbackRequestEmail = async (
+/**
+ * Build the post-event feedback email. Exported so tests can assert on the exact
+ * message a customer receives (subject, HTML, plain-text) without a transport —
+ * `server/tests/feedbackMessages.test.ts` fails the build if any template
+ * placeholder such as `{shortName}` survives into the rendered message.
+ */
+export function buildFeedbackRequestMail(
   clientEmail: string,
   clientName: string | null,
   link: string,
   locale: Locale = DEFAULT_LOCALE,
-): Promise<MailDeliveryResult> => {
+): nodemailer.SendMailOptions {
   const { t } = getServerTranslation(locale);
   const name = clientName ? clientName.split(' ')[0] : t(T.SERVER.COMMON.DEAR_CUSTOMERS);
   const team = t(T.SERVER.COMMON.TEAM);
 
-  const mailOptions = {
+  const stripTags = (value: string) =>
+    value.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+
+  const textBody = [
+    stripTags(t(T.SERVER.MAIL.FEEDBACK.GREETING, { name })),
+    '',
+    stripTags(t(T.SERVER.MAIL.FEEDBACK.BODY)),
+    '',
+    link,
+    '',
+    stripTags(t(T.SERVER.MAIL.FEEDBACK.SECURITY_NOTE)),
+    '',
+    stripTags(t(T.SERVER.MAIL.FEEDBACK.CLOSING, { team })),
+  ].join('\n');
+
+  return {
     from: getFromAddress(locale),
     to: clientEmail,
     subject: t(T.SERVER.MAIL.FEEDBACK.SUBJECT),
+    text: textBody,
     html: `
       <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 3px solid #d8a051;">
@@ -417,7 +440,16 @@ export const sendFeedbackRequestEmail = async (
     `,
     attachments: optionalLogoAttachment(),
   };
+}
 
+export const sendFeedbackRequestEmail = async (
+  clientEmail: string,
+  clientName: string | null,
+  link: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<MailDeliveryResult> => {
+  const { t } = getServerTranslation(locale);
+  const mailOptions = buildFeedbackRequestMail(clientEmail, clientName, link, locale);
   return deliverMail(mailOptions, t(T.SERVER.MAIL.FEEDBACK.LOG_LABEL, { email: clientEmail }));
 };
 

@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 import { redisClient, isRedisAvailable } from '../config/redis';
 import { getS3Client } from '../utils/s3Client';
 import { getApmSnapshot } from '../utils/apmMetrics';
+import { emailHealthCheck } from '../config/emailConfig';
 import { getEasyCountMeta } from './easyCount';
 import {
   aggregateHealthStatus,
@@ -106,13 +107,14 @@ async function checkS3(): Promise<HealthCheckResult> {
   }
 }
 
+/**
+ * Delegated to config/emailConfig so readiness, boot validation and the transport
+ * apply one identical rule. In production a missing credential is `down`, not
+ * `skipped` — a skipped check does not move the aggregate status, which is what
+ * made a silently simulating mailer look healthy.
+ */
 function checkEmail(): HealthCheckResult {
-  const user = process.env.EMAIL_USER?.trim();
-  const pass = process.env.EMAIL_PASS?.trim();
-  if (!user || !pass) {
-    return { status: 'skipped', detail: 'EMAIL_USER/EMAIL_PASS not set' };
-  }
-  return { status: 'ok', detail: 'configured' };
+  return emailHealthCheck();
 }
 
 function checkEasyCount(): HealthCheckResult {

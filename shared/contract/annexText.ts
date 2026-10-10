@@ -11,7 +11,7 @@ export function formatMoneyLine(amount: number): string {
 }
 
 export function paymentNoteText(paidTo?: ExtrasLineItem['paidTo']): string {
-  return paidTo === 'external' ? 'תשלום ישיר לספק חיצוני' : 'דרך גן מייפל אירועים';
+  return paidTo === 'external' ? 'תשלום ישיר לספק חיצוני' : 'דרך האולם / גן אירועים';
 }
 
 export function renderSelectedExtrasSection(items: ExtrasLineItem[]): string {
@@ -109,9 +109,14 @@ export function mergeContractAnnexIntoBase(baseContract: string, annex: string):
     return baseContract.split(CONTRACT_ANNEX_PLACEHOLDER).join(annex);
   }
 
-  const marker = 'הנהלת מייפל אירועים מאחלת';
-  if (baseContract.includes(marker)) {
-    return baseContract.replace(marker, `${annex}\n\n${marker}`);
+  const wishMarkers = [
+    'הנהלת האולם / גן אירועים מאחלת',
+    'הנהלת מייפל אירועים מאחלת',
+  ];
+  for (const marker of wishMarkers) {
+    if (baseContract.includes(marker)) {
+      return baseContract.replace(marker, `${annex}\n\n${marker}`);
+    }
   }
 
   return `${baseContract.trim()}\n\n${annex}`;

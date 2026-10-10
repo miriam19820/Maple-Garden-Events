@@ -223,9 +223,16 @@ function mapHttpError(error: unknown): never {
 
 export const calendarService = {
   // שליפה של כל האירועים ביום (עד 3)
-  async getAllCalendarDates(startDate: Date, endDate: Date, eventType: string = 'חתונה') {
+  async getAllCalendarDates(
+    startDate: Date,
+    endDate: Date,
+    eventType: string = 'חתונה',
+    tenantId?: string,
+  ) {
+    // Tenant scoping is mandatory: without it the calendar returns every tenant's
+    // dates, bookings, event forms and check-ins.
     const datesInRange = await prisma.eventDate.findMany({
-      where: { date: { gte: startDate, lte: endDate } },
+      where: { ...(tenantId ? { tenantId } : {}), date: { gte: startDate, lte: endDate } },
       include: { bookings: { include: { eventForm: true, eventCheckIn: true } } }
     });
     
@@ -274,12 +281,16 @@ export const calendarService = {
   },
 
   // סגירה סופית עם מניעת התנגשויות זמן
-  async bookEventFinal(dateId: string, bookingDetails: any) {
+  async bookEventFinal(dateId: string, bookingDetails: any, tenantId?: string) {
     const booking = await prisma.$transaction(async (tx) => {
       await lockEventDateRow(tx, dateId);
 
-      const eventDateRecord = await tx.eventDate.findUnique({
-        where: { id: dateId },
+      // Tenant-scoped: another tenant's date must be indistinguishable from a
+      // missing one, otherwise a booking could be attached to a foreign calendar
+      // row. `lockEventDateRow` above only takes the row lock — it does not and
+      // cannot check ownership.
+      const eventDateRecord = await tx.eventDate.findFirst({
+        where: { id: dateId, ...(tenantId ? { tenantId } : {}) },
         include: { bookings: true },
       });
       if (!eventDateRecord) {
@@ -404,7 +415,7 @@ export const calendarService = {
 
       return await prisma.$transaction(async (tx) => {
         let eventDate = await tx.eventDate.findFirst({
-          where: prismaCalendarDayWhere(calendarKey),
+          where: { tenantId, ...prismaCalendarDayWhere(calendarKey) },
           include: { bookings: true },
         });
 
@@ -471,13 +482,13 @@ export const calendarService = {
   },
 
   /** שחרור נעילת CHECKING */
-  async releaseDate(dateStr: string) {
+  async releaseDate(dateStr: string, tenantId?: string) {
     try {
       const calendarKey = toCalendarDateKey(dateStr);
 
       return await prisma.$transaction(async (tx) => {
         const eventDate = await tx.eventDate.findFirst({
-          where: prismaCalendarDayWhere(calendarKey),
+          where: { ...(tenantId ? { tenantId } : {}), ...prismaCalendarDayWhere(calendarKey) },
           include: { bookings: true },
         });
 
@@ -510,7 +521,7 @@ export const calendarService = {
   },
 
   /** יצירת אופציה מלאה על תאריך בודד */
-  async createOption(dateId: string, bookingDetails: any) {
+  async createOption(dateId: string, bookingDetails: any, tenantId?: string) {
     try {
       const optionHours = Number(bookingDetails.optionDurationHours) || DEFAULT_OPTION_HOURS;
       const expiry = defaultOptionExpiry(optionHours);
@@ -518,8 +529,8 @@ export const calendarService = {
       const booking = await prisma.$transaction(async (tx) => {
         await lockEventDateRow(tx, dateId);
 
-        const eventDateRecord = await tx.eventDate.findUnique({
-          where: { id: dateId },
+        const eventDateRecord = await tx.eventDate.findFirst({
+          where: { id: dateId, ...(tenantId ? { tenantId } : {}) },
           include: { bookings: true },
         });
         if (!eventDateRecord) {
@@ -634,7 +645,7 @@ export const calendarService = {
 
         for (const calendarKey of uniqueKeys) {
           let eventDate = await tx.eventDate.findFirst({
-            where: prismaCalendarDayWhere(calendarKey),
+            where: { tenantId, ...prismaCalendarDayWhere(calendarKey) },
             include: { bookings: true },
           });
 

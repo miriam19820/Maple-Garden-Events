@@ -229,7 +229,7 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
       }
 
       let eventDate = await tx.eventDate.findFirst({
-        where: prismaCalendarDayWhere(calendarKey),
+        where: { tenantId, ...prismaCalendarDayWhere(calendarKey) },
         include: { bookings: true },
       });
 
@@ -444,6 +444,7 @@ export async function createBooking(req: AuthRequest): Promise<HttpResult> {
       });
     }
   }
+  await invalidateCache('calendar');
 
   if (contractFields.isContractSigned && createdBookings.length > 0) {
     try {
@@ -863,6 +864,8 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
     releaseDateIds.forEach((dateId: string) => {
       emitDateUpdated({ dateId, status: 'AVAILABLE' });
     });
+    emitBookingUpdated(updated.id);
+    await invalidateCache('calendar');
 
     if (contractFields.isContractSigned && data.contractSigned) {
       try {
@@ -934,6 +937,7 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
 
   emitDateUpdated({ dateId: booking.eventDate.id, status: booking.eventDate.status });
   emitBookingUpdated(id);
+  await invalidateCache('calendar');
 
   let easycountResult: EasyCountBookingResult | null = null;
   if (!booking.isOption && updated.advancePaid > 0) {
@@ -958,8 +962,6 @@ export async function updateBooking(req: AuthRequest): Promise<HttpResult> {
         tenantId
     }, include: { eventDate: true } })
     : updated;
-
-  await invalidateCache('calendar');
 
   return { status: 200, body: {
     success: true,
@@ -1116,6 +1118,7 @@ export async function finalizeBooking(req: AuthRequest | Request): Promise<HttpR
 
   emitDateUpdated({ dateId: booking.eventDate.id, status: 'BOOKED' });
   emitBookingUpdated(bookingId);
+  await invalidateCache('calendar');
   return { status: 200, body: {
     success: true,
     message: 'האירוע נסגר והחוזה נחתם בהצלחה!',

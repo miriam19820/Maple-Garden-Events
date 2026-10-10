@@ -41,4 +41,22 @@ export const RBAC = {
 
   /** EasyCount — צפייה בסטטוס בלבד (ללא הפקת מסמכים) */
   FINANCE_READ: ['manager', 'staff'] as UserRole[],
+
+  // --- WhatsApp (§29) -------------------------------------------------------
+  // Mapped onto the existing role model rather than a parallel permission system.
+
+  /** WhatsApp.View / WhatsApp.ViewConversations — read the inbox */
+  WHATSAPP_VIEW: ['manager', 'staff'] as UserRole[],
+
+  /** WhatsApp.Send — send a message to a customer */
+  WHATSAPP_SEND: ['manager', 'staff'] as UserRole[],
+
+  /** WhatsApp.ManageTemplates — create/edit local template rows */
+  WHATSAPP_MANAGE_TEMPLATES: ['manager'] as UserRole[],
+
+  /** WhatsApp.ManageAutomations — enable/disable automation rules */
+  WHATSAPP_MANAGE_AUTOMATIONS: ['manager'] as UserRole[],
+
+  /** WhatsApp.ManageSettings — view integration status/health */
+  WHATSAPP_MANAGE_SETTINGS: ['manager'] as UserRole[],
 } as const;

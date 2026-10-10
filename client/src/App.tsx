@@ -33,6 +33,7 @@ const FeedbackStats = lazy(() => import('./components/FeedbackStats/FeedbackStat
 const Gallery = lazy(() => import('./components/Gallery/Gallery'));
 const ArchiveManager = lazy(() => import('./components/ArchiveManager/ArchiveManager'));
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));
+const WhatsAppInbox = lazy(() => import('./components/WhatsApp/WhatsAppInbox'));
 
 const CalendarWrapper = () => {
   const navigate = useNavigate();
@@ -186,6 +187,7 @@ function App() {
             <Route path="/feedback-manager" element={guard(<Lazy><FullWidthShell><FeedbackManager /></FullWidthShell></Lazy>)} />
             <Route path="/feedback-stats" element={guard(<Lazy><FullWidthShell><FeedbackStats /></FullWidthShell></Lazy>)} />
             <Route path="/gallery" element={guard(<Lazy><FullWidthShell><Gallery /></FullWidthShell></Lazy>)} />
+            <Route path="/whatsapp" element={guard(<Lazy><FullWidthShell><WhatsAppInbox /></FullWidthShell></Lazy>)} />
           </Routes>
           <AccessibilityWidget />
         </BrowserRouter>

@@ -141,7 +141,7 @@ export async function syncOptionDatesOnEdit(
     if (existingByKey.has(calendarKey)) continue;
 
     let eventDate = await tx.eventDate.findFirst({
-      where: prismaCalendarDayWhere(calendarKey),
+      where: { tenantId: anchor.tenantId, ...prismaCalendarDayWhere(calendarKey) },
       include: { bookings: true },
     });
 

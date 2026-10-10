@@ -2,7 +2,7 @@ import React from 'react';
 import styles from './OptionsManager.module.css';
 import OptionActionModal from '../OptionActionModal/OptionActionModal';
 import NotifyOptionModal from '../NotifyOptionModal/NotifyOptionModal';
-import { useBookingsQuery } from '../../hooks/queries';
+import { invalidateCalendarData, useBookingsQuery } from '../../hooks/queries';
 import { apiFetch } from '../../services/api';
 import { API_URL } from '../../config/api';
 import { PageHeader } from '../ui/PageHeader';
@@ -188,6 +188,7 @@ const OptionsManager = () => {
           onSuccess={() => {
             setSelectedOption(null);
             refetch();
+            void invalidateCalendarData();
           }}
         />
       )}

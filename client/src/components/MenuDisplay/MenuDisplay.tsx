@@ -1,4 +1,5 @@
 import { useTranslation } from '../../i18n/useTranslation';
+import { getBrandConfig } from '@shared/brand/index';
 import styles from './MenuDisplay.module.css';
 
 const menuData = [
@@ -225,7 +226,7 @@ const MenuDisplay = () => {
     <div className={styles.menuWrapper}>
       <div className={styles.header}>
         <div className={styles.logoContainer}>
-          <img src="/logo.png" alt="Maple Logo" className={styles.menuLogo} />
+          <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.menuLogo} />
         </div>
         <h2 className={styles.mainTitle}>{t(T.MENU.PAGE_TITLE)}</h2>
         <div className={styles.accentLine}></div>

@@ -18,9 +18,8 @@ export const settingsController = {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     const brand = getBrandConfig();
     res.json({
-      // Prefer brand public Hebrew name so UI/contracts stay consistent for Maple.
       venueName: brand.publicVenueName || tenant?.name || brand.displayName,
-      logoUrl: brand.logoUrl || '/assets/maple-default-logo.png',
+      logoUrl: brand.logoUrl || '/logo.png',
     });
   }),
 

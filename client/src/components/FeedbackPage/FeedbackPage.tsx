@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import styles from './FeedbackPage.module.css';
 import { API_URL } from '../../config/api';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getBrandConfig } from '@shared/brand/index';
 
 interface ClientData {
   clientName: string;
@@ -147,7 +148,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={styles.card}>
-          <img src="/logo.png" alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
+          <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
           <h2 className={styles.title}>{t(T.FEEDBACK.LOADING_TITLE)}</h2>
           <p className={styles.subtitle}>{t(T.FEEDBACK.LOADING_SUBTITLE)}</p>
         </div>
@@ -159,7 +160,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={`${styles.card} ${styles.messageBox}`}>
-          <img src="/logo.png" alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
+          <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
           <div className={styles.iconBig}>🤍</div>
           <h2 className={styles.title}>{t(T.FEEDBACK.ALREADY_PARTICIPATED_TITLE)}</h2>
           <p className={styles.subtitle}>
@@ -174,7 +175,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={`${styles.card} ${styles.messageBox}`}>
-          <img src="/logo.png" alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
+          <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
           <div className={styles.iconBig}>😕</div>
           <h2 className={styles.title}>{t(T.FEEDBACK.ERROR_TITLE)}</h2>
           <p className={styles.subtitle}>{errorMessage}</p>
@@ -187,7 +188,7 @@ const FeedbackPage: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={`${styles.card} ${styles.messageBox}`}>
-          <img src="/logo.png" alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
+          <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
           <div className={styles.iconBig}>🤍</div>
           <h2 className={styles.title}>{t(T.FEEDBACK.THANK_YOU_TITLE)}</h2>
           <p className={styles.subtitle}>{t(T.FEEDBACK.THANK_YOU_MESSAGE)}</p>
@@ -199,7 +200,7 @@ const FeedbackPage: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <img src="/logo.png" alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
+        <img src={getBrandConfig().logoUrl} alt={t(T.UI.BRAND_ALT)} className={styles.logo} />
         <h1 className={styles.title}>{t(T.FEEDBACK.PAGE_GREETING)}</h1>
         <p className={styles.subtitle}>
           {clientData?.clientName ? `${clientData.clientName}, ` : ''}

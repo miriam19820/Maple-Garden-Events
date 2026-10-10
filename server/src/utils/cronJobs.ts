@@ -13,10 +13,8 @@ import {
   sendSecurityCheckReminderEmail,
   sendManagerFinancialAlertEmail,
 } from './mailer';
-import {
-  processEndedEventsFeedback,
-  processPreviousDayEndedEventsFeedback,
-} from './feedbackHelpers';
+import { processDueFeedback } from './feedbackHelpers';
+import { FEEDBACK_LOOKBACK_DAYS, FEEDBACK_SEND_HOUR } from './feedbackSchedule';
 import { runDatabaseBackup } from './databaseBackup';
 import { processDueScheduledGreetings } from '../Services/greetingService';
 import { checkOverduePayments } from '../Services/paymentDeadlineService';
@@ -25,9 +23,14 @@ import { processPreviousDayFinancialSummaries } from '../Services/eventFinancial
 import { DEFAULT_LOCALE, getServerTranslation, T } from '../i18n/getServerTranslation';
 import { reportBackgroundFailure } from '../Services/criticalAlert.service';
 import { runDailyEventArchive } from '../Services/eventArchive.service';
+import { startWhatsAppCronJobs } from './whatsappCronJobs';
 
 export const startCronJobs = () => {
   logger.info('Cron jobs service started');
+
+  // WhatsApp outbox / webhook / automation workers (§26). No-ops while
+  // WHATSAPP_ENABLED is false, so this is safe to register unconditionally.
+  startWhatsAppCronJobs();
 
   if (process.env.BACKUP_ENABLED === 'true') {
     const schedule = process.env.BACKUP_CRON || '0 3 * * *';
@@ -181,35 +184,34 @@ export const startCronJobs = () => {
   });
 
   // ==========================================
-  // טיימר 3: בקשת משוב בסיום האירוע (כל 10 דקות)
+  // טיימר 3: משוב לאחר אירוע — סריקה תקופתית (ברירת מחדל: כל שעה עגולה)
   // ==========================================
-  cron.schedule('*/10 * * * *', async () => {
+  // A single idempotent sweep replaces the previous pair of jobs. It dispatches
+  // every event whose survey is due (event day + 1 at FEEDBACK_SEND_HOUR), retries
+  // failed deliveries with backoff and catches up after downtime — all driven by
+  // the event's real end datetime, never by EventDate.status, so it cannot race
+  // with the nightly archive job. Running it repeatedly is safe: every recipient
+  // is claimed atomically in the database before anything is sent.
+  const feedbackSchedule = process.env.FEEDBACK_CRON || '0 * * * *';
+  cron.schedule(feedbackSchedule, async () => {
     try {
-      const { eventsProcessed, linksSent, checked } = await processEndedEventsFeedback();
-      if (eventsProcessed > 0 || linksSent > 0) {
-        logger.info(`--- משוב אוטומטי: ${linksSent} קישורים נשלחו (${eventsProcessed} אירועים, ${checked} נבדקו) ---`);
+      const result = await processDueFeedback();
+      if (result.eventsProcessed > 0 || result.linksSent > 0 || result.failedEvents > 0) {
+        logger.info(
+          `--- משוב אוטומטי: ${result.linksSent} קישורים נשלחו `
+            + `(${result.eventsProcessed} אירועים, ${result.checked} נבדקו, `
+            + `${result.failedEvents} כשלים, ${result.tenants} טננטים) ---`,
+        );
       }
     } catch (error) {
       logger.error('שגיאה בתהליך שליחת משוב אוטומטי:', error);
-      reportBackgroundFailure('ended-events-feedback', error);
+      reportBackgroundFailure('due-feedback-sweep', error);
     }
   });
-
-  // ==========================================
-  // טיימר 3ב: משוב לאירועי אתמול (יומי ב-10:00)
-  // ==========================================
-  cron.schedule('0 10 * * *', async () => {
-    try {
-      const { eventsProcessed, linksSent, checked, date } =
-        await processPreviousDayEndedEventsFeedback();
-      logger.info(
-        `--- משוב יומי (${date}): ${linksSent} קישורים, ${eventsProcessed} אירועים, ${checked} נבדקו ---`,
-      );
-    } catch (error) {
-      logger.error('שגיאה במשוב יומי לאירועי אתמול:', error);
-      reportBackgroundFailure('previous-day-feedback', error);
-    }
-  });
+  logger.info(
+    `Post-event feedback sweep scheduled: ${feedbackSchedule} (send hour ${FEEDBACK_SEND_HOUR}:00, `
+      + `lookback ${FEEDBACK_LOOKBACK_DAYS}d, timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone})`,
+  );
 
   // ==========================================
   // טיימר 3ג: סיכום כספי למנהל — בוקר אחרי האירוע (09:15)

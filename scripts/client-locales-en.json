@@ -54,7 +54,7 @@
       "PAGE_INFO": "Page {page} of {totalPages} ({total} records)"
     },
     "A11Y": {
-      "BRAND_ALT": "Maple — Event Garden",
+      "BRAND_ALT": "{venueName}",
       "LOADING": "Loading",
       "ITEMS": "{count} items"
     }
@@ -252,7 +252,7 @@
     "REASON_EVENT_CANCELLED": "Event cancelled entirely",
     "REASON_TERMS": "Disagreement on terms",
     "REASON_OTHER": "Other",
-    "NOTIFY_DEFAULT": "Hello {clientName}, we are interested in your date ({date}) at Maple Events Garden. Please get back to us soon.",
+    "NOTIFY_DEFAULT": "Hello {clientName}, we are interested in your date ({date}) at {venueName}. Please get back to us soon.",
     "NOTIFY_TITLE": "Notify client about option",
     "NOTIFY_CLIENT": "Client:",
     "NOTIFY_MESSAGE": "Message:",
