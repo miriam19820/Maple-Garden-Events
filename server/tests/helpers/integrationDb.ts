@@ -43,17 +43,16 @@ export async function ensureIntegrationFixtures(): Promise<string> {
 
   await prisma.systemSettings.upsert({
     where: { id: 'global' },
-    create: { id: 'global', tenantId: tenant.id },
+    create: { id: 'global', tenantId },
     update: {},
   });
 
-  return tenant.id;
+  return tenantId;
 }
 
 export async function createAvailableEventDate(calendarKey: string, tenantId: string) {
   return prisma.eventDate.create({
     data: {
-      tenantId,
       date: calendarDateForStorage(calendarKey),
       status: 'AVAILABLE',
       tenantId,
