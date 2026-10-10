@@ -15,7 +15,7 @@ import { hasRequiredWeddingClientDetails, isContractFullySigned } from '@shared/
 import { parseNotesBundle, serializeNotesBundle } from '../../utils/notesStorage';
 import { apiFetch } from '../../services/api';
 import { reportClientError } from '../../utils/reportError';
-import { useGlobalSettingsQuery } from '../../hooks/queries';
+import { invalidateCalendarData, useGlobalSettingsQuery } from '../../hooks/queries';
 import {
   DEFAULT_PAYMENT_TEMPLATES,
   findPaymentTemplate,
@@ -1097,6 +1097,7 @@ const BookingForm = ({ initialDates, isOption: forcedIsOption }: BookingFormProp
         if ((!isOption || convertFromOption) && contractSigned && savedId) {
           await promptPrintAfterClose(savedId, t);
         }
+        await invalidateCalendarData();
         navigate('/calendar');
       } else if (response.status === 409 && resData.conflict) {
         alert(t(T.BOOKING.ALERTS.CONFLICT_UPDATED, {

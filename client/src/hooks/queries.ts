@@ -122,6 +122,13 @@ export function useArchiveEventsQuery(
 
 import { queryClient } from '../lib/queryClient';
 
+export async function invalidateCalendarData() {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+  ]);
+}
+
 export function prefetchCalendarDates(start: string, end: string, eventType: string) {
   queryClient.prefetchQuery({
     queryKey: ['calendar', start, end, eventType],
@@ -167,6 +174,7 @@ export function useCalendarDatesQuery(start: string, end: string, eventType: str
       return [];
     },
     enabled: Boolean(start && end),
+    staleTime: 0,
   });
 }
 
