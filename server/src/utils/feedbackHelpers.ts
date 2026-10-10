@@ -5,6 +5,7 @@ import { toCalendarDateKey } from './dateLocal';
 import { sendFeedbackRequestWhatsApp } from './whatsapp';
 import { logger } from './logger';
 import { emitFeedbackUpdated } from './realtime';
+import { isLocalBaseUrl, resolvePublicBaseUrl } from '../config/publicBaseUrl';
 import {
   FEEDBACK_ELIGIBLE_EVENT_STATUSES,
   FEEDBACK_MAX_NOTIFY_ATTEMPTS,
@@ -82,15 +83,14 @@ export function buildFeedbackSides(booking: {
 }
 
 export function isLocalClientUrl(url?: string): boolean {
-  const value = (url ?? process.env.CLIENT_URL ?? 'http://localhost:5173').toLowerCase();
-  return value.includes('localhost') || value.includes('127.0.0.1') || value.includes('0.0.0.0');
+  return isLocalBaseUrl(url ?? resolvePublicBaseUrl());
 }
 
-export function getClientFeedbackUrl(token: string): string {
-  const baseUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
-  if (isLocalClientUrl(baseUrl)) {
+export function getClientFeedbackUrl(token: string, requestOrigin?: string): string {
+  const baseUrl = resolvePublicBaseUrl(requestOrigin);
+  if (isLocalBaseUrl(baseUrl)) {
     logger.warn(
-      'CLIENT_URL is local — feedback links in emails will not work for external customers. Set CLIENT_URL to a public URL.',
+      'Public site URL is local — feedback links in emails will not work for external customers. Use the live dashboard or set CLIENT_URL / DOMAIN.',
     );
   }
   return `${baseUrl}/feedback/${token}`;
@@ -132,6 +132,8 @@ export type FeedbackDispatchDeps = {
   log?: FeedbackLogger;
   emitUpdated?: (payload: { bookingId: string }) => void;
   now?: Date;
+  /** Public origin of the admin request, e.g. https://admin.maple-g.co.il */
+  publicOrigin?: string;
 };
 
 type ResolvedDeps = {
@@ -196,7 +198,7 @@ export async function sendFeedbackLinkForRecord(
   const skippedReasons: string[] = [];
   let emailSent = false;
   let whatsappSent = false;
-  const link = getClientFeedbackUrl(feedback.token);
+  const link = getClientFeedbackUrl(feedback.token, deps.publicOrigin);
 
   if (feedback.isCompleted) {
     return {

@@ -1,7 +1,10 @@
-/** Origins allowed for browser API calls (admin on localhost + public CLIENT_URL). */
+import { getConfiguredPublicOrigins, normalizeBaseUrl } from './publicBaseUrl';
+
+/** Origins allowed for browser API calls (admin hosts + public CLIENT_URL). */
 export function getCorsOrigins(): string[] {
-  const origins = new Set<string>();
-  const clientUrl = process.env.CLIENT_URL?.replace(/\/$/, '');
+  const origins = new Set<string>(getConfiguredPublicOrigins());
+
+  const clientUrl = normalizeBaseUrl(process.env.CLIENT_URL);
   if (clientUrl) origins.add(clientUrl);
 
   if (process.env.NODE_ENV !== 'production') {

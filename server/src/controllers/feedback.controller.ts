@@ -18,6 +18,7 @@ import {
 } from '../utils/feedbackAnomaly';
 import { sendManagerFinancialAlertEmail } from '../utils/mailer';
 import { sendManagerFinancialAlert } from '../utils/whatsapp';
+import { originFromRequest, resolvePublicBaseUrl } from '../config/publicBaseUrl';
 import { getBrandConfig } from '@maple/shared/brand';
 import {
   aggregateFeedbackScores,
@@ -169,6 +170,7 @@ function buildAdminGroup(
     lastEmailSent?: boolean;
     lastWhatsappSent?: boolean;
   }>,
+  publicOrigin?: string,
 ): AdminGroup {
   let sides: AdminSide[];
 
@@ -176,7 +178,7 @@ function buildAdminGroup(
     sides = feedbacks.map((fb) => ({
       id: fb.id,
       token: fb.token,
-      link: getClientFeedbackUrl(fb.token),
+      link: getClientFeedbackUrl(fb.token, publicOrigin),
       clientSide: fb.clientSide,
       clientName: fb.clientName,
       foodRating: fb.foodRating,
@@ -346,7 +348,7 @@ export const feedbackController = {
     if (bothSidesComplete && sideA && sideB) {
       const anomaly = detectFeedbackDiscrepancy(sideA, sideB);
       if (anomaly.hasAnomaly) {
-        const dashboardUrl = getFeedbackDashboardUrl(bookingId);
+        const dashboardUrl = getFeedbackDashboardUrl(bookingId, originFromRequest(req));
         const details =
           `${anomaly.reasons.join('; ')}\n`
           + `ממוצע משולב: ${combinedAverage ?? '—'}\n`
@@ -460,13 +462,15 @@ export const feedbackController = {
     for (const record of targets) {
       const contact = contactForSide(booking, record.clientSide);
       if (sendNotifications) {
-        results.push(await sendFeedbackLinkForRecord(record, contact));
+        results.push(await sendFeedbackLinkForRecord(record, contact, {
+          publicOrigin: originFromRequest(req),
+        }));
       } else {
         results.push({
           clientSide: record.clientSide,
           clientName: record.clientName,
           token: record.token,
-          link: getClientFeedbackUrl(record.token),
+          link: getClientFeedbackUrl(record.token, originFromRequest(req)),
           emailSent: false,
           whatsappSent: false,
           skippedReasons: [],
@@ -476,8 +480,8 @@ export const feedbackController = {
 
     const anySent = results.some((r) => r.emailSent || r.whatsappSent);
     const allSkipped = sendNotifications && results.every((r) => !r.emailSent && !r.whatsappSent);
-    const localhostLinkWarning = isLocalClientUrl()
-      ? 'הקישור במייל מצביע ל-localhost — לקוחות חיצוניים לא יוכלו לפתוח אותו. הגדר CLIENT_URL לכתובת ציבורית (ראה .env).'
+    const localhostLinkWarning = isLocalClientUrl(resolvePublicBaseUrl(originFromRequest(req)))
+      ? 'הקישור במייל מצביע ל-localhost — לקוחות חיצוניים לא יוכלו לפתוח אותו. שלחי מהאתר הציבורי או הגדירי CLIENT_URL / DOMAIN.'
       : null;
 
     emitFeedbackUpdated({ bookingId });
@@ -533,7 +537,9 @@ export const feedbackController = {
       (booking) => booking.eventDate && hasEventEnded(booking, booking.eventDate.date, booking.eventForm, now),
     );
 
-    const data = finishedBookings.map((booking) => buildAdminGroup(booking, booking.feedbacks));
+    const data = finishedBookings.map((booking) => (
+      buildAdminGroup(booking, booking.feedbacks, originFromRequest(req))
+    ));
     const total = data.length;
     const pageData = data.slice(skip, skip + limit);
 

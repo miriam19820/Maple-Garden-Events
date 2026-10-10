@@ -43,6 +43,8 @@ import { getApmSnapshot } from './utils/apmMetrics';
 validateEnv();
 
 const app = express();
+// Staging/production sit behind nginx; needed so request origin is https://admin.maple-g.co.il
+app.set('trust proxy', 1);
 
 /** Cheap process liveness — always 200 if the Node process is up. */
 app.get('/api/health/live', (_req, res) => {

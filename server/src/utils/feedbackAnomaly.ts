@@ -1,3 +1,5 @@
+import { resolvePublicBaseUrl } from '../config/publicBaseUrl';
+
 /**
  * Side-to-side feedback anomaly detection.
  * Categories: food, service, venue (hall/cleanliness).
@@ -67,7 +69,7 @@ export function detectFeedbackDiscrepancy(
   };
 }
 
-export function getFeedbackDashboardUrl(bookingId: string): string {
-  const base = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+export function getFeedbackDashboardUrl(bookingId: string, requestOrigin?: string): string {
+  const base = resolvePublicBaseUrl(requestOrigin);
   return `${base}/feedback-manager?bookingId=${encodeURIComponent(bookingId)}`;
 }
