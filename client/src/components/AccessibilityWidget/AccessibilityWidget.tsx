@@ -178,7 +178,7 @@ export function AccessibilityWidget() {
         onClick={() => setOpen((prev) => !prev)}
       >
         <img
-          src="/accessibility-wheelchair.svg?v=3"
+          src="/accessibility-icon.svg?v=4"
           alt=""
           className={styles.toggleIcon}
           width={52}
